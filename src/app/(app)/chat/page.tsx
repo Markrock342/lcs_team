@@ -20,6 +20,7 @@ import { Avatar, Button, Input, Modal, Textarea, ProfileRoleBadges } from "@/com
 import { uploadFile, isImageFile } from "@/lib/upload";
 import { slugifyChannelName, formatChannelDisplay } from "@/lib/channels";
 import { parseMentions, notifyUser, logActivity } from "@/lib/activity";
+import { isOnline, formatPresenceStatus } from "@/lib/presence";
 import type { Channel, Message, Profile } from "@/lib/types";
 import { format, isToday, isYesterday } from "date-fns";
 import { th } from "date-fns/locale";
@@ -60,6 +61,7 @@ export default function ChatPage() {
   const [editDesc, setEditDesc] = useState("");
   const [editingChannel, setEditingChannel] = useState(false);
   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
+  const [, setPresenceTick] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -166,6 +168,36 @@ export default function ChatPage() {
     return () => {
       supabase.removeChannel(chSub);
     };
+  }, []);
+
+  useEffect(() => {
+    const supabase = createClient();
+    const presenceSub = supabase
+      .channel("profiles-presence")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles" },
+        (payload) => {
+          const updated = payload.new as Profile;
+          setProfiles((prev) =>
+            prev.map((p) =>
+              p.id === updated.id
+                ? { ...p, last_seen_at: updated.last_seen_at }
+                : p
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(presenceSub);
+    };
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => setPresenceTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -415,19 +447,41 @@ export default function ChatPage() {
           })}
         </nav>
 
-        {/* Online members */}
+        {/* Team presence */}
         <div className="p-3 border-t border-brand">
           <p className="text-[10px] uppercase tracking-wider text-muted mb-2 flex items-center gap-1">
             <Users size={12} /> ทีม — {profiles.length}
+            <span className="normal-case tracking-normal">
+              · {profiles.filter((p) => isOnline(p.last_seen_at)).length} ออนไลน์
+            </span>
           </p>
-          <div className="space-y-1.5 max-h-28 overflow-y-auto">
-            {profiles.map((p) => (
-              <div key={p.id} className="flex items-center gap-2 text-xs min-w-0">
-                <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-                <span className="truncate flex-1">{p.display_name}</span>
-                <ProfileRoleBadges profile={p} size="xs" />
-              </div>
-            ))}
+          <div className="space-y-2 max-h-36 overflow-y-auto overscroll-contain scroll-touch">
+            {profiles.map((p) => {
+              const online = isOnline(p.last_seen_at);
+              return (
+                <div key={p.id} className="flex items-start gap-2 text-xs min-w-0">
+                  <div
+                    className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${
+                      online ? "bg-emerald-400" : "bg-zinc-500"
+                    }`}
+                    title={online ? "ออนไลน์" : "ออฟไลน์"}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="truncate font-medium">{p.display_name}</span>
+                      <ProfileRoleBadges profile={p} size="xs" />
+                    </div>
+                    <p
+                      className={`text-[10px] truncate ${
+                        online ? "text-emerald-400" : "text-muted"
+                      }`}
+                    >
+                      {formatPresenceStatus(p.last_seen_at)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </aside>

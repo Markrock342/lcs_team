@@ -21,6 +21,7 @@ import { Avatar, ProfileRoleBadges } from "./ui";
 import { Logo } from "./Logo";
 import { NotificationBell } from "./NotificationBell";
 import { getPageTitle } from "./mobile-ui";
+import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 import type { Profile } from "@/lib/types";
 
 const MAIN_NAV = [
@@ -58,6 +59,8 @@ export function AppShell({
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const isChat = pathname === "/chat" || pathname.startsWith("/chat/");
+
+  usePresenceHeartbeat();
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {

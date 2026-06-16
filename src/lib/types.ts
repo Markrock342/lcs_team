@@ -28,6 +28,7 @@ export interface Profile {
   role: TeamRole;
   display_roles: TeamRole[] | null;
   avatar_url: string | null;
+  last_seen_at: string | null;
   created_at: string;
 }
 
