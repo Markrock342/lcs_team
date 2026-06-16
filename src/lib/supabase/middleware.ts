@@ -16,7 +16,7 @@ const PROTECTED_PREFIXES = [
   "/more",
 ];
 
-const PUBLIC_PREFIXES = ["/login", "/setup", "/portal", "/auth"];
+const PUBLIC_PREFIXES = ["/login", "/portal", "/auth"];
 
 function isProtected(pathname: string) {
   return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
@@ -30,15 +30,21 @@ export async function updateSession(request: NextRequest) {
   const env = getSupabaseEnv();
   const pathname = request.nextUrl.pathname;
 
+  // หน้า setup ถูกลบแล้ว — redirect เก่าไป login
+  if (pathname === "/setup" || pathname.startsWith("/setup/")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
   if (isPublic(pathname)) {
     return NextResponse.next();
   }
 
   if (!env) {
-    if (pathname === "/setup") return NextResponse.next();
     if (pathname === "/" || isProtected(pathname)) {
       const url = request.nextUrl.clone();
-      url.pathname = "/setup";
+      url.pathname = "/login";
       return NextResponse.redirect(url);
     }
     return NextResponse.next();

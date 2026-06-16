@@ -9,6 +9,12 @@ import { Button, Input } from "@/components/ui";
 import { Logo } from "@/components/Logo";
 import { TEAM } from "@/lib/constants";
 
+const supabaseConfigured =
+  !!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
+  !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() &&
+  !process.env.NEXT_PUBLIC_SUPABASE_URL.includes("your-project") &&
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== "your-anon-key";
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -90,6 +96,14 @@ export default function LoginPage() {
           <h2 className="text-lg font-semibold text-center">
             {mode === "login" ? "เข้าสู่ระบบ" : "สมัครสมาชิก"}
           </h2>
+
+          {!supabaseConfigured && (
+            <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm">
+              ยังไม่ได้ตั้งค่า Supabase บน server — ใส่{" "}
+              <code className="text-xs">NEXT_PUBLIC_SUPABASE_URL</code> และ{" "}
+              <code className="text-xs">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> ใน Vercel แล้ว Redeploy
+            </div>
+          )}
 
           {error && (
             <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
