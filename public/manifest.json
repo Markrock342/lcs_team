@@ -1,0 +1,17 @@
+{
+  "name": "Limit Code Studio",
+  "short_name": "LCS",
+  "description": "ระบบจัดการทีม Limit Code Studio",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#050a14",
+  "theme_color": "#00a3ff",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

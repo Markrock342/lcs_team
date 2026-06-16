@@ -1,36 +1,95 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Limit Code — Team Workspace
 
-## Getting Started
+ระบบจัดการทีม Freelance Software House สำหรับทีม **Limit Code**
 
-First, run the development server:
+## ทีม
+
+| ชื่อ | บทบาท | หน้าที่ |
+|------|--------|---------|
+| Mark | PM | Project Manager |
+| Knott | Backend | Backend Developer |
+| Bank | Design | UX/UI & Frontend |
+
+## ฟีเจอร์
+
+- **Login/Register** — ระบบเข้าสู่ระบบด้วย Supabase Auth
+- **ลูกค้า** — เพิ่ม/แก้ไขข้อมูลลูกค้า, ผู้ติดต่อ, ประเภทงาน (แอพ, เว็บ, ระบบ, design ฯลฯ)
+- **งาน** — ติดตามงาน สถานะ (ยังไม่เริ่ม, รอดำเนินการ, กำลังทำ, รอตรวจ, เสร็จแล้ว), ระยะเวลา (วัน)
+- **ตารางงาน** — ดู timeline รายสัปดาห์ + ตารางรายการ
+- **แชททีม** — แชท realtime, ส่งรูป/ไฟล์
+- **รองรับมือถือ** — Responsive + bottom navigation
+
+## เริ่มต้นใช้งาน
+
+### 1. ติดตั้ง dependencies
+
+```bash
+npm install
+```
+
+### 2. ตั้งค่า Supabase
+
+1. สร้างโปรเจกต์ที่ [supabase.com](https://supabase.com)
+2. ไปที่ **SQL Editor** แล้วรันไฟล์ `supabase/schema.sql`
+3. ไปที่ **Storage** → สร้าง bucket ชื่อ `uploads` (Public bucket)
+4. รัน storage policies ใน SQL Editor:
+
+```sql
+CREATE POLICY "Authenticated upload" ON storage.objects
+  FOR INSERT TO authenticated WITH CHECK (bucket_id = 'uploads');
+
+CREATE POLICY "Public read uploads" ON storage.objects
+  FOR SELECT TO public USING (bucket_id = 'uploads');
+
+CREATE POLICY "Authenticated delete" ON storage.objects
+  FOR DELETE TO authenticated USING (bucket_id = 'uploads');
+```
+
+5. คัดลอก `.env.local.example` เป็น `.env.local` แล้วใส่ URL และ Anon Key
+
+```bash
+cp .env.local.example .env.local
+```
+
+### 3. สร้างบัญชีทีม
+
+สมัครสมาชิกผ่านหน้า Login ด้วยอีเมลของแต่ละคน แล้วอัปเดต profile:
+
+```sql
+UPDATE profiles SET display_name = 'Mark', role = 'pm', username = 'mark' WHERE username = 'mark';
+UPDATE profiles SET display_name = 'Knott', role = 'backend', username = 'knott' WHERE username = 'knott';
+UPDATE profiles SET display_name = 'Bank', role = 'design', username = 'bank' WHERE username = 'bank';
+```
+
+### 4. รัน dev server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+เปิด [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tech Stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Next.js 16** (App Router)
+- **Supabase** (Auth, Database, Storage, Realtime)
+- **Tailwind CSS 4**
+- **TypeScript**
 
-## Learn More
+## โครงสร้าง
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+  app/
+    (app)/          # หน้าหลัก (ต้อง login)
+      dashboard/    # ภาพรวม
+      clients/      # ลูกค้า
+      tasks/        # งาน
+      schedule/     # ตารางงาน
+      chat/         # แชททีม
+    login/          # เข้าสู่ระบบ
+  components/       # UI components
+  lib/              # Supabase, types, constants
+supabase/
+  schema.sql        # Database schema
+```
