@@ -7,7 +7,7 @@ export const MESSAGE_SELECT_BASIC = "*, sender:profiles!sender_id(*)";
 export const MESSAGE_SELECT_FULL = `
   *,
   sender:profiles!sender_id(*),
-  reply_to:messages!reply_to_id(
+  reply_to:messages!messages_reply_to_id_fkey(
     id, content, sender_id, deleted_at, file_name,
     sender:profiles!sender_id(display_name)
   ),
@@ -16,6 +16,22 @@ export const MESSAGE_SELECT_FULL = `
     reader:profiles!user_id(id, display_name, username)
   )
 `;
+
+/** PostgREST อาจคืน reply_to เป็น array (ความสัมพันธ์กลับ) — ใช้เฉพาะเมื่อมี reply_to_id */
+export function getMessageReplyPreview(msg: Message) {
+  if (!msg.reply_to_id) return null;
+  const rt = msg.reply_to;
+  if (!rt || Array.isArray(rt)) return null;
+  if (typeof rt === "object" && "id" in rt && rt.id) return rt;
+  return null;
+}
+
+function normalizeMessage(msg: Message): Message {
+  const reply_to = getMessageReplyPreview(msg);
+  if (reply_to) return { ...msg, reply_to };
+  const { reply_to: _, ...rest } = msg;
+  return rest;
+}
 
 function isSchemaError(message: string) {
   const m = message.toLowerCase();
@@ -54,10 +70,12 @@ async function fetchWithProfilesFallback(
   );
 
   return {
-    data: rows.map((row) => ({
-      ...(row as Message),
-      sender: profileMap.get(row.sender_id) ?? null,
-    })),
+    data: rows.map((row) =>
+      normalizeMessage({
+        ...(row as Message),
+        sender: profileMap.get(row.sender_id) ?? null,
+      })
+    ),
     error: null,
   };
 }
@@ -75,7 +93,9 @@ export async function fetchChannelMessages(
       .limit(200);
 
     if (!res.error) {
-      return { data: (res.data as unknown as Message[]) ?? [], error: null };
+      const data =
+        (res.data as unknown as Message[] | null)?.map(normalizeMessage) ?? [];
+      return { data, error: null };
     }
 
     if (!isSchemaError(res.error.message)) {
@@ -104,7 +124,7 @@ async function fetchOneWithProfileFallback(
     .eq("id", row.sender_id)
     .single();
 
-  return { ...(row as Message), sender: sender ?? null };
+  return normalizeMessage({ ...(row as Message), sender: sender ?? null });
 }
 
 export async function fetchMessageById(
@@ -118,7 +138,9 @@ export async function fetchMessageById(
       .eq("id", id)
       .single();
 
-    if (!res.error && res.data) return res.data as unknown as Message;
+    if (!res.error && res.data) {
+      return normalizeMessage(res.data as unknown as Message);
+    }
 
     if (res.error && !isSchemaError(res.error.message)) return null;
   }
@@ -168,7 +190,10 @@ export async function insertChatMessage(
       .single();
 
     if (!res.error && res.data) {
-      return { data: res.data as unknown as Message, error: null };
+      return {
+        data: normalizeMessage(res.data as unknown as Message),
+        error: null,
+      };
     }
 
     if (res.error) {

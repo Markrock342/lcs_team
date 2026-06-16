@@ -11,6 +11,7 @@ import Image from "next/image";
 import { Avatar } from "@/components/ui";
 import { isImageFile } from "@/lib/upload";
 import { downloadChatFile, getReadReceiptNames } from "@/lib/chat";
+import { getMessageReplyPreview } from "@/lib/chat-messages";
 import type { Message, Profile, TeamRole } from "@/lib/types";
 import { isAdmin } from "@/lib/permissions";
 
@@ -38,6 +39,7 @@ export function ChatMessageItem({
     isOwn || (currentUserRole ? isAdmin(currentUserRole) : false);
   const deleted = !!msg.deleted_at;
   const readBy = getReadReceiptNames(msg.reads, msg.sender_id, profiles);
+  const replyPreview = getMessageReplyPreview(msg);
 
   return (
     <div className="flex gap-3 py-1 px-2 -mx-2 rounded-lg hover:bg-card-hover/50 group">
@@ -90,18 +92,18 @@ export function ChatMessageItem({
           </div>
         </div>
 
-        {msg.reply_to && (
+        {replyPreview && (
           <div className="flex items-start gap-1.5 mb-1.5 pl-2 border-l-2 border-accent/40 text-xs text-muted">
             <CornerDownRight size={12} className="shrink-0 mt-0.5" />
             <div className="min-w-0">
               <span className="text-accent font-medium">
-                {msg.reply_to.sender?.display_name ?? "Unknown"}
+                {replyPreview.sender?.display_name ?? "Unknown"}
               </span>
               <p className="truncate">
-                {msg.reply_to.deleted_at
+                {replyPreview.deleted_at
                   ? "ข้อความถูกลบ"
-                  : msg.reply_to.content ||
-                    msg.reply_to.file_name ||
+                  : replyPreview.content ||
+                    replyPreview.file_name ||
                     "ไฟล์แนบ"}
               </p>
             </div>
