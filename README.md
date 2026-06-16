@@ -51,6 +51,18 @@ CREATE POLICY "Authenticated delete" ON storage.objects
 cp .env.local.example .env.local
 ```
 
+6. **ตั้งค่า Auth URL ใน Supabase** (สำคัญ — ถ้าไม่ตั้ง ลิงก์ยืนยันอีเมลจะไป localhost)
+
+ไปที่ **Authentication → URL Configuration**:
+
+| ช่อง | ค่า |
+|------|-----|
+| **Site URL** | `https://lcs-team.vercel.app` |
+| **Redirect URLs** | `https://lcs-team.vercel.app/**` |
+| | `http://localhost:3000/**` |
+
+บน **Vercel** ใส่ env เพิ่ม: `NEXT_PUBLIC_SITE_URL=https://lcs-team.vercel.app` แล้ว Redeploy
+
 ### 3. สร้างบัญชีทีม
 
 สมัครสมาชิกผ่านหน้า Login ด้วยอีเมลของแต่ละคน แล้วอัปเดต profile:

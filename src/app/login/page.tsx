@@ -8,6 +8,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { Button, Input } from "@/components/ui";
 import { Logo } from "@/components/Logo";
 import { TEAM } from "@/lib/constants";
+import { getAuthCallbackUrl } from "@/lib/env";
 
 const supabaseConfigured =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
@@ -48,7 +49,7 @@ export default function LoginPage() {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: getAuthCallbackUrl(),
           data: {
             username: email.split("@")[0],
             display_name: email.split("@")[0],

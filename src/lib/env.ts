@@ -12,3 +12,15 @@ export function getSupabaseEnv() {
 export function isSupabaseConfigured() {
   return getSupabaseEnv() !== null;
 }
+
+/** URL หลักของแอพ — ใช้ในลิงก์ยืนยันอีเมล (ต้องตรงกับ Supabase Site URL) */
+export function getSiteUrl() {
+  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "");
+  if (fromEnv) return fromEnv;
+  if (typeof window !== "undefined") return window.location.origin;
+  return "http://localhost:3000";
+}
+
+export function getAuthCallbackUrl() {
+  return `${getSiteUrl()}/auth/callback`;
+}
