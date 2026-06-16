@@ -61,6 +61,8 @@ export default function ChatPage() {
   const [editingChannel, setEditingChannel] = useState(false);
   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadMessages = useCallback(async (channelId: string) => {
@@ -167,13 +169,29 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
+    if (!isNearBottomRef.current) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, activeChannel]);
 
   function selectChannel(ch: Channel) {
     setActiveChannel(ch);
     setShowMobileChannels(false);
+    isNearBottomRef.current = true;
   }
+
+  useEffect(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+
+    function onScroll() {
+      isNearBottomRef.current =
+        el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    }
+
+    el.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [activeChannel, showMobileChannels]);
 
   async function handleCreateChannel(e: React.FormEvent) {
     e.preventDefault();
@@ -357,12 +375,12 @@ export default function ChatPage() {
   let lastDate = "";
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-8.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] lg:h-[calc(100dvh-3rem)] border border-brand rounded-2xl overflow-hidden bg-card animate-fade-in">
+    <div className="flex flex-col lg:flex-row flex-1 min-h-0 border border-brand rounded-2xl overflow-hidden bg-card animate-fade-in">
       {/* Channel sidebar — Discord style */}
       <aside
         className={`${
           showMobileChannels ? "flex" : "hidden"
-        } lg:flex flex-col w-full lg:w-60 bg-sidebar border-r border-brand shrink-0`}
+        } lg:flex flex-col w-full lg:w-60 bg-sidebar border-r border-brand shrink-0 min-h-0`}
       >
         <div className="px-4 py-3 border-b border-brand flex items-center justify-between">
           <h2 className="font-semibold text-sm tracking-wide">แชannels</h2>
@@ -375,7 +393,7 @@ export default function ChatPage() {
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
+        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-touch p-2 space-y-0.5">
           {channels.map((ch) => {
             const active = activeChannel?.id === ch.id;
             return (
@@ -416,7 +434,7 @@ export default function ChatPage() {
       <div
         className={`${
           showMobileChannels ? "hidden" : "flex"
-        } lg:flex flex-col flex-1 min-w-0`}
+        } lg:flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden`}
       >
         {activeChannel ? (
           <>
@@ -466,7 +484,10 @@ export default function ChatPage() {
             </div>
 
             {/* Messages — Discord layout */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
+            <div
+              ref={messagesScrollRef}
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-touch px-4 py-4 space-y-1"
+            >
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center py-12">
                   <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mb-4">

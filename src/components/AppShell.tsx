@@ -57,6 +57,7 @@ export function AppShell({
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+  const isChat = pathname === "/chat" || pathname.startsWith("/chat/");
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -166,13 +167,27 @@ export function AppShell({
         </div>
       </header>
 
-      <main className="flex-1 lg:ml-64 w-full min-w-0 overflow-x-hidden">
+      <main className={`flex-1 lg:ml-64 w-full min-w-0 overflow-x-hidden ${isChat ? "overflow-hidden" : ""}`}>
         <div className="hidden lg:flex items-center justify-end gap-2 px-6 py-3 border-b border-border">
           <NotificationBell />
           <Link href="/settings" className="text-sm text-muted hover:text-foreground px-3 py-1.5 rounded-lg hover:bg-card-hover">ตั้งค่า</Link>
         </div>
-        <div className="pt-[calc(3.5rem+env(safe-area-inset-top))] lg:pt-0 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-6">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6">{children}</div>
+        <div
+          className={
+            isChat
+              ? "pt-[calc(3.5rem+env(safe-area-inset-top))] lg:pt-0 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-6 h-[100dvh] lg:h-auto overflow-hidden flex flex-col"
+              : "pt-[calc(3.5rem+env(safe-area-inset-top))] lg:pt-0 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-6"
+          }
+        >
+          <div
+            className={`max-w-7xl mx-auto w-full ${
+              isChat
+                ? "flex-1 min-h-0 flex flex-col px-2 sm:px-6 py-2 sm:py-6"
+                : "px-4 sm:px-6 py-4 sm:py-6"
+            }`}
+          >
+            {children}
+          </div>
         </div>
       </main>
 

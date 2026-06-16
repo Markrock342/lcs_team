@@ -36,6 +36,11 @@ body {
   font-family: var(--font-ibm-plex), system-ui, sans-serif;
   -webkit-tap-highlight-color: transparent;
   overflow-x: hidden;
+  overscroll-behavior-y: none;
+}
+
+html {
+  overscroll-behavior-y: none;
 }
 
 .pt-safe {
@@ -48,6 +53,15 @@ body {
 
 .touch-manipulation {
   touch-action: manipulation;
+}
+
+.overscroll-contain {
+  overscroll-behavior: contain;
+}
+
+.scroll-touch {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .bg-brand-glow {
