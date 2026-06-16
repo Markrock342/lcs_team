@@ -22,6 +22,12 @@ import { uploadFile, isImageFile } from "@/lib/upload";
 import { slugifyChannelName, formatChannelDisplay } from "@/lib/channels";
 import { parseMentions, notifyUser, logActivity } from "@/lib/activity";
 import { isOnline, formatPresenceStatus } from "@/lib/presence";
+import {
+  fetchChannelMessages,
+  fetchMessageById,
+  insertChatMessage,
+  markMessagesAsReadSafe,
+} from "@/lib/chat-messages";
 import type { Channel, Message, Profile } from "@/lib/types";
 import { format, isToday, isYesterday } from "date-fns";
 import { th } from "date-fns/locale";
@@ -39,19 +45,6 @@ function formatDateDivider(date: string) {
   if (isYesterday(d)) return "เมื่อวาน";
   return format(d, "d MMMM yyyy", { locale: th });
 }
-
-const MESSAGE_SELECT = `
-  *,
-  sender:profiles(*),
-  reply_to:messages!reply_to_id(
-    id, content, sender_id, deleted_at, file_name,
-    sender:profiles(display_name)
-  ),
-  reads:message_reads(
-    user_id, read_at,
-    reader:profiles(id, display_name, username)
-  )
-`;
 
 export default function ChatPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -75,6 +68,8 @@ export default function ChatPage() {
   const [editingChannel, setEditingChannel] = useState(false);
   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [chatError, setChatError] = useState("");
+  const [sendError, setSendError] = useState("");
   const [, setPresenceTick] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
@@ -95,14 +90,11 @@ export default function ChatPage() {
 
   const loadMessages = useCallback(async (channelId: string) => {
     const supabase = createClient();
-    const { data } = await supabase
-      .from("messages")
-      .select(MESSAGE_SELECT)
-      .eq("channel_id", channelId)
-      .order("created_at", { ascending: true })
-      .limit(200);
-    setMessages(data ?? []);
-    return data ?? [];
+    const { data, error } = await fetchChannelMessages(supabase, channelId);
+    setMessages(data);
+    if (error) setChatError(error);
+    else setChatError("");
+    return data;
   }, []);
 
   const markMessagesAsRead = useCallback(
@@ -110,13 +102,7 @@ export default function ChatPage() {
       const ids = msgs
         .filter((m) => m.sender_id !== userId && !m.deleted_at)
         .map((m) => m.id);
-      if (!ids.length) return;
-
-      const supabase = createClient();
-      await supabase.from("message_reads").upsert(
-        ids.map((message_id) => ({ message_id, user_id: userId })),
-        { onConflict: "message_id,user_id" }
-      );
+      await markMessagesAsReadSafe(createClient(), ids, userId);
     },
     []
   );
@@ -181,11 +167,7 @@ export default function ChatPage() {
         },
         async (payload) => {
           const newMsg = payload.new as Message;
-          const { data: full } = await supabase
-            .from("messages")
-            .select(MESSAGE_SELECT)
-            .eq("id", newMsg.id)
-            .single();
+          const full = await fetchMessageById(supabase, newMsg.id);
 
           if (!full) return;
 
@@ -209,11 +191,7 @@ export default function ChatPage() {
         },
         async (payload) => {
           const updated = payload.new as Message;
-          const { data: full } = await supabase
-            .from("messages")
-            .select(MESSAGE_SELECT)
-            .eq("id", updated.id)
-            .single();
+          const full = await fetchMessageById(supabase, updated.id);
           if (!full) return;
           setMessages((prev) =>
             prev.map((m) => (m.id === full.id ? full : m))
@@ -482,6 +460,7 @@ export default function ChatPage() {
     if (!currentUser || !activeChannel) return;
 
     setSending(true);
+    setSendError("");
     sendAbortRef.current = new AbortController();
     const signal = sendAbortRef.current.signal;
     const supabase = createClient();
@@ -507,9 +486,9 @@ export default function ChatPage() {
     const mentionIds = parseMentions(content, profiles);
     const replyId = replyTo?.deleted_at ? null : replyTo?.id ?? null;
 
-    const { data: msgData } = await supabase
-      .from("messages")
-      .insert({
+    const { data: msgData, error: insertError } = await insertChatMessage(
+      supabase,
+      {
         channel_id: activeChannel.id,
         sender_id: currentUser.id,
         content: content.trim() || null,
@@ -518,9 +497,15 @@ export default function ChatPage() {
         file_type,
         mentioned_ids: mentionIds,
         reply_to_id: replyId,
-      })
-      .select(MESSAGE_SELECT)
-      .single();
+      }
+    );
+
+    if (insertError) {
+      setSendError(insertError);
+      setSending(false);
+      sendAbortRef.current = null;
+      return;
+    }
 
     if (signal.aborted) {
       if (msgData?.id) {
@@ -726,6 +711,11 @@ export default function ChatPage() {
             </div>
 
             {/* Messages — Discord layout */}
+            {(chatError || sendError) && (
+              <div className="mx-4 mt-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                {sendError || chatError}
+              </div>
+            )}
             <div
               ref={messagesScrollRef}
               className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-touch px-4 py-4 space-y-1"
