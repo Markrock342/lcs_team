@@ -21,6 +21,8 @@ export default function SettingsPage() {
   const [pushOn, setPushOn] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [installable, setInstallable] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isIos, setIsIos] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [team, setTeam] = useState<Profile[]>([]);
   const [roleSaving, setRoleSaving] = useState<string | null>(null);
@@ -29,6 +31,12 @@ export default function SettingsPage() {
   useEffect(() => {
     checkPush();
     loadProfile();
+    setIsStandalone(
+      window.matchMedia("(display-mode: standalone)").matches ||
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (navigator as any).standalone === true
+    );
+    setIsIos(/iphone|ipad|ipod/i.test(navigator.userAgent));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
@@ -206,16 +214,37 @@ export default function SettingsPage() {
           </Button>
         </div>
 
-        {installable && (
-          <div className="flex items-center justify-between p-4">
+        {!isStandalone && (
+          <div className="p-4 space-y-3">
             <div className="flex items-center gap-3">
-              <Smartphone size={20} className="text-accent" />
-              <div>
+              <Smartphone size={20} className="text-accent shrink-0" />
+              <div className="min-w-0">
                 <p className="font-medium text-sm">ติดตั้งแอพ (PWA)</p>
                 <p className="text-xs text-muted">เพิ่มไปหน้าจอ Home</p>
               </div>
+              {installable && (
+                <Button onClick={installApp} className="shrink-0 ml-auto">
+                  ติดตั้ง
+                </Button>
+              )}
             </div>
-            <Button onClick={installApp}>ติดตั้ง</Button>
+            {!installable && isIos && (
+              <p className="text-xs text-muted pl-8">
+                iPhone/iPad: Safari → ปุ่ม <strong>แชร์</strong> → <strong>Add to Home Screen</strong>
+              </p>
+            )}
+            {!installable && !isIos && (
+              <p className="text-xs text-muted pl-8">
+                Chrome/Edge: เมนู ⋮ → <strong>Install app</strong> / <strong>ติดตั้งแอป</strong>
+              </p>
+            )}
+          </div>
+        )}
+
+        {isStandalone && (
+          <div className="flex items-center gap-3 p-4">
+            <Smartphone size={20} className="text-emerald-400" />
+            <p className="text-sm text-emerald-400">ติดตั้งเป็นแอพแล้ว ✓</p>
           </div>
         )}
 
@@ -234,8 +263,14 @@ export default function SettingsPage() {
       </section>
 
       {!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && (
-        <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-          Push ยังไม่พร้อม — รัน <code>node scripts/generate-vapid.js</code> แล้วใส่ใน .env.local
+        <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 space-y-1">
+          <p>
+            <strong>Push Notifications (ไม่บังคับ)</strong> — แอพใช้ได้ปกติแม้ไม่เปิด
+          </p>
+          <p>
+            ถ้าอยากได้ push: รัน <code>node scripts/generate-vapid.js</code> แล้วใส่ 3 ค่าใน{" "}
+            <code>.env.local</code> (local) และ <strong>Vercel Environment Variables</strong> (production) แล้ว redeploy
+          </p>
         </p>
       )}
     </div>

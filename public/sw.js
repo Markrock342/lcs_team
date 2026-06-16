@@ -15,7 +15,7 @@ if (IS_LOCAL) {
     );
   });
 } else {
-  const CACHE = "lcs-v2";
+  const CACHE = "lcs-v3";
   const PRECACHE = ["/manifest.json", "/logo.png"];
 
   self.addEventListener("install", (event) => {
@@ -76,8 +76,8 @@ if (IS_LOCAL) {
     event.waitUntil(
       self.registration.showNotification(data.title, {
         body: data.body,
-      icon: "/logo.png",
-      badge: "/logo.png",
+        icon: "/logo.png",
+        badge: "/logo.png",
         data: { link: data.link },
         vibrate: [200, 100, 200],
       })

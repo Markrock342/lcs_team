@@ -14,6 +14,11 @@ export const metadata: Metadata = {
   title: "Limit Code Studio — Team Workspace",
   description: "ระบบจัดการทีม Limit Code Studio",
   manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "LCS",
+    statusBarStyle: "black-translucent",
+  },
   icons: {
     icon: "/logo.png",
     apple: "/logo.png",
@@ -34,13 +39,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="th" className={`${ibmPlex.variable} h-full`}>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){if(!('serviceWorker'in navigator))return;navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister()})});if('caches'in window)caches.keys().then(function(k){k.forEach(function(c){caches.delete(c)})})})();`,
-          }}
-        />
-      </head>
       <body className="min-h-full antialiased bg-background text-foreground">
         <ThemeProvider>
           {children}

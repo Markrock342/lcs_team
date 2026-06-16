@@ -16,7 +16,7 @@ const PROTECTED_PREFIXES = [
   "/more",
 ];
 
-const PUBLIC_PREFIXES = ["/login", "/portal", "/auth"];
+const PUBLIC_PREFIXES = ["/login", "/portal", "/auth", "/sw.js", "/manifest.json", "/clear-sw.html"];
 
 function isProtected(pathname: string) {
   return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));

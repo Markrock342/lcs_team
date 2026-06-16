@@ -98,10 +98,16 @@ export default function LoginPage() {
           </h2>
 
           {!supabaseConfigured && (
-            <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm">
-              ยังไม่ได้ตั้งค่า Supabase บน server — ใส่{" "}
-              <code className="text-xs">NEXT_PUBLIC_SUPABASE_URL</code> และ{" "}
-              <code className="text-xs">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> ใน Vercel แล้ว Redeploy
+            <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm space-y-1">
+              <p>
+                <strong>.env.local ใช้ได้แค่ localhost</strong> — ไม่ถูก push ขึ้น Vercel
+              </p>
+              <p>
+                ไปที่ Vercel → Project → Settings → Environment Variables แล้วใส่{" "}
+                <code className="text-xs">NEXT_PUBLIC_SUPABASE_URL</code> +{" "}
+                <code className="text-xs">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>{" "}
+                (copy จาก .env.local) → กด <strong>Redeploy</strong>
+              </p>
             </div>
           )}
 
