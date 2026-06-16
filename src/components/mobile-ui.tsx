@@ -6,6 +6,12 @@ const PAGE_TITLES: Record<string, string> = {
   "/tasks": "งาน",
   "/schedule": "ตารางงาน",
   "/chat": "แชททีม",
+  "/more": "เมนู",
+  "/invoices": "ใบแจ้งหนี้",
+  "/activity": "ประวัติ",
+  "/notifications": "แจ้งเตือน",
+  "/settings": "ตั้งค่า",
+  "/templates": "เทมเพลต",
 };
 
 export function getPageTitle(pathname: string): string {

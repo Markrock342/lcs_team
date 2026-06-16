@@ -11,11 +11,15 @@ import {
   Plus,
   ChevronLeft,
   Users,
+  Pencil,
+  Trash2,
+  MoreVertical,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar, Button, Input, Modal, Textarea } from "@/components/ui";
 import { uploadFile, isImageFile } from "@/lib/upload";
 import { slugifyChannelName, formatChannelDisplay } from "@/lib/channels";
+import { parseMentions, notifyUser, logActivity } from "@/lib/activity";
 import type { Channel, Message, Profile } from "@/lib/types";
 import { format, isToday, isYesterday } from "date-fns";
 import { th } from "date-fns/locale";
@@ -51,6 +55,11 @@ export default function ChatPage() {
   const [newChannelDesc, setNewChannelDesc] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editingChannel, setEditingChannel] = useState(false);
+  const [channelMenuOpen, setChannelMenuOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -213,6 +222,54 @@ export default function ChatPage() {
     setNewChannelName("");
     setNewChannelDesc("");
     setCreateOpen(false);
+    await logActivity("create", "channel", data?.id ?? null, slug);
+  }
+
+  function openEditChannel() {
+    if (!activeChannel) return;
+    setEditName(activeChannel.name);
+    setEditDesc(activeChannel.description ?? "");
+    setEditOpen(true);
+    setChannelMenuOpen(false);
+  }
+
+  async function handleEditChannel(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activeChannel) return;
+    const slug = slugifyChannelName(editName);
+    if (!slug) return;
+
+    setEditingChannel(true);
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("channels")
+      .update({ name: slug, description: editDesc.trim() || null })
+      .eq("id", activeChannel.id)
+      .select()
+      .single();
+
+    setEditingChannel(false);
+    if (error || !data) return;
+
+    setChannels((prev) => prev.map((c) => (c.id === data.id ? data : c)));
+    setActiveChannel(data);
+    setEditOpen(false);
+    await logActivity("update", "channel", data.id, slug);
+  }
+
+  async function handleDeleteChannel() {
+    if (!activeChannel || activeChannel.name === "general") return;
+    if (!confirm(`ลบแชannel #${activeChannel.name}?`)) return;
+
+    const supabase = createClient();
+    await supabase.from("channels").delete().eq("id", activeChannel.id);
+    setChannels((prev) => prev.filter((c) => c.id !== activeChannel.id));
+    const next = channels.find((c) => c.id !== activeChannel.id) ?? null;
+    setActiveChannel(next);
+    if (next) loadMessages(next.id);
+    else setMessages([]);
+    setChannelMenuOpen(false);
+    await logActivity("delete", "channel", activeChannel.id, activeChannel.name);
   }
 
   async function handleSend(e: React.FormEvent) {
@@ -236,14 +293,25 @@ export default function ChatPage() {
       }
     }
 
-    await supabase.from("messages").insert({
+    const mentionIds = parseMentions(content, profiles);
+
+    const { data: msgData } = await supabase.from("messages").insert({
       channel_id: activeChannel.id,
       sender_id: currentUser.id,
       content: content.trim() || null,
       file_url,
       file_name,
       file_type,
-    });
+      mentioned_ids: mentionIds,
+    }).select().single();
+
+    for (const uid of mentionIds) {
+      if (uid !== currentUser.id) {
+        await notifyUser(uid, `💬 ถูก mention ใน #${activeChannel.name}`, content.trim().slice(0, 80), "/chat");
+      }
+    }
+
+    await logActivity("comment", "message", msgData?.id ?? null, `#${activeChannel.name}`);
 
     setContent("");
     setFile(null);
@@ -360,12 +428,38 @@ export default function ChatPage() {
                 <ChevronLeft size={20} />
               </button>
               <Hash size={20} className="text-muted shrink-0" />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <h1 className="font-semibold truncate">{activeChannel.name}</h1>
                 {activeChannel.description && (
                   <p className="text-xs text-muted truncate">
                     {activeChannel.description}
                   </p>
+                )}
+              </div>
+              <div className="relative shrink-0">
+                <button
+                  onClick={() => setChannelMenuOpen(!channelMenuOpen)}
+                  className="p-1.5 rounded-lg hover:bg-card-hover text-muted"
+                >
+                  <MoreVertical size={18} />
+                </button>
+                {channelMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-lg z-10 py-1 min-w-[140px]">
+                    <button
+                      onClick={openEditChannel}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-card-hover"
+                    >
+                      <Pencil size={14} /> แก้ไข
+                    </button>
+                    {activeChannel.name !== "general" && (
+                      <button
+                        onClick={handleDeleteChannel}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10"
+                      >
+                        <Trash2 size={14} /> ลบ
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -416,7 +510,13 @@ export default function ChatPage() {
                           </div>
                           {msg.content && (
                             <p className="text-sm whitespace-pre-wrap break-words text-zinc-200">
-                              {msg.content}
+                              {msg.content.split(/(@\w+)/g).map((part, i) =>
+                                part.startsWith("@") ? (
+                                  <span key={i} className="text-accent font-medium">{part}</span>
+                                ) : (
+                                  part
+                                )
+                              )}
                             </p>
                           )}
                           {msg.file_url && isImageFile(msg.file_type) && (
@@ -491,7 +591,7 @@ export default function ChatPage() {
                   type="text"
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder={`ส่งข้อความใน #${activeChannel.name}`}
+                  placeholder={`ส่งข้อความใน #${activeChannel.name} (@username เพื่อ mention)`}
                   className="flex-1 bg-transparent px-2 py-1.5 text-sm placeholder:text-muted focus:outline-none"
                 />
                 <button
@@ -529,6 +629,26 @@ export default function ChatPage() {
         onDescChange={setNewChannelDesc}
         onSubmit={handleCreateChannel}
       />
+
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="แก้ไขแชannel">
+        <form onSubmit={handleEditChannel} className="space-y-4">
+          <Input
+            label="ชื่อแชannel"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            required
+          />
+          <Textarea
+            label="คำอธิบาย"
+            value={editDesc}
+            onChange={(e) => setEditDesc(e.target.value)}
+            rows={2}
+          />
+          <Button type="submit" loading={editingChannel} className="w-full">
+            บันทึก
+          </Button>
+        </form>
+      </Modal>
     </div>
   );
 }

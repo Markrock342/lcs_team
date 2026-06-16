@@ -2,18 +2,46 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseEnv } from "@/lib/env";
 
+const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/clients",
+  "/tasks",
+  "/schedule",
+  "/chat",
+  "/invoices",
+  "/activity",
+  "/notifications",
+  "/settings",
+  "/templates",
+  "/more",
+];
+
+const PUBLIC_PREFIXES = ["/login", "/setup", "/portal", "/auth"];
+
+function isProtected(pathname: string) {
+  return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+}
+
+function isPublic(pathname: string) {
+  return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+}
+
 export async function updateSession(request: NextRequest) {
   const env = getSupabaseEnv();
   const pathname = request.nextUrl.pathname;
 
-  // ยังไม่ได้ตั้งค่า Supabase — เปิดได้แค่หน้า setup
+  if (isPublic(pathname)) {
+    return NextResponse.next();
+  }
+
   if (!env) {
-    if (pathname === "/setup") {
-      return NextResponse.next();
+    if (pathname === "/setup") return NextResponse.next();
+    if (pathname === "/" || isProtected(pathname)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/setup";
+      return NextResponse.redirect(url);
     }
-    const url = request.nextUrl.clone();
-    url.pathname = "/setup";
-    return NextResponse.redirect(url);
+    return NextResponse.next();
   }
 
   let supabaseResponse = NextResponse.next({ request });
@@ -39,21 +67,13 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAuthPage = pathname === "/login";
-  const isProtected =
-    pathname.startsWith("/dashboard") ||
-    pathname.startsWith("/clients") ||
-    pathname.startsWith("/tasks") ||
-    pathname.startsWith("/schedule") ||
-    pathname.startsWith("/chat");
-
-  if (!user && isProtected) {
+  if (!user && isProtected(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  if (user && isAuthPage) {
+  if (user && pathname === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);

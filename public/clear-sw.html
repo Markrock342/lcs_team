@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <title>ล้าง Service Worker — LCS</title>
+  <style>
+    body { font-family: system-ui; background: #050a14; color: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .box { text-align: center; padding: 2rem; }
+    a { color: #00a3ff; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <p id="msg">กำลังล้าง cache และ Service Worker...</p>
+  </div>
+  <script>
+    (async function () {
+      try {
+        if ("serviceWorker" in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map((r) => r.unregister()));
+        }
+        if ("caches" in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        }
+        document.getElementById("msg").innerHTML =
+          "✅ ล้างเรียบร้อย! <br><br><a href=\"/dashboard\">ไปหน้า Dashboard →</a>";
+        setTimeout(() => { window.location.href = "/dashboard"; }, 1500);
+      } catch (e) {
+        document.getElementById("msg").textContent = "Error: " + e.message;
+      }
+    })();
+  </script>
+</body>
+</html>

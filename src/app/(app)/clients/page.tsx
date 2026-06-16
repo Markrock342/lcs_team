@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Phone, Mail, Building2, Trash2, Pencil, Users, ExternalLink, Link2 } from "lucide-react";
+import { Plus, Phone, Mail, Building2, Trash2, Pencil, Users, ExternalLink, Link2, Share2, FileUp, Copy, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
   Button,
@@ -18,7 +18,9 @@ import {
 } from "@/lib/constants";
 import { CLIENT_LINK_FIELDS } from "@/lib/constants";
 import { uploadFile } from "@/lib/upload";
+import { logActivity } from "@/lib/activity";
 import type { Client, ProjectType, ClientStatus } from "@/lib/types";
+import type { ClientFile } from "@/lib/extras-types";
 import Image from "next/image";
 
 const emptyClient = {
@@ -50,6 +52,10 @@ export default function ClientsPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState<string>("all");
+  const [clientFiles, setClientFiles] = useState<ClientFile[]>([]);
+  const [fileUploading, setFileUploading] = useState(false);
+  const [copiedPortal, setCopiedPortal] = useState<string | null>(null);
+  const [portalEnabled, setPortalEnabled] = useState(false);
 
   useEffect(() => {
     loadClients();
@@ -74,6 +80,8 @@ export default function ClientsPage() {
 
   function openEdit(client: Client) {
     setEditing(client);
+    setPortalEnabled(!!(client as Client & { portal_enabled?: boolean }).portal_enabled);
+    loadClientFiles(client.id);
     setForm({
       name: client.name,
       contact_name: client.contact_name ?? "",
@@ -95,6 +103,67 @@ export default function ClientsPage() {
     });
     setImageFile(null);
     setModalOpen(true);
+  }
+
+  async function loadClientFiles(clientId: string) {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("client_files")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false });
+    setClientFiles(data ?? []);
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!editing || !e.target.files?.[0]) return;
+    setFileUploading(true);
+    const file = e.target.files[0];
+    const supabase = createClient();
+    const uploaded = await uploadFile(file, "client-files");
+    if (uploaded) {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from("client_files").insert({
+        client_id: editing.id,
+        name: file.name,
+        file_url: uploaded.url,
+        file_type: file.type,
+        file_size: file.size,
+        uploaded_by: user?.id,
+      });
+      await logActivity("upload", "client_file", editing.id, file.name);
+      loadClientFiles(editing.id);
+    }
+    setFileUploading(false);
+    e.target.value = "";
+  }
+
+  async function deleteClientFile(id: string) {
+    if (!editing || !confirm("ลบไฟล์นี้?")) return;
+    const supabase = createClient();
+    await supabase.from("client_files").delete().eq("id", id);
+    loadClientFiles(editing.id);
+  }
+
+  async function togglePortal(enabled: boolean) {
+    if (!editing) return;
+    setPortalEnabled(enabled);
+    const supabase = createClient();
+    const updates: { portal_enabled: boolean; portal_token?: string } = { portal_enabled: enabled };
+    if (enabled && !(editing as Client & { portal_token?: string }).portal_token) {
+      updates.portal_token = crypto.randomUUID();
+    }
+    await supabase.from("clients").update(updates).eq("id", editing.id);
+    setEditing({ ...editing, ...updates } as Client);
+    loadClients();
+  }
+
+  function copyPortalLink(client: Client & { portal_token?: string }) {
+    if (!client.portal_token) return;
+    const url = `${window.location.origin}/portal/${client.portal_token}`;
+    navigator.clipboard.writeText(url);
+    setCopiedPortal(client.id);
+    setTimeout(() => setCopiedPortal(null), 2000);
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -132,9 +201,11 @@ export default function ClientsPage() {
 
     if (editing) {
       await supabase.from("clients").update(payload).eq("id", editing.id);
+      await logActivity("update", "client", editing.id, form.name);
     } else {
       const { data: { user } } = await supabase.auth.getUser();
       await supabase.from("clients").insert({ ...payload, created_by: user?.id });
+      await logActivity("create", "client", null, form.name);
     }
 
     setSaving(false);
@@ -273,6 +344,16 @@ export default function ClientsPage() {
                 )}
 
                 <div className="flex gap-2 mt-4 pt-3 border-t border-border sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                  {(client as Client & { portal_enabled?: boolean; portal_token?: string }).portal_enabled &&
+                    (client as Client & { portal_token?: string }).portal_token && (
+                    <button
+                      onClick={() => copyPortalLink(client as Client & { portal_token: string })}
+                      className="p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20"
+                      title="คัดลอกลิงก์ Client Portal"
+                    >
+                      {copiedPortal === client.id ? <Check size={14} /> : <Share2 size={14} />}
+                    </button>
+                  )}
                   <button
                     onClick={() => openEdit(client)}
                     className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-background border border-border text-xs hover:bg-card-hover"
@@ -409,6 +490,70 @@ export default function ClientsPage() {
               className="text-sm text-muted file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-accent/20 file:text-accent file:text-sm file:font-medium"
             />
           </div>
+
+          {editing && (
+            <>
+              <div className="pt-2 border-t border-border">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+                    <Share2 size={16} className="text-accent" /> Client Portal
+                  </p>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={portalEnabled}
+                      onChange={(e) => togglePortal(e.target.checked)}
+                      className="rounded border-border"
+                    />
+                    เปิดใช้งาน
+                  </label>
+                </div>
+                {portalEnabled && (editing as Client & { portal_token?: string }).portal_token && (
+                  <div className="flex gap-2">
+                    <Input
+                      label=""
+                      readOnly
+                      value={`${typeof window !== "undefined" ? window.location.origin : ""}/portal/${(editing as Client & { portal_token: string }).portal_token}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copyPortalLink(editing as Client & { portal_token: string })}
+                      className="mt-auto p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 shrink-0"
+                    >
+                      {copiedPortal === editing.id ? <Check size={16} /> : <Copy size={16} />}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2 border-t border-border">
+                <p className="text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2">
+                  <FileUp size={16} className="text-accent" /> ไฟล์ลูกค้า
+                </p>
+                <input
+                  type="file"
+                  onChange={handleFileUpload}
+                  disabled={fileUploading}
+                  className="text-sm text-muted file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-accent/20 file:text-accent file:text-sm file:font-medium mb-3"
+                />
+                {clientFiles.length > 0 && (
+                  <ul className="space-y-2">
+                    {clientFiles.map((f) => (
+                      <li key={f.id} className="flex items-center gap-2 text-sm bg-background rounded-lg px-3 py-2">
+                        <a href={f.file_url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-accent hover:underline">
+                          {f.name}
+                        </a>
+                        <button type="button" onClick={() => deleteClientFile(f.id)} className="text-red-400 hover:text-red-300">
+                          <Trash2 size={14} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </>
+          )}
+
           <Button type="submit" loading={saving} className="w-full">
             {editing ? "บันทึก" : "เพิ่มลูกค้า"}
           </Button>

@@ -117,3 +117,23 @@ input, select, textarea {
 .animate-pulse-glow {
   animation: pulse-glow 3s ease-in-out infinite;
 }
+
+/* Light theme */
+[data-theme="light"] {
+  --background: #f0f4f8;
+  --foreground: #0a1628;
+  --card: #ffffff;
+  --card-hover: #e8eef4;
+  --border: #c5d5e8;
+  --accent: #0077cc;
+  --accent-dim: #005fa3;
+  --accent-glow: rgba(0, 119, 204, 0.12);
+  --muted: #5a7a9a;
+  --sidebar: #e8eef4;
+}
+
+[data-theme="light"] .bg-brand-mesh {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 119, 204, 0.08), transparent),
+    var(--background);
+}

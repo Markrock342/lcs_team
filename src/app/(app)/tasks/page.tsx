@@ -22,8 +22,11 @@ import {
   Avatar,
 } from "@/components/ui";
 import { PageHeader, FilterTabs } from "@/components/mobile-ui";
+import { KanbanBoard } from "@/components/KanbanBoard";
+import { TimeTracker } from "@/components/TimeTracker";
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS } from "@/lib/constants";
 import { uploadFile } from "@/lib/upload";
+import { logActivity, notifyUser } from "@/lib/activity";
 import type { Task, Client, Profile, TaskStatus, TaskPriority } from "@/lib/types";
 
 const emptyTask = {
@@ -85,10 +88,15 @@ function TaskRow({
             <> · {task.start_date} → {task.due_date}</>
           )}
         </p>
-        {task.description && (
-          <p className="text-xs text-muted mt-1 line-clamp-1">{task.description}</p>
-        )}
-      </div>
+                  {task.description && (
+                    <p className="text-xs text-muted mt-1 line-clamp-1">{task.description}</p>
+                  )}
+                  {!isSub && (
+                    <div className="mt-2">
+                      <TimeTracker taskId={task.id} taskTitle={task.title} />
+                    </div>
+                  )}
+                </div>
 
       <div className="flex items-center gap-2 flex-wrap">
         {task.assignee ? (
@@ -151,6 +159,7 @@ export default function TasksPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [modalMode, setModalMode] = useState<"parent" | "sub">("parent");
 
@@ -260,6 +269,11 @@ export default function TasksPage() {
       await supabase.from("tasks").insert({ ...payload, created_by: user?.id });
     }
 
+    await logActivity(editing ? "update" : "create", "task", editing?.id ?? null, form.title);
+    if (form.assigned_to && form.assigned_to !== editing?.assigned_to) {
+      await notifyUser(form.assigned_to, "📋 มอบหมายงานใหม่", form.title, "/tasks");
+    }
+
     setSaving(false);
     setModalOpen(false);
     loadData();
@@ -321,9 +335,13 @@ export default function TasksPage() {
       />
 
       <FilterTabs
-        active={statusFilter}
-        onChange={setStatusFilter}
+        active={viewMode === "kanban" ? "kanban" : statusFilter}
+        onChange={(k) => {
+          if (k === "kanban") setViewMode("kanban");
+          else { setViewMode("list"); setStatusFilter(k); }
+        }}
         tabs={[
+          { key: "kanban", label: "Kanban" },
           { key: "all", label: "ทั้งหมด", count: tasks.length },
           ...Object.entries(TASK_STATUS_LABELS).map(([k, v]) => ({
             key: k,
@@ -333,7 +351,9 @@ export default function TasksPage() {
         ]}
       />
 
-      {visibleParents.length === 0 ? (
+      {viewMode === "kanban" ? (
+        <KanbanBoard tasks={tasks} onStatusChange={quickStatusChange} />
+      ) : visibleParents.length === 0 ? (
         <EmptyState
           icon={<CheckSquare size={28} />}
           title="ยังไม่มีงาน"

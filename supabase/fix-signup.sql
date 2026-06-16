@@ -11,6 +11,7 @@ AS $$
 DECLARE
   base_username TEXT;
   final_username TEXT;
+  assigned_role TEXT;
 BEGIN
   base_username := COALESCE(
     NEW.raw_user_meta_data->>'username',
@@ -23,12 +24,17 @@ BEGIN
     final_username := base_username || '_' || substr(NEW.id::text, 1, 8);
   END IF;
 
+  assigned_role := CASE
+    WHEN lower(NEW.email) = 'markrock342@gmail.com' THEN 'admin'
+    ELSE COALESCE(NEW.raw_user_meta_data->>'role', 'pm')
+  END;
+
   INSERT INTO public.profiles (id, username, display_name, role)
   VALUES (
     NEW.id,
     final_username,
     COALESCE(NEW.raw_user_meta_data->>'display_name', base_username),
-    COALESCE(NEW.raw_user_meta_data->>'role', 'pm')
+    assigned_role
   );
 
   RETURN NEW;

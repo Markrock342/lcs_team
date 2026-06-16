@@ -59,12 +59,14 @@ export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
 };
 
 export const ROLE_LABELS: Record<TeamRole, string> = {
+  admin: "Admin",
   pm: "PM",
   backend: "Backend",
   design: "Design/Frontend",
 };
 
 export const ROLE_COLORS: Record<TeamRole, string> = {
+  admin: "bg-red-500/20 text-red-300",
   pm: "bg-orange-500/20 text-orange-300",
   backend: "bg-[#00a3ff]/20 text-[#00a3ff]",
   design: "bg-pink-500/20 text-pink-300",

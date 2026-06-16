@@ -1,5 +1,7 @@
 import { IBM_Plex_Sans_Thai } from "next/font/google";
 import type { Metadata, Viewport } from "next";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { PWARegister } from "@/components/PWARegister";
 import "./globals.css";
 
 const ibmPlex = IBM_Plex_Sans_Thai({
@@ -13,8 +15,8 @@ export const metadata: Metadata = {
   description: "ระบบจัดการทีม Limit Code Studio",
   manifest: "/manifest.json",
   icons: {
-    icon: "/logo.png",
-    apple: "/logo.png",
+    icon: "/icon.svg",
+    apple: "/icon.svg",
   },
 };
 
@@ -32,8 +34,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="th" className={`${ibmPlex.variable} h-full`}>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){if(!('serviceWorker'in navigator))return;navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister()})});if('caches'in window)caches.keys().then(function(k){k.forEach(function(c){caches.delete(c)})})})();`,
+          }}
+        />
+      </head>
       <body className="min-h-full antialiased bg-background text-foreground">
-        {children}
+        <ThemeProvider>
+          {children}
+          <PWARegister />
+        </ThemeProvider>
       </body>
     </html>
   );

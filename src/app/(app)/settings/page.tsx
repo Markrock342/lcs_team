@@ -1,0 +1,243 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Moon, Sun, Bell, Download, Smartphone, Shield } from "lucide-react";
+import { PageHeader } from "@/components/mobile-ui";
+import { Button, RoleBadge, Select } from "@/components/ui";
+import { useTheme } from "@/components/ThemeProvider";
+import { subscribeToPush, unsubscribeFromPush } from "@/components/PWARegister";
+import { createClient } from "@/lib/supabase/client";
+import { exportToCSV } from "@/lib/activity";
+import { ROLE_LABELS } from "@/lib/constants";
+import {
+  ASSIGNABLE_ROLES,
+  ROLE_DESCRIPTIONS,
+  hasPermission,
+} from "@/lib/permissions";
+import type { Profile, TeamRole } from "@/lib/types";
+
+export default function SettingsPage() {
+  const { theme, toggle } = useTheme();
+  const [pushOn, setPushOn] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [installable, setInstallable] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [team, setTeam] = useState<Profile[]>([]);
+  const [roleSaving, setRoleSaving] = useState<string | null>(null);
+  const [roleError, setRoleError] = useState("");
+
+  useEffect(() => {
+    checkPush();
+    loadProfile();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      (window as any).__pwaPrompt = e;
+      setInstallable(true);
+    });
+  }, []);
+
+  async function loadProfile() {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+    setProfile(data);
+
+    if (data && hasPermission(data.role, "manage_team")) {
+      const { data: members } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("display_name");
+      setTeam(members ?? []);
+    }
+  }
+
+  async function updateMemberRole(memberId: string, role: TeamRole) {
+    setRoleSaving(memberId);
+    setRoleError("");
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ role })
+      .eq("id", memberId);
+
+    if (error) {
+      setRoleError(error.message);
+    } else {
+      setTeam((prev) =>
+        prev.map((m) => (m.id === memberId ? { ...m, role } : m))
+      );
+    }
+    setRoleSaving(null);
+  }
+
+  async function checkPush() {
+    if (!("serviceWorker" in navigator)) return;
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    setPushOn(!!sub);
+  }
+
+  async function togglePush() {
+    setPushLoading(true);
+    if (pushOn) {
+      await unsubscribeFromPush();
+      setPushOn(false);
+    } else {
+      const ok = await subscribeToPush();
+      setPushOn(ok);
+    }
+    setPushLoading(false);
+  }
+
+  async function exportAll() {
+    const supabase = createClient();
+    const [clients, tasks] = await Promise.all([
+      supabase.from("clients").select("*"),
+      supabase.from("tasks").select("*, client:clients(name)"),
+    ]);
+    exportToCSV(
+      "clients.csv",
+      ["ชื่อ", "บริษัท", "สถานะ", "ประเภท"],
+      (clients.data ?? []).map((c) => [c.name, c.company ?? "", c.status, c.project_type])
+    );
+    setTimeout(() => {
+      exportToCSV(
+        "tasks.csv",
+        ["งาน", "ลูกค้า", "สถานะ", "เริ่ม", "ครบ"],
+        (tasks.data ?? []).map((t) => [
+          t.title,
+          t.client?.name ?? "",
+          t.status,
+          t.start_date ?? "",
+          t.due_date ?? "",
+        ])
+      );
+    }, 500);
+  }
+
+  async function installApp() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const prompt = (window as any).__pwaPrompt;
+    if (prompt) {
+      prompt.prompt();
+      await prompt.userChoice;
+      setInstallable(false);
+    }
+  }
+
+  return (
+    <div className="space-y-5 animate-fade-in max-w-lg">
+      <PageHeader title="ตั้งค่า" description="PWA, Push, Theme และ Export" />
+
+      {profile && hasPermission(profile.role, "manage_team") && (
+        <section className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-3 p-4 border-b border-border">
+            <Shield size={20} className="text-red-400" />
+            <div>
+              <p className="font-medium text-sm">จัดการทีม & สิทธิ์</p>
+              <p className="text-xs text-muted">มอบหมาย role ให้สมาชิก</p>
+            </div>
+          </div>
+          <div className="divide-y divide-border">
+            {team.map((member) => (
+              <div key={member.id} className="p-4 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate">{member.display_name}</p>
+                    <p className="text-xs text-muted">@{member.username}</p>
+                  </div>
+                  <RoleBadge role={member.role} />
+                </div>
+                <Select
+                  label="หน้าที่"
+                  value={member.role}
+                  disabled={roleSaving === member.id}
+                  onChange={(e) =>
+                    updateMemberRole(member.id, e.target.value as TeamRole)
+                  }
+                >
+                  {ASSIGNABLE_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {ROLE_LABELS[role]}
+                    </option>
+                  ))}
+                </Select>
+                <p className="text-[11px] text-muted">{ROLE_DESCRIPTIONS[member.role]}</p>
+              </div>
+            ))}
+          </div>
+          {roleError && (
+            <p className="px-4 pb-4 text-xs text-red-400">{roleError}</p>
+          )}
+        </section>
+      )}
+
+      <section className="bg-card border border-border rounded-2xl divide-y divide-border">
+        <div className="flex items-center justify-between p-4">
+          <div className="flex items-center gap-3">
+            {theme === "dark" ? <Moon size={20} className="text-accent" /> : <Sun size={20} className="text-amber-400" />}
+            <div>
+              <p className="font-medium text-sm">ธีม</p>
+              <p className="text-xs text-muted">{theme === "dark" ? "Dark Mode" : "Light Mode"}</p>
+            </div>
+          </div>
+          <Button variant="secondary" onClick={toggle}>สลับ</Button>
+        </div>
+
+        <div className="flex items-center justify-between p-4">
+          <div className="flex items-center gap-3">
+            <Bell size={20} className="text-accent" />
+            <div>
+              <p className="font-medium text-sm">Push Notifications</p>
+              <p className="text-xs text-muted">แจ้งเตือนแม้ออกจากแอพ</p>
+            </div>
+          </div>
+          <Button variant={pushOn ? "secondary" : "primary"} loading={pushLoading} onClick={togglePush}>
+            {pushOn ? "ปิด" : "เปิด"}
+          </Button>
+        </div>
+
+        {installable && (
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-3">
+              <Smartphone size={20} className="text-accent" />
+              <div>
+                <p className="font-medium text-sm">ติดตั้งแอพ (PWA)</p>
+                <p className="text-xs text-muted">เพิ่มไปหน้าจอ Home</p>
+              </div>
+            </div>
+            <Button onClick={installApp}>ติดตั้ง</Button>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between p-4">
+          <div className="flex items-center gap-3">
+            <Download size={20} className="text-accent" />
+            <div>
+              <p className="font-medium text-sm">Export ข้อมูล</p>
+              <p className="text-xs text-muted">CSV ลูกค้า + งาน</p>
+            </div>
+          </div>
+          {(!profile || hasPermission(profile.role, "export_data")) && (
+            <Button variant="secondary" onClick={exportAll}>Export</Button>
+          )}
+        </div>
+      </section>
+
+      {!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && (
+        <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+          Push ยังไม่พร้อม — รัน <code>node scripts/generate-vapid.js</code> แล้วใส่ใน .env.local
+        </p>
+      )}
+    </div>
+  );
+}

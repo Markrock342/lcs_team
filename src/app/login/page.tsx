@@ -83,18 +83,6 @@ export default function LoginPage() {
           <p className="text-muted mt-1 text-sm tracking-wide">{TEAM.tagline}</p>
         </div>
 
-        <div className="flex justify-center gap-4 mb-8">
-          {TEAM.members.map((m) => (
-            <div key={m.username} className="text-center">
-              <div className="w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center text-sm font-bold mx-auto mb-1">
-                {m.displayName[0]}
-              </div>
-              <p className="text-xs font-medium">{m.displayName}</p>
-              <p className="text-[10px] text-muted">{m.title}</p>
-            </div>
-          ))}
-        </div>
-
         <form
           onSubmit={handleSubmit}
           className="bg-card border border-brand rounded-2xl p-6 space-y-4 shadow-brand"
@@ -120,7 +108,7 @@ export default function LoginPage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="mark@limitcode.dev"
+            placeholder="you@email.com"
             required
           />
 
