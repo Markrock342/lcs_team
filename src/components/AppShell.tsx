@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Avatar, RoleBadge } from "./ui";
+import { Avatar, ProfileRoleBadges } from "./ui";
 import { Logo } from "./Logo";
 import { NotificationBell } from "./NotificationBell";
 import { getPageTitle } from "./mobile-ui";
@@ -119,9 +119,9 @@ export function AppShell({
               <Avatar name={profile.display_name} size="sm" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{profile.display_name}</p>
-                <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="flex flex-wrap items-center gap-1 mt-0.5">
                   <p className="text-xs text-muted truncate">@{profile.username}</p>
-                  <RoleBadge role={profile.role} />
+                  <ProfileRoleBadges profile={profile} size="xs" />
                 </div>
               </div>
               <button onClick={handleLogout} className="p-2 rounded-lg hover:bg-card-hover text-muted" title="ออกจากระบบ">
@@ -149,9 +149,9 @@ export function AppShell({
                   <div className="absolute right-0 top-full mt-2 w-48 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
                     <div className="px-4 py-3 border-b border-border">
                       <p className="text-sm font-medium truncate">{profile.display_name}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className="flex flex-wrap items-center gap-1 mt-0.5">
                         <p className="text-xs text-muted">@{profile.username}</p>
-                        <RoleBadge role={profile.role} />
+                        <ProfileRoleBadges profile={profile} size="xs" />
                       </div>
                     </div>
                     <Link href="/settings" onClick={() => setProfileOpen(false)} className="block px-4 py-2.5 text-sm hover:bg-card-hover">ตั้งค่า</Link>

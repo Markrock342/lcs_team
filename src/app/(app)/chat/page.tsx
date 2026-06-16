@@ -16,7 +16,7 @@ import {
   MoreVertical,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Avatar, Button, Input, Modal, Textarea } from "@/components/ui";
+import { Avatar, Button, Input, Modal, Textarea, ProfileRoleBadges } from "@/components/ui";
 import { uploadFile, isImageFile } from "@/lib/upload";
 import { slugifyChannelName, formatChannelDisplay } from "@/lib/channels";
 import { parseMentions, notifyUser, logActivity } from "@/lib/activity";
@@ -402,9 +402,10 @@ export default function ChatPage() {
           </p>
           <div className="space-y-1.5 max-h-28 overflow-y-auto">
             {profiles.map((p) => (
-              <div key={p.id} className="flex items-center gap-2 text-xs">
+              <div key={p.id} className="flex items-center gap-2 text-xs min-w-0">
                 <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-                <span className="truncate">{p.display_name}</span>
+                <span className="truncate flex-1">{p.display_name}</span>
+                <ProfileRoleBadges profile={p} size="xs" />
               </div>
             ))}
           </div>

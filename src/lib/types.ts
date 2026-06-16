@@ -26,6 +26,7 @@ export interface Profile {
   username: string;
   display_name: string;
   role: TeamRole;
+  display_roles: TeamRole[] | null;
   avatar_url: string | null;
   created_at: string;
 }

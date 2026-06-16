@@ -1,4 +1,5 @@
-import type { TaskStatus, TeamRole } from "@/lib/types";
+import type { TaskStatus, TeamRole, Profile } from "@/lib/types";
+import { getProfileDisplayRoles } from "@/lib/profile-display";
 import {
   TASK_STATUS_LABELS,
   TASK_STATUS_COLORS,
@@ -22,6 +23,29 @@ export function RoleBadge({ role }: { role: TeamRole }) {
       className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${ROLE_COLORS[role]}`}
     >
       {ROLE_LABELS[role]}
+    </span>
+  );
+}
+
+export function ProfileRoleBadges({
+  profile,
+  size = "sm",
+}: {
+  profile: Pick<Profile, "role" | "display_roles">;
+  size?: "sm" | "xs";
+}) {
+  const roles = getProfileDisplayRoles(profile);
+  const text = size === "xs" ? "text-[10px] px-1.5 py-0" : "text-xs";
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {roles.map((role) => (
+        <span
+          key={role}
+          className={`inline-flex items-center rounded-md font-medium ${text} ${ROLE_COLORS[role]}`}
+        >
+          {ROLE_LABELS[role]}
+        </span>
+      ))}
     </span>
   );
 }

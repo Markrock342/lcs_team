@@ -11,7 +11,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { StatusBadge, Avatar, RoleBadge } from "@/components/ui";
+import { StatusBadge, Avatar, ProfileRoleBadges } from "@/components/ui";
 import { TEAM } from "@/lib/constants";
 import type { Task, Client, Profile } from "@/lib/types";
 
@@ -162,6 +162,7 @@ export default function DashboardPage() {
               username: m.username,
               display_name: m.displayName,
               role: m.role,
+              display_roles: null,
               avatar_url: null,
               created_at: "",
             }))).map((member) => {
@@ -177,7 +178,7 @@ export default function DashboardPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-sm">{member.display_name}</p>
-                      <RoleBadge role={member.role} />
+                      <ProfileRoleBadges profile={member} size="xs" />
                     </div>
                     <p className="text-xs text-muted">
                       {memberTasks.length} งานที่รับผิดชอบ

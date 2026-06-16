@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Moon, Sun, Bell, Download, Smartphone, Shield } from "lucide-react";
+import { Moon, Sun, Bell, Download, Smartphone, Shield, User } from "lucide-react";
 import { PageHeader } from "@/components/mobile-ui";
-import { Button, RoleBadge, Select } from "@/components/ui";
+import { Button, RoleBadge, Select, Avatar, ProfileRoleBadges } from "@/components/ui";
 import { useTheme } from "@/components/ThemeProvider";
 import { subscribeToPush, unsubscribeFromPush } from "@/components/PWARegister";
 import { createClient } from "@/lib/supabase/client";
@@ -14,6 +14,7 @@ import {
   ROLE_DESCRIPTIONS,
   hasPermission,
 } from "@/lib/permissions";
+import { getProfileDisplayRoles } from "@/lib/profile-display";
 import type { Profile, TeamRole } from "@/lib/types";
 
 export default function SettingsPage() {
@@ -26,6 +27,7 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [team, setTeam] = useState<Profile[]>([]);
   const [roleSaving, setRoleSaving] = useState<string | null>(null);
+  const [displaySaving, setDisplaySaving] = useState(false);
   const [roleError, setRoleError] = useState("");
 
   useEffect(() => {
@@ -97,6 +99,33 @@ export default function SettingsPage() {
     setRoleSaving(null);
   }
 
+  async function toggleDisplayRole(role: TeamRole) {
+    if (!profile) return;
+    setDisplaySaving(true);
+    const current = getProfileDisplayRoles(profile);
+    let next = current.includes(role)
+      ? current.filter((r) => r !== role)
+      : [...current, role];
+    if (next.length === 0) next = [profile.role];
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ display_roles: next })
+      .eq("id", profile.id);
+
+    if (error) {
+      setRoleError(error.message);
+    } else {
+      const updated = { ...profile, display_roles: next };
+      setProfile(updated);
+      setTeam((prev) =>
+        prev.map((m) => (m.id === profile.id ? { ...m, display_roles: next } : m))
+      );
+    }
+    setDisplaySaving(false);
+  }
+
   async function checkPush() {
     if (!("serviceWorker" in navigator)) return;
     const reg = await navigator.serviceWorker.ready;
@@ -156,6 +185,53 @@ export default function SettingsPage() {
     <div className="space-y-5 animate-fade-in max-w-lg">
       <PageHeader title="ตั้งค่า" description="PWA, Push, Theme และ Export" />
 
+      {profile && (
+        <section className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-3 p-4 border-b border-border">
+            <User size={20} className="text-accent" />
+            <div>
+              <p className="font-medium text-sm">โปรไฟล์ของฉัน</p>
+              <p className="text-xs text-muted">badge ที่ทีมเห็นใน sidebar / แชท</p>
+            </div>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <Avatar name={profile.display_name} />
+              <div>
+                <p className="font-medium text-sm">{profile.display_name}</p>
+                <p className="text-xs text-muted">@{profile.username}</p>
+                <div className="mt-1">
+                  <ProfileRoleBadges profile={profile} size="xs" />
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-muted">
+              สิทธิ์จริง: <strong>{ROLE_LABELS[profile.role]}</strong> — เลือก badge เพิ่มได้ (เช่น Admin + PM)
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {ASSIGNABLE_ROLES.map((role) => {
+                const on = getProfileDisplayRoles(profile).includes(role);
+                return (
+                  <button
+                    key={role}
+                    type="button"
+                    disabled={displaySaving}
+                    onClick={() => toggleDisplayRole(role)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      on
+                        ? "bg-accent/20 text-accent ring-1 ring-accent/40"
+                        : "bg-background border border-border text-muted hover:text-foreground"
+                    }`}
+                  >
+                    {ROLE_LABELS[role]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
       {profile && hasPermission(profile.role, "manage_team") && (
         <section className="bg-card border border-border rounded-2xl overflow-hidden">
           <div className="flex items-center gap-3 p-4 border-b border-border">
@@ -173,7 +249,7 @@ export default function SettingsPage() {
                     <p className="font-medium text-sm truncate">{member.display_name}</p>
                     <p className="text-xs text-muted">@{member.username}</p>
                   </div>
-                  <RoleBadge role={member.role} />
+                  <ProfileRoleBadges profile={member} size="xs" />
                 </div>
                 <Select
                   label="หน้าที่"
