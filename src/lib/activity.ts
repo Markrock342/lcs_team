@@ -1,4 +1,8 @@
 import { createClient } from "@/lib/supabase/client";
+import {
+  sendNotification,
+  sendNotifications,
+} from "@/lib/notifications";
 
 export async function logActivity(
   action: string,
@@ -29,15 +33,7 @@ export async function notifyUser(
   body: string,
   link?: string
 ) {
-  try {
-    await fetch("/api/notifications/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, title, body, link }),
-    });
-  } catch {
-    // ignore
-  }
+  await sendNotification({ userId, title, body, link });
 }
 
 export async function notifyTeam(
@@ -49,11 +45,10 @@ export async function notifyTeam(
   try {
     const supabase = createClient();
     const { data: profiles } = await supabase.from("profiles").select("id");
-    for (const p of profiles ?? []) {
-      if (p.id !== excludeUserId) {
-        await notifyUser(p.id, title, body, link);
-      }
-    }
+    const items = (profiles ?? [])
+      .filter((p) => p.id !== excludeUserId)
+      .map((p) => ({ userId: p.id, title, body, link }));
+    await sendNotifications(items);
   } catch {
     // ignore
   }

@@ -2,114 +2,114 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MessageCircle, X } from "lucide-react";
+import { AtSign, Bell, CheckSquare, MessageCircle, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { chatChannelHref, getChatChannelIdFromLink } from "@/lib/channels";
-import type { Channel, Profile } from "@/lib/types";
+import { getChatChannelIdFromLink } from "@/lib/channels";
+import {
+  inferNotificationKind,
+  type NotificationKind,
+} from "@/lib/notifications";
 
 type ToastItem = {
   id: string;
+  notificationId: string;
   title: string;
   body: string;
   link: string;
+  kind: NotificationKind;
 };
 
-const AUTO_DISMISS_MS = 4500;
+const AUTO_DISMISS_MS = 5000;
+const MAX_TOASTS = 3;
+
+const KIND_ICON = {
+  chat: MessageCircle,
+  mention: AtSign,
+  task: CheckSquare,
+  system: Bell,
+} as const;
+
+const KIND_STYLE = {
+  chat: "bg-accent/15 text-accent",
+  mention: "bg-violet-500/15 text-violet-400",
+  task: "bg-amber-500/15 text-amber-400",
+  system: "bg-zinc-500/15 text-zinc-300",
+} as const;
 
 export function InAppNotificationToasts({ userId }: { userId: string }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [toast, setToast] = useState<ToastItem | null>(null);
-  const [phase, setPhase] = useState<"in" | "out">("in");
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const removeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const channelsRef = useRef<Pick<Channel, "id" | "name">[]>([]);
-  const profilesRef = useRef<Pick<Profile, "id" | "display_name">[]>([]);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
+  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const activeChatChannelId =
     pathname === "/chat" ? searchParams.get("channel") : null;
 
-  const shouldSuppressChatToast = useCallback(
-    (channelId: string) =>
-      pathname === "/chat" && activeChatChannelId === channelId,
+  const shouldSuppress = useCallback(
+    (link: string | null) => {
+      const channelId = getChatChannelIdFromLink(link);
+      return (
+        !!channelId &&
+        pathname === "/chat" &&
+        activeChatChannelId === channelId
+      );
+    },
     [pathname, activeChatChannelId]
   );
 
-  const dismiss = useCallback(() => {
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    setPhase("out");
-    removeTimerRef.current = setTimeout(() => {
-      setToast(null);
-      setPhase("in");
+  const removeToast = useCallback((id: string) => {
+    setExitingIds((prev) => new Set(prev).add(id));
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+      setExitingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }, 280);
+
+    const timer = timersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
   }, []);
 
-  const showToast = useCallback(
+  const enqueue = useCallback(
     (item: Omit<ToastItem, "id">) => {
-      const channelId = getChatChannelIdFromLink(item.link);
-      if (channelId && shouldSuppressChatToast(channelId)) return;
+      if (shouldSuppress(item.link)) return;
 
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-      if (removeTimerRef.current) clearTimeout(removeTimerRef.current);
+      const id = crypto.randomUUID();
+      const toast: ToastItem = { ...item, id };
 
-      setToast({ ...item, id: crypto.randomUUID() });
-      setPhase("in");
+      setToasts((prev) => [...prev, toast].slice(-MAX_TOASTS));
 
-      hideTimerRef.current = setTimeout(dismiss, AUTO_DISMISS_MS);
+      const timer = setTimeout(() => removeToast(id), AUTO_DISMISS_MS);
+      timersRef.current.set(id, timer);
     },
-    [dismiss, shouldSuppressChatToast]
+    [removeToast, shouldSuppress]
   );
 
-  useEffect(() => {
-    async function loadMeta() {
+  const openToast = useCallback(
+    async (toast: ToastItem) => {
+      removeToast(toast.id);
       const supabase = createClient();
-      const [channelsRes, profilesRes] = await Promise.all([
-        supabase.from("channels").select("id, name"),
-        supabase.from("profiles").select("id, display_name"),
-      ]);
-      channelsRef.current = channelsRes.data ?? [];
-      profilesRef.current = profilesRes.data ?? [];
-    }
-
-    loadMeta();
-  }, []);
+      await supabase
+        .from("notifications")
+        .update({ read: true })
+        .eq("id", toast.notificationId);
+      router.push(toast.link);
+    },
+    [removeToast, router]
+  );
 
   useEffect(() => {
     const supabase = createClient();
 
     const channel = supabase
       .channel(`in-app-toasts:${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
-        (payload) => {
-          const msg = payload.new as {
-            id: string;
-            channel_id: string;
-            sender_id: string;
-            content: string | null;
-            file_name: string | null;
-            deleted_at: string | null;
-          };
-
-          if (msg.sender_id === userId || msg.deleted_at) return;
-          if (shouldSuppressChatToast(msg.channel_id)) return;
-
-          const sender = profilesRef.current.find((p) => p.id === msg.sender_id);
-          const ch = channelsRef.current.find((c) => c.id === msg.channel_id);
-          const preview =
-            msg.content?.trim().slice(0, 80) ||
-            msg.file_name ||
-            "ส่งไฟล์";
-
-          showToast({
-            title: `#${ch?.name ?? "แชท"}`,
-            body: `${sender?.display_name ?? "ทีม"}: ${preview}`,
-            link: chatChannelHref(msg.channel_id),
-          });
-        }
-      )
       .on(
         "postgres_changes",
         {
@@ -126,68 +126,81 @@ export function InAppNotificationToasts({ userId }: { userId: string }) {
             link: string | null;
           };
 
-          if (n.link?.startsWith("/chat")) return;
-
-          showToast({
+          enqueue({
+            notificationId: n.id,
             title: n.title,
             body: n.body ?? "",
             link: n.link ?? "/notifications",
+            kind: inferNotificationKind(n.title, n.link),
           });
         }
       )
       .subscribe();
 
     return () => {
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-      if (removeTimerRef.current) clearTimeout(removeTimerRef.current);
+      for (const timer of timersRef.current.values()) {
+        clearTimeout(timer);
+      }
+      timersRef.current.clear();
       supabase.removeChannel(channel);
     };
-  }, [userId, showToast, shouldSuppressChatToast]);
+  }, [userId, enqueue]);
 
-  if (!toast) return null;
+  if (!toasts.length) return null;
 
   return (
-    <div
-      className={`fixed inset-x-0 z-[60] px-3 pointer-events-none ${
-        phase === "in" ? "animate-toast-in" : "animate-toast-out"
-      } top-[calc(3.5rem+env(safe-area-inset-top))] lg:top-3`}
-    >
-      <button
-        type="button"
-        onClick={() => {
-          dismiss();
-          router.push(toast.link);
-        }}
-        className="pointer-events-auto w-full max-w-md mx-auto flex items-start gap-3 px-4 py-3 rounded-xl border border-accent/30 bg-card/95 backdrop-blur-md shadow-lg text-left touch-manipulation"
-      >
-        <div className="p-2 rounded-lg bg-accent/15 text-accent shrink-0">
-          <MessageCircle size={18} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm truncate">{toast.title}</p>
-          {toast.body && (
-            <p className="text-sm text-muted mt-0.5 line-clamp-2">{toast.body}</p>
-          )}
-        </div>
-        <span
-          role="button"
-          tabIndex={0}
-          onClick={(e) => {
-            e.stopPropagation();
-            dismiss();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              e.stopPropagation();
-              dismiss();
+    <div className="fixed inset-x-0 z-60 px-3 flex flex-col gap-2 pointer-events-none top-[calc(3.5rem+env(safe-area-inset-top))] lg:top-3">
+      {toasts.map((toast) => {
+        const Icon = KIND_ICON[toast.kind];
+        const exiting = exitingIds.has(toast.id);
+
+        return (
+          <div
+            key={toast.id}
+            className={
+              exiting ? "animate-toast-out" : "animate-toast-in"
             }
-          }}
-          className="p-1 rounded-lg text-muted hover:text-foreground shrink-0 pointer-events-auto"
-        >
-          <X size={16} />
-        </span>
-      </button>
+          >
+            <button
+              type="button"
+              onClick={() => openToast(toast)}
+              className="pointer-events-auto w-full max-w-md mx-auto flex items-start gap-3 px-4 py-3 rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-lg text-left touch-manipulation"
+            >
+              <div
+                className={`p-2 rounded-lg shrink-0 ${KIND_STYLE[toast.kind]}`}
+              >
+                <Icon size={18} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm truncate">{toast.title}</p>
+                {toast.body && (
+                  <p className="text-sm text-muted mt-0.5 line-clamp-2">
+                    {toast.body}
+                  </p>
+                )}
+              </div>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeToast(toast.id);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    removeToast(toast.id);
+                  }
+                }}
+                className="p-1 rounded-lg text-muted hover:text-foreground shrink-0 pointer-events-auto"
+              >
+                <X size={16} />
+              </span>
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

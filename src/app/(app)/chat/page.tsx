@@ -22,7 +22,8 @@ import { ChatMessageItem } from "@/components/ChatMessageItem";
 import { ChatMentionInput } from "@/components/ChatMentionInput";
 import { uploadFile, isImageFile } from "@/lib/upload";
 import { slugifyChannelName, formatChannelDisplay, chatChannelHref, resolveChannelFromParam } from "@/lib/channels";
-import { parseMentions, notifyTeam, logActivity } from "@/lib/activity";
+import { parseMentions, logActivity } from "@/lib/activity";
+import { notifyChatMessage } from "@/lib/notifications";
 import { isOnline, formatPresenceStatus } from "@/lib/presence";
 import {
   fetchChannelMessages,
@@ -590,12 +591,15 @@ function ChatPageContent() {
       file_name ||
       (file ? "ส่งไฟล์" : "ข้อความใหม่");
 
-    await notifyTeam(
-      currentUser.id,
-      `#${activeChannel.name}`,
-      `${currentUser.display_name}: ${preview}`,
-      chatChannelHref(activeChannel.id)
-    );
+    await notifyChatMessage({
+      channelId: activeChannel.id,
+      channelName: activeChannel.name,
+      senderId: currentUser.id,
+      senderName: currentUser.display_name,
+      preview,
+      mentionedIds: mentionIds,
+      recipientIds: profiles.map((p) => p.id),
+    });
 
     await logActivity("comment", "message", msgData?.id ?? null, `#${activeChannel.name}`);
 

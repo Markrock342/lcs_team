@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { sendPushToUser } from "@/lib/push-server";
+import { deliverNotifications } from "@/lib/notification-server";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -21,30 +20,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  await supabase.from("notifications").insert({
-    user_id: userId,
-    title,
-    body,
-    link: link ?? null,
-  });
-
-  const admin = createAdminClient();
-  const db = admin ?? supabase;
-
-  const { data: subs } = await db
-    .from("push_subscriptions")
-    .select("endpoint, p256dh, auth")
-    .eq("user_id", userId);
-
-  const { data: profile } = await db
-    .from("profiles")
-    .select("push_enabled")
-    .eq("id", userId)
-    .single();
-
-  if (profile?.push_enabled !== false && subs?.length) {
-    await sendPushToUser(subs, { title, body, link });
-  }
+  await deliverNotifications(supabase, [
+    { userId, title, body: body ?? "", link },
+  ]);
 
   return NextResponse.json({ ok: true });
 }
