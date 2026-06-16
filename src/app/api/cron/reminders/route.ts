@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push-server";
 import { NextResponse } from "next/server";
 
@@ -52,7 +53,10 @@ export async function GET() {
       link: "/tasks",
     });
 
-    const { data: subs } = await supabase
+    const admin = createAdminClient();
+    const db = admin ?? supabase;
+
+    const { data: subs } = await db
       .from("push_subscriptions")
       .select("endpoint, p256dh, auth")
       .eq("user_id", task.assigned_to);

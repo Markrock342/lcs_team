@@ -21,7 +21,7 @@ import { ChatMessageItem } from "@/components/ChatMessageItem";
 import { ChatMentionInput } from "@/components/ChatMentionInput";
 import { uploadFile, isImageFile } from "@/lib/upload";
 import { slugifyChannelName, formatChannelDisplay } from "@/lib/channels";
-import { parseMentions, notifyUser, logActivity } from "@/lib/activity";
+import { parseMentions, notifyTeam, logActivity } from "@/lib/activity";
 import { isOnline, formatPresenceStatus } from "@/lib/presence";
 import {
   fetchChannelMessages,
@@ -520,11 +520,17 @@ export default function ChatPage() {
       return;
     }
 
-    for (const uid of mentionIds) {
-      if (uid !== currentUser.id) {
-        await notifyUser(uid, `💬 ถูก mention ใน #${activeChannel.name}`, content.trim().slice(0, 80), "/chat");
-      }
-    }
+    const preview =
+      content.trim().slice(0, 80) ||
+      file_name ||
+      (file ? "ส่งไฟล์" : "ข้อความใหม่");
+
+    await notifyTeam(
+      currentUser.id,
+      `#${activeChannel.name}`,
+      `${currentUser.display_name}: ${preview}`,
+      "/chat"
+    );
 
     await logActivity("comment", "message", msgData?.id ?? null, `#${activeChannel.name}`);
 
