@@ -180,17 +180,19 @@ export default function ChatPage() {
   }
 
   useEffect(() => {
-    const el = messagesScrollRef.current;
-    if (!el) return;
+    const scrollEl = messagesScrollRef.current;
+    if (!scrollEl) return;
 
     function onScroll() {
+      const node = messagesScrollRef.current;
+      if (!node) return;
       isNearBottomRef.current =
-        el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        node.scrollHeight - node.scrollTop - node.clientHeight < 80;
     }
 
-    el.addEventListener("scroll", onScroll, { passive: true });
+    scrollEl.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
-    return () => el.removeEventListener("scroll", onScroll);
+    return () => scrollEl.removeEventListener("scroll", onScroll);
   }, [activeChannel, showMobileChannels]);
 
   async function handleCreateChannel(e: React.FormEvent) {
