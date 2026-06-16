@@ -2,7 +2,8 @@ import { createClient } from "@/lib/supabase/client";
 
 export async function uploadFile(
   file: File,
-  folder: "clients" | "tasks" | "chat" | "client-files"
+  folder: "clients" | "tasks" | "chat" | "client-files",
+  signal?: AbortSignal
 ): Promise<{ url: string; path: string } | null> {
   const supabase = createClient();
   const ext =
@@ -15,6 +16,8 @@ export async function uploadFile(
     cacheControl: "3600",
     upsert: false,
   });
+
+  if (signal?.aborted) return null;
 
   if (error) {
     console.error("Upload error:", error);

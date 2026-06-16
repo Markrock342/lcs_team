@@ -87,6 +87,12 @@ export interface Channel {
   created_at: string;
 }
 
+export interface MessageRead {
+  user_id: string;
+  read_at: string;
+  reader?: Pick<Profile, "id" | "display_name" | "username"> | null;
+}
+
 export interface Message {
   id: string;
   channel_id: string;
@@ -95,6 +101,14 @@ export interface Message {
   file_url: string | null;
   file_name: string | null;
   file_type: string | null;
+  reply_to_id: string | null;
+  deleted_at: string | null;
+  mentioned_ids?: string[] | null;
   created_at: string;
   sender?: Profile | null;
+  reply_to?: Pick<
+    Message,
+    "id" | "content" | "sender_id" | "deleted_at" | "file_name"
+  > & { sender?: Pick<Profile, "display_name"> | null } | null;
+  reads?: MessageRead[];
 }

@@ -13,9 +13,11 @@ import {
   Pencil,
   Trash2,
   MoreVertical,
+  CornerDownRight,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar, Button, Input, Modal, Textarea, ProfileRoleBadges } from "@/components/ui";
+import { ChatMessageItem } from "@/components/ChatMessageItem";
 import { uploadFile, isImageFile } from "@/lib/upload";
 import { slugifyChannelName, formatChannelDisplay } from "@/lib/channels";
 import { parseMentions, notifyUser, logActivity } from "@/lib/activity";
@@ -23,7 +25,6 @@ import { isOnline, formatPresenceStatus } from "@/lib/presence";
 import type { Channel, Message, Profile } from "@/lib/types";
 import { format, isToday, isYesterday } from "date-fns";
 import { th } from "date-fns/locale";
-import Image from "next/image";
 
 function formatMsgTime(date: string) {
   const d = new Date(date);
@@ -38,6 +39,19 @@ function formatDateDivider(date: string) {
   if (isYesterday(d)) return "เมื่อวาน";
   return format(d, "d MMMM yyyy", { locale: th });
 }
+
+const MESSAGE_SELECT = `
+  *,
+  sender:profiles(*),
+  reply_to:messages!reply_to_id(
+    id, content, sender_id, deleted_at, file_name,
+    sender:profiles(display_name)
+  ),
+  reads:message_reads(
+    user_id, read_at,
+    reader:profiles(id, display_name, username)
+  )
+`;
 
 export default function ChatPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -60,11 +74,13 @@ export default function ChatPage() {
   const [editDesc, setEditDesc] = useState("");
   const [editingChannel, setEditingChannel] = useState(false);
   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [, setPresenceTick] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sendAbortRef = useRef<AbortController | null>(null);
 
   const filePreviewUrl = useMemo(
     () => (file && isImageFile(file.type) ? URL.createObjectURL(file) : null),
@@ -81,12 +97,29 @@ export default function ChatPage() {
     const supabase = createClient();
     const { data } = await supabase
       .from("messages")
-      .select("*, sender:profiles(*)")
+      .select(MESSAGE_SELECT)
       .eq("channel_id", channelId)
       .order("created_at", { ascending: true })
       .limit(200);
     setMessages(data ?? []);
+    return data ?? [];
   }, []);
+
+  const markMessagesAsRead = useCallback(
+    async (msgs: Message[], userId: string) => {
+      const ids = msgs
+        .filter((m) => m.sender_id !== userId && !m.deleted_at)
+        .map((m) => m.id);
+      if (!ids.length) return;
+
+      const supabase = createClient();
+      await supabase.from("message_reads").upsert(
+        ids.map((message_id) => ({ message_id, user_id: userId })),
+        { onConflict: "message_id,user_id" }
+      );
+    },
+    []
+  );
 
   useEffect(() => {
     async function init() {
@@ -112,7 +145,8 @@ export default function ChatPage() {
       const first = channelList.find((c) => c.name === "general") ?? channelList[0] ?? null;
       if (first) {
         setActiveChannel(first);
-        await loadMessages(first.id);
+        const msgs = await loadMessages(first.id);
+        if (user) await markMessagesAsRead(msgs, user.id);
         setShowMobileChannels(false);
       }
 
@@ -120,12 +154,19 @@ export default function ChatPage() {
     }
 
     init();
-  }, [loadMessages]);
+  }, [loadMessages, markMessagesAsRead]);
 
   useEffect(() => {
-    if (!activeChannel) return;
+    if (!activeChannel || !currentUser) return;
 
-    loadMessages(activeChannel.id);
+    let cancelled = false;
+
+    async function sync() {
+      const msgs = await loadMessages(activeChannel!.id);
+      if (!cancelled) await markMessagesAsRead(msgs, currentUser!.id);
+    }
+
+    sync();
     const supabase = createClient();
 
     const msgChannel = supabase
@@ -140,23 +181,84 @@ export default function ChatPage() {
         },
         async (payload) => {
           const newMsg = payload.new as Message;
-          const { data: sender } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", newMsg.sender_id)
+          const { data: full } = await supabase
+            .from("messages")
+            .select(MESSAGE_SELECT)
+            .eq("id", newMsg.id)
             .single();
+
+          if (!full) return;
+
           setMessages((prev) => {
-            if (prev.some((m) => m.id === newMsg.id)) return prev;
-            return [...prev, { ...newMsg, sender }];
+            if (prev.some((m) => m.id === full.id)) return prev;
+            return [...prev, full];
           });
+
+          if (full.sender_id !== currentUser?.id) {
+            await markMessagesAsRead([full], currentUser!.id);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `channel_id=eq.${activeChannel.id}`,
+        },
+        async (payload) => {
+          const updated = payload.new as Message;
+          const { data: full } = await supabase
+            .from("messages")
+            .select(MESSAGE_SELECT)
+            .eq("id", updated.id)
+            .single();
+          if (!full) return;
+          setMessages((prev) =>
+            prev.map((m) => (m.id === full.id ? full : m))
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "message_reads" },
+        (payload) => {
+          const read = payload.new as { message_id: string; user_id: string; read_at: string };
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.id !== read.message_id) return m;
+              const existing = m.reads ?? [];
+              if (existing.some((r) => r.user_id === read.user_id)) return m;
+              const reader = profiles.find((p) => p.id === read.user_id);
+              return {
+                ...m,
+                reads: [
+                  ...existing,
+                  {
+                    user_id: read.user_id,
+                    read_at: read.read_at,
+                    reader: reader
+                      ? {
+                          id: reader.id,
+                          display_name: reader.display_name,
+                          username: reader.username,
+                        }
+                      : null,
+                  },
+                ],
+              };
+            })
+          );
         }
       )
       .subscribe();
 
     return () => {
+      cancelled = true;
       supabase.removeChannel(msgChannel);
     };
-  }, [activeChannel, loadMessages]);
+  }, [activeChannel, loadMessages, markMessagesAsRead, currentUser, profiles]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -218,6 +320,7 @@ export default function ChatPage() {
   function selectChannel(ch: Channel) {
     setActiveChannel(ch);
     setShowMobileChannels(false);
+    setReplyTo(null);
     isNearBottomRef.current = true;
   }
 
@@ -351,12 +454,36 @@ export default function ChatPage() {
     }
   }
 
+  async function handleDeleteMessage(msg: Message) {
+    if (!confirm("ลบข้อความนี้?")) return;
+    const supabase = createClient();
+    const deleted_at = new Date().toISOString();
+    const { error } = await supabase
+      .from("messages")
+      .update({ deleted_at })
+      .eq("id", msg.id);
+
+    if (!error) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === msg.id ? { ...m, deleted_at } : m))
+      );
+    }
+  }
+
+  function cancelSend() {
+    sendAbortRef.current?.abort();
+    sendAbortRef.current = null;
+    setSending(false);
+  }
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (!content.trim() && !file) return;
     if (!currentUser || !activeChannel) return;
 
     setSending(true);
+    sendAbortRef.current = new AbortController();
+    const signal = sendAbortRef.current.signal;
     const supabase = createClient();
 
     let file_url: string | null = null;
@@ -364,7 +491,12 @@ export default function ChatPage() {
     let file_type: string | null = null;
 
     if (file) {
-      const uploaded = await uploadFile(file, "chat");
+      const uploaded = await uploadFile(file, "chat", signal);
+      if (signal.aborted) {
+        setSending(false);
+        sendAbortRef.current = null;
+        return;
+      }
       if (uploaded) {
         file_url = uploaded.url;
         file_name = file.name;
@@ -373,16 +505,34 @@ export default function ChatPage() {
     }
 
     const mentionIds = parseMentions(content, profiles);
+    const replyId = replyTo?.deleted_at ? null : replyTo?.id ?? null;
 
-    const { data: msgData } = await supabase.from("messages").insert({
-      channel_id: activeChannel.id,
-      sender_id: currentUser.id,
-      content: content.trim() || null,
-      file_url,
-      file_name,
-      file_type,
-      mentioned_ids: mentionIds,
-    }).select().single();
+    const { data: msgData } = await supabase
+      .from("messages")
+      .insert({
+        channel_id: activeChannel.id,
+        sender_id: currentUser.id,
+        content: content.trim() || null,
+        file_url,
+        file_name,
+        file_type,
+        mentioned_ids: mentionIds,
+        reply_to_id: replyId,
+      })
+      .select(MESSAGE_SELECT)
+      .single();
+
+    if (signal.aborted) {
+      if (msgData?.id) {
+        await supabase
+          .from("messages")
+          .update({ deleted_at: new Date().toISOString() })
+          .eq("id", msgData.id);
+      }
+      setSending(false);
+      sendAbortRef.current = null;
+      return;
+    }
 
     for (const uid of mentionIds) {
       if (uid !== currentUser.id) {
@@ -394,7 +544,16 @@ export default function ChatPage() {
 
     setContent("");
     setFile(null);
+    setReplyTo(null);
     setSending(false);
+    sendAbortRef.current = null;
+
+    if (msgData) {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msgData.id)) return prev;
+        return [...prev, msgData];
+      });
+    }
   }
 
   if (loading) {
@@ -600,60 +759,45 @@ export default function ChatPage() {
                           <div className="flex-1 h-px bg-border" />
                         </div>
                       )}
-                      <div className="flex gap-3 py-1 px-2 -mx-2 rounded-lg hover:bg-card-hover/50 group">
-                        {msg.sender && (
-                          <Avatar name={msg.sender.display_name} size="sm" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-baseline gap-2 mb-0.5">
-                            <span className="font-semibold text-sm">
-                              {msg.sender?.display_name ?? "Unknown"}
-                            </span>
-                            <span className="text-[10px] text-muted">
-                              {formatMsgTime(msg.created_at)}
-                            </span>
-                          </div>
-                          {msg.content && (
-                            <p className="text-sm whitespace-pre-wrap break-words text-zinc-200">
-                              {msg.content.split(/(@\w+)/g).map((part, i) =>
-                                part.startsWith("@") ? (
-                                  <span key={i} className="text-accent font-medium">{part}</span>
-                                ) : (
-                                  part
-                                )
-                              )}
-                            </p>
-                          )}
-                          {msg.file_url && isImageFile(msg.file_type) && (
-                            <div className="mt-2 relative rounded-lg overflow-hidden max-w-sm border border-border">
-                              <Image
-                                src={msg.file_url}
-                                alt={msg.file_name ?? "image"}
-                                width={400}
-                                height={300}
-                                className="w-full max-h-72 object-contain pointer-events-none select-none"
-                              />
-                            </div>
-                          )}
-                          {msg.file_url && !isImageFile(msg.file_type) && (
-                            <a
-                              href={msg.file_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 mt-1 text-sm text-accent hover:underline"
-                            >
-                              <FileText size={14} />
-                              {msg.file_name ?? "ไฟล์แนบ"}
-                            </a>
-                          )}
-                        </div>
-                      </div>
+                      <ChatMessageItem
+                        msg={msg}
+                        currentUserId={currentUser?.id}
+                        currentUserRole={currentUser?.role}
+                        profiles={profiles}
+                        formatTime={formatMsgTime}
+                        onReply={setReplyTo}
+                        onDelete={handleDeleteMessage}
+                      />
                     </div>
                   );
                 })
               )}
               <div ref={messagesEndRef} />
             </div>
+
+            {/* Reply preview */}
+            {replyTo && (
+              <div className="mx-4 mb-2 flex items-center gap-2 px-3 py-2 bg-accent/10 border border-accent/30 rounded-xl">
+                <CornerDownRight size={14} className="text-accent shrink-0" />
+                <div className="flex-1 min-w-0 text-xs">
+                  <p className="text-accent font-medium">
+                    ตอบ {replyTo.sender?.display_name}
+                  </p>
+                  <p className="truncate text-muted">
+                    {replyTo.deleted_at
+                      ? "ข้อความถูกลบ"
+                      : replyTo.content || replyTo.file_name || "ไฟล์แนบ"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReplyTo(null)}
+                  className="text-muted hover:text-foreground p-1"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
 
             {/* File preview */}
             {file && (
@@ -713,15 +857,16 @@ export default function ChatPage() {
                   className="flex-1 bg-transparent px-2 py-1.5 text-sm placeholder:text-muted focus:outline-none"
                 />
                 <button
-                  type="submit"
-                  disabled={sending || (!content.trim() && !file)}
-                  className="p-2 rounded-lg bg-accent hover:bg-accent-dim text-white transition-colors disabled:opacity-40 shrink-0"
+                  type={sending ? "button" : "submit"}
+                  onClick={sending ? cancelSend : undefined}
+                  disabled={!sending && !content.trim() && !file}
+                  className={`p-2 rounded-lg transition-colors shrink-0 ${
+                    sending
+                      ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                      : "bg-accent hover:bg-accent-dim text-white disabled:opacity-40"
+                  }`}
                 >
-                  {sending ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Send size={18} />
-                  )}
+                  {sending ? <X size={18} /> : <Send size={18} />}
                 </button>
               </div>
             </form>
