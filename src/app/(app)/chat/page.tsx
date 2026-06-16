@@ -18,6 +18,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { Avatar, Button, Input, Modal, Textarea, ProfileRoleBadges } from "@/components/ui";
 import { ChatMessageItem } from "@/components/ChatMessageItem";
+import { ChatMentionInput } from "@/components/ChatMentionInput";
 import { uploadFile, isImageFile } from "@/lib/upload";
 import { slugifyChannelName, formatChannelDisplay } from "@/lib/channels";
 import { parseMentions, notifyUser, logActivity } from "@/lib/activity";
@@ -838,13 +839,14 @@ export default function ChatPage() {
                 >
                   <Paperclip size={18} />
                 </button>
-                <input
-                  type="text"
+                <ChatMentionInput
                   value={content}
-                  onChange={(e) => setContent(e.target.value)}
+                  onChange={setContent}
+                  profiles={profiles}
+                  currentUserId={currentUser?.id}
                   onPaste={handlePaste}
-                  placeholder={`ส่งข้อความใน #${activeChannel.name} (@username เพื่อ mention)`}
-                  className="flex-1 bg-transparent px-2 py-1.5 text-sm placeholder:text-muted focus:outline-none"
+                  disabled={sending}
+                  placeholder={`ส่งข้อความใน #${activeChannel.name}`}
                 />
                 <button
                   type={sending ? "button" : "submit"}
