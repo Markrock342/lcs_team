@@ -62,7 +62,7 @@ FROM auth.users u
 WHERE p.id = u.id
   AND lower(u.email) = 'markrock342@gmail.com';
 
--- 4. กันเปลี่ยน role เอง (เฉพาะ admin เปลี่ยนได้)
+-- 4. กันเปลี่ยน role เอง + กัน admin demote ตัวเอง
 CREATE OR REPLACE FUNCTION public.protect_profile_role()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -71,6 +71,12 @@ SET search_path = public
 AS $$
 BEGIN
   IF OLD.role IS DISTINCT FROM NEW.role THEN
+    IF OLD.id = auth.uid() AND OLD.role = 'admin' AND NEW.role <> 'admin' THEN
+      RAISE EXCEPTION 'Cannot demote yourself from admin';
+    END IF;
+    IF OLD.id = auth.uid() THEN
+      RAISE EXCEPTION 'Cannot change your own role';
+    END IF;
     IF auth.uid() IS NULL OR NOT EXISTS (
       SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
     ) THEN

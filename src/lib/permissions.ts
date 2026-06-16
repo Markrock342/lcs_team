@@ -29,8 +29,8 @@ export const ROLE_PERMISSIONS: Record<TeamRole, Permission[]> = {
 };
 
 export const ROLE_DESCRIPTIONS: Record<TeamRole, string> = {
-  admin: "แอดมิน — จัดการทีม มอบหมาย role ควบคุมได้ทุกส่วน",
-  pm: "PM — จัดการลูกค้า งาน ใบแจ้งหนี้ เทมเพลต",
+  admin: "แอดมิน — สิทธิ์ครบทุกอย่าง รวม PM (จัดการทีม + ลูกค้า + งาน)",
+  pm: "PM — จัดการลูกค้า งาน ใบแจ้งหนี้ เทมเพลต (ไม่มีจัดการทีม)",
   backend: "Backend — รับงาน dev/API ที่มอบหมาย",
   design: "Design/Frontend — รับงาน UI/UX ที่มอบหมาย",
 };

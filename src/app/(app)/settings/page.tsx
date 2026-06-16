@@ -72,6 +72,16 @@ export default function SettingsPage() {
     setRoleSaving(memberId);
     setRoleError("");
     const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user?.id === memberId) {
+      setRoleError("เปลี่ยน role ตัวเองไม่ได้ — ให้ admin คนอื่นจัดการ (admin มีสิทธิ์ PM ครบอยู่แล้ว)");
+      setRoleSaving(null);
+      return;
+    }
+
     const { error } = await supabase
       .from("profiles")
       .update({ role })
@@ -168,7 +178,7 @@ export default function SettingsPage() {
                 <Select
                   label="หน้าที่"
                   value={member.role}
-                  disabled={roleSaving === member.id}
+                  disabled={roleSaving === member.id || member.id === profile?.id}
                   onChange={(e) =>
                     updateMemberRole(member.id, e.target.value as TeamRole)
                   }
@@ -180,6 +190,11 @@ export default function SettingsPage() {
                   ))}
                 </Select>
                 <p className="text-[11px] text-muted">{ROLE_DESCRIPTIONS[member.role]}</p>
+                {member.id === profile?.id && (
+                  <p className="text-[11px] text-amber-400">
+                    เปลี่ยน role ตัวเองไม่ได้ — ใช้ admin ถ้าต้องการสิทธิ์ PM + จัดการทีม
+                  </p>
+                )}
               </div>
             ))}
           </div>
