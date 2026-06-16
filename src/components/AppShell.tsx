@@ -15,7 +15,8 @@ import {
   LayoutTemplate,
   Settings,
 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { Suspense, useState, useRef, useEffect } from "react";
+import { InAppNotificationToasts } from "./InAppNotificationToasts";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar, ProfileRoleBadges } from "./ui";
 import { Logo } from "./Logo";
@@ -103,6 +104,11 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen min-h-[100dvh]">
+      {profile && (
+        <Suspense fallback={null}>
+          <InAppNotificationToasts userId={profile.id} />
+        </Suspense>
+      )}
       <aside className="hidden lg:flex flex-col w-64 bg-sidebar border-r border-brand fixed inset-y-0 left-0 overflow-y-auto">
         <div className="p-5 border-b border-brand">
           <div className="flex flex-col items-center gap-2 py-2">

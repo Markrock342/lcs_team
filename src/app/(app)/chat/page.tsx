@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Send,
   Paperclip,
@@ -20,7 +21,7 @@ import { Avatar, Button, Input, Modal, Textarea, ProfileRoleBadges } from "@/com
 import { ChatMessageItem } from "@/components/ChatMessageItem";
 import { ChatMentionInput } from "@/components/ChatMentionInput";
 import { uploadFile, isImageFile } from "@/lib/upload";
-import { slugifyChannelName, formatChannelDisplay } from "@/lib/channels";
+import { slugifyChannelName, formatChannelDisplay, chatChannelHref, resolveChannelFromParam } from "@/lib/channels";
 import { parseMentions, notifyTeam, logActivity } from "@/lib/activity";
 import { isOnline, formatPresenceStatus } from "@/lib/presence";
 import {
@@ -48,6 +49,23 @@ function formatDateDivider(date: string) {
 }
 
 export default function ChatPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-32">
+          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <ChatPageContent />
+    </Suspense>
+  );
+}
+
+function ChatPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const channelParam = searchParams.get("channel");
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -75,6 +93,7 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
+  const pendingScrollBottomRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sendAbortRef = useRef<AbortController | null>(null);
 
@@ -129,9 +148,18 @@ export default function ChatPage() {
         setCurrentUser(profile ?? null);
       }
 
-      const first = channelList.find((c) => c.name === "general") ?? channelList[0] ?? null;
+      const fromParam = resolveChannelFromParam(channelParam, channelList);
+      const first =
+        fromParam ??
+        channelList.find((c) => c.name === "general") ??
+        channelList[0] ??
+        null;
       if (first) {
         setActiveChannel(first);
+        pendingScrollBottomRef.current = true;
+        if (channelParam !== first.id) {
+          router.replace(chatChannelHref(first.id), { scroll: false });
+        }
         const msgs = await loadMessages(first.id);
         if (user) await markMessagesAsRead(msgs, user.id);
         setShowMobileChannels(false);
@@ -144,8 +172,20 @@ export default function ChatPage() {
   }, [loadMessages, markMessagesAsRead]);
 
   useEffect(() => {
+    if (loading || !channels.length || !channelParam) return;
+    const ch = resolveChannelFromParam(channelParam, channels);
+    if (!ch || ch.id === activeChannel?.id) return;
+    setActiveChannel(ch);
+    setShowMobileChannels(false);
+    setReplyTo(null);
+    pendingScrollBottomRef.current = true;
+    isNearBottomRef.current = true;
+  }, [channelParam, channels, loading, activeChannel?.id]);
+
+  useEffect(() => {
     if (!activeChannel || !currentUser) return;
 
+    pendingScrollBottomRef.current = true;
     let cancelled = false;
 
     async function sync() {
@@ -291,16 +331,34 @@ export default function ChatPage() {
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    if (!isNearBottomRef.current) return;
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, activeChannel]);
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+    isNearBottomRef.current = true;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (showMobileChannels || !messagesScrollRef.current) return;
+
+    if (pendingScrollBottomRef.current) {
+      scrollToBottom("auto");
+      pendingScrollBottomRef.current = false;
+      return;
+    }
+
+    if (isNearBottomRef.current) {
+      scrollToBottom("auto");
+    }
+  }, [messages, showMobileChannels, activeChannel?.id, scrollToBottom]);
 
   function selectChannel(ch: Channel) {
     setActiveChannel(ch);
     setShowMobileChannels(false);
     setReplyTo(null);
     isNearBottomRef.current = true;
+    pendingScrollBottomRef.current = true;
+    router.replace(chatChannelHref(ch.id), { scroll: false });
   }
 
   useEffect(() => {
@@ -361,6 +419,8 @@ export default function ChatPage() {
       setActiveChannel(data);
       setMessages([]);
       setShowMobileChannels(false);
+      pendingScrollBottomRef.current = true;
+      router.replace(chatChannelHref(data.id), { scroll: false });
     }
 
     setNewChannelName("");
@@ -410,8 +470,13 @@ export default function ChatPage() {
     setChannels((prev) => prev.filter((c) => c.id !== activeChannel.id));
     const next = channels.find((c) => c.id !== activeChannel.id) ?? null;
     setActiveChannel(next);
-    if (next) loadMessages(next.id);
-    else setMessages([]);
+    if (next) {
+      pendingScrollBottomRef.current = true;
+      router.replace(chatChannelHref(next.id), { scroll: false });
+      loadMessages(next.id);
+    } else {
+      setMessages([]);
+    }
     setChannelMenuOpen(false);
     await logActivity("delete", "channel", activeChannel.id, activeChannel.name);
   }
@@ -529,7 +594,7 @@ export default function ChatPage() {
       currentUser.id,
       `#${activeChannel.name}`,
       `${currentUser.display_name}: ${preview}`,
-      "/chat"
+      chatChannelHref(activeChannel.id)
     );
 
     await logActivity("comment", "message", msgData?.id ?? null, `#${activeChannel.name}`);

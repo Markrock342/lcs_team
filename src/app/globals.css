@@ -132,6 +132,36 @@ input, select, textarea {
   animation: pulse-glow 3s ease-in-out infinite;
 }
 
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-100% - 0.5rem));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(calc(-100% - 0.5rem));
+  }
+}
+
+.animate-toast-in {
+  animation: toast-in 0.35s ease-out forwards;
+}
+
+.animate-toast-out {
+  animation: toast-out 0.28s ease-in forwards;
+}
+
 /* Light theme */
 [data-theme="light"] {
   --background: #f0f4f8;
