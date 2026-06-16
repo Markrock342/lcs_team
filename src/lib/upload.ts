@@ -5,7 +5,10 @@ export async function uploadFile(
   folder: "clients" | "tasks" | "chat" | "client-files"
 ): Promise<{ url: string; path: string } | null> {
   const supabase = createClient();
-  const ext = file.name.split(".").pop();
+  const ext =
+    file.name.includes(".")
+      ? file.name.split(".").pop()
+      : file.type.split("/")[1]?.replace("jpeg", "jpg") || "bin";
   const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
   const { error } = await supabase.storage.from("uploads").upload(path, file, {

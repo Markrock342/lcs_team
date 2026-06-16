@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Send,
   Paperclip,
-  Image as ImageIcon,
   FileText,
   X,
   Hash,
@@ -66,6 +65,17 @@ export default function ChatPage() {
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const filePreviewUrl = useMemo(
+    () => (file && isImageFile(file.type) ? URL.createObjectURL(file) : null),
+    [file]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl);
+    };
+  }, [filePreviewUrl]);
 
   const loadMessages = useCallback(async (channelId: string) => {
     const supabase = createClient();
@@ -322,6 +332,23 @@ export default function ChatPage() {
     else setMessages([]);
     setChannelMenuOpen(false);
     await logActivity("delete", "channel", activeChannel.id, activeChannel.name);
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of Array.from(items)) {
+      if (!item.type.startsWith("image/")) continue;
+      e.preventDefault();
+      const blob = item.getAsFile();
+      if (!blob) return;
+      const ext = blob.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
+      setFile(
+        new File([blob], `pasted-${Date.now()}.${ext}`, { type: blob.type })
+      );
+      return;
+    }
   }
 
   async function handleSend(e: React.FormEvent) {
@@ -632,11 +659,21 @@ export default function ChatPage() {
             {file && (
               <div className="mx-4 mb-2 flex items-center gap-2 px-3 py-2 bg-background border border-border rounded-xl">
                 {isImageFile(file.type) ? (
-                  <ImageIcon size={16} className="text-accent" />
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={filePreviewUrl ?? ""}
+                      alt=""
+                      className="w-10 h-10 rounded object-cover shrink-0"
+                    />
+                    <span className="text-sm truncate flex-1">รูปจากคลิปบอร์ด</span>
+                  </>
                 ) : (
-                  <FileText size={16} className="text-accent" />
+                  <>
+                    <FileText size={16} className="text-accent shrink-0" />
+                    <span className="text-sm truncate flex-1">{file.name}</span>
+                  </>
                 )}
-                <span className="text-sm truncate flex-1">{file.name}</span>
                 <button
                   onClick={() => setFile(null)}
                   className="text-muted hover:text-foreground"
@@ -649,12 +686,14 @@ export default function ChatPage() {
             {/* Input */}
             <form
               onSubmit={handleSend}
+              onPaste={handlePaste}
               className="p-4 border-t border-brand shrink-0"
             >
               <div className="flex items-end gap-2 bg-background border border-border rounded-xl px-2 py-2 focus-within:ring-2 focus-within:ring-accent/30">
                 <input
                   ref={fileInputRef}
                   type="file"
+                  accept="image/*,.pdf,.doc,.docx,.zip"
                   className="hidden"
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 />
@@ -669,7 +708,8 @@ export default function ChatPage() {
                   type="text"
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder={`ส่งข้อความใน #${activeChannel.name} (@username เพื่อ mention)`}
+                  onPaste={handlePaste}
+                  placeholder={`ส่งข้อความใน #${activeChannel.name} · Cmd+V วางรูป`}
                   className="flex-1 bg-transparent px-2 py-1.5 text-sm placeholder:text-muted focus:outline-none"
                 />
                 <button
