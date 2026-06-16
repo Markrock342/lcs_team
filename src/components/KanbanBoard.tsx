@@ -44,7 +44,7 @@ export function KanbanBoard({
                   <p className="text-xs text-muted mt-1">{task.client?.name ?? "—"}</p>
                   {task.assignee && (
                     <div className="flex items-center gap-1.5 mt-2">
-                      <Avatar name={task.assignee.display_name} size="sm" />
+                      <Avatar name={task.assignee.display_name} src={task.assignee.avatar_url} size="sm" />
                       <span className="text-[10px] text-muted">{task.assignee.display_name}</span>
                     </div>
                   )}

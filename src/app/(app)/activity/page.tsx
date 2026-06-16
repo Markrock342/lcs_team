@@ -42,7 +42,9 @@ export default function ActivityPage() {
       <div className="space-y-2">
         {logs.map((log) => (
           <div key={log.id} className="flex gap-3 p-3 bg-card border border-border rounded-xl">
-            {log.user && <Avatar name={log.user.display_name} size="sm" />}
+            {log.user && (
+              <Avatar name={log.user.display_name} src={log.user.avatar_url} size="sm" />
+            )}
             <div className="flex-1 min-w-0">
               <p className="text-sm">
                 <span className="font-medium">{log.user?.display_name ?? "ระบบ"}</span>{" "}

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Moon, Sun, Bell, Download, Smartphone, Shield, User } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Moon, Sun, Bell, Download, Smartphone, Shield, User, Camera } from "lucide-react";
 import { PageHeader } from "@/components/mobile-ui";
 import { Button, Select, Avatar, ProfileRoleBadges } from "@/components/ui";
 import { useTheme } from "@/components/ThemeProvider";
 import { subscribeToPush, unsubscribeFromPush } from "@/components/PWARegister";
 import { createClient } from "@/lib/supabase/client";
+import { uploadFile, isImageFile } from "@/lib/upload";
 import { exportToCSV } from "@/lib/activity";
 import { ROLE_LABELS } from "@/lib/constants";
 import {
@@ -30,6 +31,8 @@ export default function SettingsPage() {
   const [roleSaving, setRoleSaving] = useState<string | null>(null);
   const [displaySaving, setDisplaySaving] = useState<string | null>(null);
   const [roleError, setRoleError] = useState("");
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     checkPush();
@@ -132,6 +135,48 @@ export default function SettingsPage() {
     setDisplaySaving(null);
   }
 
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !profile) return;
+
+    if (!isImageFile(file.type)) {
+      setRoleError("อัปโหลดได้เฉพาะไฟล์รูป");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setRoleError("รูปต้องไม่เกิน 5 MB");
+      return;
+    }
+
+    setAvatarUploading(true);
+    setRoleError("");
+
+    const uploaded = await uploadFile(file, "avatars");
+    if (!uploaded) {
+      setRoleError("อัปโหลดรูปไม่สำเร็จ");
+      setAvatarUploading(false);
+      e.target.value = "";
+      return;
+    }
+
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ avatar_url: uploaded.url })
+      .eq("id", profile.id)
+      .select()
+      .single();
+
+    if (error) {
+      setRoleError(error.message);
+    } else if (data) {
+      setProfile(data);
+    }
+
+    setAvatarUploading(false);
+    e.target.value = "";
+  }
+
   async function checkPush() {
     if (!("serviceWorker" in navigator)) return;
     const reg = await navigator.serviceWorker.ready;
@@ -202,10 +247,43 @@ export default function SettingsPage() {
           </div>
           <div className="p-4 space-y-3">
             <div className="flex items-center gap-3">
-              <Avatar name={profile.display_name} />
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={avatarUploading}
+                className="relative shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-accent/40"
+              >
+                <Avatar
+                  name={profile.display_name}
+                  src={profile.avatar_url}
+                  size="lg"
+                />
+                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 opacity-0 hover:opacity-100 transition-opacity">
+                  {avatarUploading ? (
+                    <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Camera size={18} className="text-white" />
+                  )}
+                </span>
+              </button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
               <div>
                 <p className="font-medium text-sm">{profile.display_name}</p>
                 <p className="text-xs text-muted">@{profile.username}</p>
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={avatarUploading}
+                  className="mt-1 text-xs text-accent hover:underline disabled:opacity-50"
+                >
+                  {avatarUploading ? "กำลังอัปโหลด..." : "เปลี่ยนรูปโปรไฟล์"}
+                </button>
                 <div className="mt-1">
                   <ProfileRoleBadges profile={profile} size="xs" />
                 </div>

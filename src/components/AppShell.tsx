@@ -120,7 +120,7 @@ export function AppShell({
         {profile && (
           <div className="p-3 border-t border-border">
             <div className="flex items-center gap-3 px-3 py-2">
-              <Avatar name={profile.display_name} size="sm" />
+              <Avatar name={profile.display_name} src={profile.avatar_url} size="sm" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{profile.display_name}</p>
                 <div className="flex flex-wrap items-center gap-1 mt-0.5">
@@ -147,7 +147,7 @@ export function AppShell({
             {profile && (
               <div className="relative" ref={profileRef}>
                 <button onClick={() => setProfileOpen(!profileOpen)} className="p-1 rounded-full">
-                  <Avatar name={profile.display_name} size="sm" />
+                  <Avatar name={profile.display_name} src={profile.avatar_url} size="sm" />
                 </button>
                 {profileOpen && (
                   <div className="absolute right-0 top-full mt-2 w-48 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">

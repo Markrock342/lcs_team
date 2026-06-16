@@ -41,7 +41,13 @@ export function ChatMessageItem({
 
   return (
     <div className="flex gap-3 py-1 px-2 -mx-2 rounded-lg hover:bg-card-hover/50 group">
-      {msg.sender && <Avatar name={msg.sender.display_name} size="sm" />}
+      {msg.sender && (
+        <Avatar
+          name={msg.sender.display_name}
+          src={msg.sender.avatar_url}
+          size="sm"
+        />
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 mb-0.5">
           <span className="font-semibold text-sm">

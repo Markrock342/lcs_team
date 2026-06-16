@@ -191,7 +191,7 @@ export function MonthGanttCalendar({
                     <span className="text-[10px] text-zinc-500">(ย่อย)</span>
                   )}
                   {t.assignee && (
-                    <Avatar name={t.assignee.display_name} size="sm" />
+                    <Avatar name={t.assignee.display_name} src={t.assignee.avatar_url} size="sm" />
                   )}
                   <span className="text-zinc-500 text-[10px]">
                     {t.start_date?.slice(5)}–{t.due_date?.slice(5)}

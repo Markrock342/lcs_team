@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { TaskStatus, TeamRole, Profile } from "@/lib/types";
 import { getProfileDisplayRoles } from "@/lib/profile-display";
 import {
@@ -52,9 +53,11 @@ export function ProfileRoleBadges({
 
 export function Avatar({
   name,
+  src,
   size = "md",
 }: {
   name: string;
+  src?: string | null;
   size?: "sm" | "md" | "lg";
 }) {
   const initials = name
@@ -69,6 +72,20 @@ export function Avatar({
     md: "w-9 h-9 text-sm",
     lg: "w-12 h-12 text-base",
   }[size];
+
+  const px = { sm: 28, md: 36, lg: 48 }[size];
+
+  if (src) {
+    return (
+      <Image
+        src={src}
+        alt={name}
+        width={px}
+        height={px}
+        className={`${sizeClass} rounded-full object-cover shrink-0`}
+      />
+    );
+  }
 
   const colors = [
     "bg-[#00a3ff]",

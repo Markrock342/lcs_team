@@ -182,7 +182,7 @@ export default function DashboardPage() {
                   key={member.id}
                   className="flex items-center gap-3 p-3 rounded-xl bg-background border border-border"
                 >
-                  <Avatar name={member.display_name} />
+                  <Avatar name={member.display_name} src={member.avatar_url} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-sm">{member.display_name}</p>

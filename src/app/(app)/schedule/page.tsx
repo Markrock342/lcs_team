@@ -101,6 +101,7 @@ export default function SchedulePage() {
                         <div className="flex items-center gap-2">
                           <Avatar
                             name={task.assignee.display_name}
+                            src={task.assignee.avatar_url}
                             size="sm"
                           />
                           <span className="text-xs">

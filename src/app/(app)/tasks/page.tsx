@@ -101,7 +101,7 @@ function TaskRow({
       <div className="flex items-center gap-2 flex-wrap">
         {task.assignee ? (
           <div className="flex items-center gap-2 bg-background border border-border rounded-lg px-2 py-1">
-            <Avatar name={task.assignee.display_name} size="sm" />
+            <Avatar name={task.assignee.display_name} src={task.assignee.avatar_url} size="sm" />
             <span className="text-xs">{task.assignee.display_name}</span>
           </div>
         ) : (
@@ -409,7 +409,7 @@ export default function TasksPage() {
                           .slice(0, 4)
                           .map((s) =>
                             s.assignee ? (
-                              <Avatar key={s.id} name={s.assignee.display_name} size="sm" />
+                              <Avatar key={s.id} name={s.assignee.display_name} src={s.assignee.avatar_url} size="sm" />
                             ) : null
                           )}
                       </div>
