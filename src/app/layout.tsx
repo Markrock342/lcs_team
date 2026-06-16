@@ -15,8 +15,8 @@ export const metadata: Metadata = {
   description: "ระบบจัดการทีม Limit Code Studio",
   manifest: "/manifest.json",
   icons: {
-    icon: "/icon.svg",
-    apple: "/icon.svg",
+    icon: "/logo.png",
+    apple: "/logo.png",
   },
 };
 

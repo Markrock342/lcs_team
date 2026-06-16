@@ -19,7 +19,7 @@ export function Logo({
 
   return (
     <Image
-      src="/icon.svg"
+      src="/logo.png"
       alt="Limit Code Studio"
       width={px}
       height={px}
