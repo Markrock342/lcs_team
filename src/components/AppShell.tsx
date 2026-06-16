@@ -167,22 +167,28 @@ export function AppShell({
         </div>
       </header>
 
-      <main className={`flex-1 lg:ml-64 w-full min-w-0 overflow-x-hidden ${isChat ? "overflow-hidden" : ""}`}>
-        <div className="hidden lg:flex items-center justify-end gap-2 px-6 py-3 border-b border-border">
+      <main
+        className={`flex-1 lg:ml-64 w-full min-w-0 ${
+          isChat
+            ? "flex flex-col h-dvh max-h-dvh overflow-hidden"
+            : "overflow-x-hidden"
+        }`}
+      >
+        <div className="hidden lg:flex shrink-0 items-center justify-end gap-2 px-6 py-3 border-b border-border">
           <NotificationBell />
           <Link href="/settings" className="text-sm text-muted hover:text-foreground px-3 py-1.5 rounded-lg hover:bg-card-hover">ตั้งค่า</Link>
         </div>
         <div
           className={
             isChat
-              ? "pt-[calc(3.5rem+env(safe-area-inset-top))] lg:pt-0 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-6 h-[100dvh] lg:h-auto overflow-hidden flex flex-col"
+              ? "flex-1 min-h-0 overflow-hidden flex flex-col pt-[calc(3.5rem+env(safe-area-inset-top))] lg:pt-0 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0"
               : "pt-[calc(3.5rem+env(safe-area-inset-top))] lg:pt-0 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-6"
           }
         >
           <div
             className={`max-w-7xl mx-auto w-full ${
               isChat
-                ? "flex-1 min-h-0 flex flex-col px-2 sm:px-6 py-2 sm:py-6"
+                ? "flex-1 min-h-0 flex flex-col px-2 sm:px-6 py-2 lg:py-3"
                 : "px-4 sm:px-6 py-4 sm:py-6"
             }`}
           >

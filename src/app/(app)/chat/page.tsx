@@ -377,7 +377,7 @@ export default function ChatPage() {
   let lastDate = "";
 
   return (
-    <div className="flex flex-col lg:flex-row flex-1 min-h-0 border border-brand rounded-2xl overflow-hidden bg-card animate-fade-in">
+    <div className="flex flex-col lg:flex-row flex-1 min-h-0 h-full max-h-full border border-brand rounded-2xl overflow-hidden bg-card animate-fade-in">
       {/* Channel sidebar — Discord style */}
       <aside
         className={`${
@@ -549,8 +549,8 @@ export default function ChatPage() {
                                 src={msg.file_url}
                                 alt={msg.file_name ?? "image"}
                                 width={400}
-                                height={260}
-                                className="object-cover"
+                                height={300}
+                                className="w-full max-h-72 object-contain pointer-events-none select-none"
                               />
                             </div>
                           )}
