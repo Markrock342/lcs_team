@@ -215,6 +215,14 @@ export default function SettingsPage() {
               สิทธิ์จริง: <strong>{ROLE_LABELS[profile.role]}</strong>
               {!isAdmin(profile.role) && " — badge ถูกกำหนดโดย admin"}
             </p>
+            {!isAdmin(profile.role) &&
+              getProfileDisplayRoles(profile).includes("admin") && (
+                <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+                  มี badge Admin แต่สิทธิ์จริงยังเป็น PM — เลื่อนลงจะไม่เห็น{" "}
+                  <strong>จัดการทีม & สิทธิ์</strong> จนกว่าจะตั้ง role เป็น admin ใน
+                  Supabase (รัน <code className="text-accent">fix-restore-admin.sql</code>)
+                </p>
+              )}
           </div>
         </section>
       )}
