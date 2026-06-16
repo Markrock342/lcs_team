@@ -53,29 +53,37 @@ export default function DashboardPage() {
       label: "ลูกค้าที่ทำอยู่",
       value: activeClients.length,
       icon: Users,
-      color: "text-accent",
-      bg: "bg-accent/10",
+      card: "bg-gradient-to-br from-[#00a3ff]/20 via-[#00a3ff]/8 to-transparent border-[#00a3ff]/35",
+      iconBg: "bg-[#00a3ff]/25",
+      iconColor: "text-[#7dd3ff]",
+      valueColor: "text-[#7dd3ff]",
     },
     {
       label: "งานกำลังทำ",
       value: inProgress.length,
       icon: TrendingUp,
-      color: "text-emerald-400",
-      bg: "bg-emerald-500/10",
+      card: "bg-gradient-to-br from-emerald-500/20 via-emerald-500/8 to-transparent border-emerald-500/35",
+      iconBg: "bg-emerald-500/25",
+      iconColor: "text-emerald-300",
+      valueColor: "text-emerald-300",
     },
     {
       label: "รอดำเนินการ",
       value: waiting.length,
       icon: Clock,
-      color: "text-amber-400",
-      bg: "bg-amber-500/10",
+      card: "bg-gradient-to-br from-amber-500/20 via-amber-500/8 to-transparent border-amber-500/35",
+      iconBg: "bg-amber-500/25",
+      iconColor: "text-amber-300",
+      valueColor: "text-amber-300",
     },
     {
       label: "ยังไม่เริ่ม",
       value: pending.length,
       icon: AlertTriangle,
-      color: "text-zinc-400",
-      bg: "bg-zinc-500/10",
+      card: "bg-gradient-to-br from-rose-500/20 via-rose-500/8 to-transparent border-rose-500/35",
+      iconBg: "bg-rose-500/25",
+      iconColor: "text-rose-300",
+      valueColor: "text-rose-300",
     },
   ];
 
@@ -99,12 +107,12 @@ export default function DashboardPage() {
         {stats.map((s) => (
           <div
             key={s.label}
-            className="bg-card border border-border rounded-2xl p-4 hover:border-accent/30 transition-colors"
+            className={`border rounded-2xl p-4 transition-all hover:scale-[1.02] hover:shadow-lg ${s.card}`}
           >
-            <div className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center mb-3`}>
-              <s.icon className={s.color} size={20} />
+            <div className={`w-10 h-10 rounded-xl ${s.iconBg} flex items-center justify-center mb-3`}>
+              <s.icon className={s.iconColor} size={20} />
             </div>
-            <p className="text-2xl font-bold">{s.value}</p>
+            <p className={`text-2xl font-bold ${s.valueColor}`}>{s.value}</p>
             <p className="text-xs text-muted mt-0.5">{s.label}</p>
           </div>
         ))}
@@ -112,8 +120,8 @@ export default function DashboardPage() {
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Pending tasks */}
-        <section className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+        <section className="bg-card border border-[#00a3ff]/25 rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[#00a3ff]/15 bg-[#00a3ff]/5">
             <h2 className="font-semibold flex items-center gap-2">
               <CheckSquare size={18} className="text-accent" />
               งานที่ต้องทำ
@@ -149,10 +157,10 @@ export default function DashboardPage() {
         </section>
 
         {/* Team */}
-        <section className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-border">
+        <section className="bg-card border border-violet-500/25 rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-violet-500/15 bg-violet-500/5">
             <h2 className="font-semibold flex items-center gap-2">
-              <Users size={18} className="text-accent" />
+              <Users size={18} className="text-violet-400" />
               ทีมงาน
             </h2>
           </div>
@@ -192,8 +200,8 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent clients */}
-      <section className="bg-card border border-border rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+      <section className="bg-card border border-emerald-500/25 rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-emerald-500/15 bg-emerald-500/5">
           <h2 className="font-semibold">ลูกค้าล่าสุด</h2>
           <Link href="/clients" className="text-xs text-accent hover:underline flex items-center gap-1">
             ดูทั้งหมด <ArrowRight size={12} />
