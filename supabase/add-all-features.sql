@@ -117,6 +117,7 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS push_enabled BOOLEAN DEFAULT TRUE;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS mentioned_ids UUID[] DEFAULT '{}';
 
 -- ========== TRIGGERS ==========
+DROP TRIGGER IF EXISTS invoices_updated_at ON invoices;
 CREATE TRIGGER invoices_updated_at BEFORE UPDATE ON invoices
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
