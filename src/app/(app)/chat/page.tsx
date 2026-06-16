@@ -666,7 +666,7 @@ export default function ChatPage() {
                       alt=""
                       className="w-10 h-10 rounded object-cover shrink-0"
                     />
-                    <span className="text-sm truncate flex-1">รูปจากคลิปบอร์ด</span>
+                    <span className="text-sm truncate flex-1">{file.name}</span>
                   </>
                 ) : (
                   <>
@@ -709,7 +709,7 @@ export default function ChatPage() {
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   onPaste={handlePaste}
-                  placeholder={`ส่งข้อความใน #${activeChannel.name} · Cmd+V วางรูป`}
+                  placeholder={`ส่งข้อความใน #${activeChannel.name} (@username เพื่อ mention)`}
                   className="flex-1 bg-transparent px-2 py-1.5 text-sm placeholder:text-muted focus:outline-none"
                 />
                 <button
