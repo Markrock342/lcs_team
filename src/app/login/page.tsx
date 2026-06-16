@@ -45,14 +45,17 @@ export default function LoginPage() {
         return;
       }
     } else {
+      const username = email.split("@")[0].toLowerCase();
+      const teamMember = TEAM.members.find((m) => m.username === username);
       const { data, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: getAuthCallbackUrl(),
           data: {
-            username: email.split("@")[0],
-            display_name: email.split("@")[0],
+            username,
+            display_name: teamMember?.displayName ?? username,
+            ...(teamMember ? { role: teamMember.role } : {}),
           },
         },
       });
