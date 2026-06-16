@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 const VAPID_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
@@ -17,13 +16,19 @@ function urlBase64ToUint8Array(base64String: string) {
   return outputArray;
 }
 
+async function ensureServiceWorker() {
+  if (!("serviceWorker" in navigator)) return null;
+  if (process.env.NODE_ENV === "development") return null;
+  await navigator.serviceWorker.register("/sw.js");
+  return navigator.serviceWorker.ready;
+}
+
 export function PWARegister() {
   const router = useRouter();
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       if (process.env.NODE_ENV === "development") {
-        // SW ใน dev ทำให้ CSS/JS โหลดไม่ได้ — ล้าง cache แล้ว unregister
         navigator.serviceWorker.getRegistrations().then((regs) => {
           regs.forEach((r) => r.unregister());
         });
@@ -35,12 +40,10 @@ export function PWARegister() {
       }
     }
 
-    // Check due date reminders on app open
     if (process.env.NODE_ENV === "production") {
       fetch("/api/cron/reminders").catch(() => {});
     }
 
-    // Handle notification click from SW
     navigator.serviceWorker?.addEventListener("message", (event) => {
       if (event.data?.link) router.push(event.data.link);
     });
@@ -49,31 +52,66 @@ export function PWARegister() {
   return null;
 }
 
-export async function subscribeToPush(): Promise<boolean> {
-  if (!VAPID_KEY || !("serviceWorker" in navigator) || !("PushManager" in window)) {
-    return false;
+export type PushSubscribeResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export async function subscribeToPush(): Promise<PushSubscribeResult> {
+  if (!VAPID_KEY) {
+    return { ok: false, error: "ยังไม่ได้ตั้งค่า VAPID บนเซิร์ฟเวอร์" };
+  }
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return { ok: false, error: "เบราว์เซอร์นี้ไม่รองรับ Push" };
+  }
+
+  const reg = await ensureServiceWorker();
+  if (!reg) {
+    return { ok: false, error: "Service Worker ยังไม่พร้อม (ลอง refresh)" };
   }
 
   const permission = await Notification.requestPermission();
-  if (permission !== "granted") return false;
+  if (permission === "denied") {
+    return {
+      ok: false,
+      error: "ถูกบล็อก — ไปเปิด Notifications ใน Settings ของเครื่อง",
+    };
+  }
+  if (permission !== "granted") {
+    return { ok: false, error: "ยังไม่ได้อนุญาตการแจ้งเตือน" };
+  }
 
-  const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(VAPID_KEY),
-  });
+  try {
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_KEY),
+      });
+    }
 
-  const json = sub.toJSON();
-  const res = await fetch("/api/push/subscribe", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      endpoint: json.endpoint,
-      keys: json.keys,
-    }),
-  });
+    const json = sub.toJSON();
+    const res = await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        endpoint: json.endpoint,
+        keys: json.keys,
+      }),
+    });
 
-  return res.ok;
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return {
+        ok: false,
+        error: data.error ?? "บันทึก subscription ไม่สำเร็จ",
+      };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "subscribe failed";
+    return { ok: false, error: msg };
+  }
 }
 
 export async function unsubscribeFromPush(): Promise<boolean> {
@@ -91,4 +129,32 @@ export async function installPWA(): Promise<boolean> {
   deferred.prompt();
   await deferred.userChoice;
   return true;
+}
+
+export async function sendTestPush(): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch("/api/push/test", { method: "POST" });
+  if (res.ok) return { ok: true };
+  const data = await res.json().catch(() => ({}));
+  return { ok: false, error: data.error ?? "ส่งทดสอบไม่สำเร็จ" };
+}
+
+export function getPushBlockers(): string[] {
+  const blockers: string[] = [];
+  if (!VAPID_KEY) blockers.push("VAPID ยังไม่ตั้งบน production (Vercel env)");
+  if (typeof window !== "undefined") {
+    if (!("serviceWorker" in navigator)) blockers.push("ไม่มี Service Worker");
+    if (!("PushManager" in window)) blockers.push("เบราว์เซอร์ไม่รองรับ Push");
+    if (Notification.permission === "denied") {
+      blockers.push("Notifications ถูกบล็อกที่ระดับ OS");
+    }
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (navigator as any).standalone === true;
+    if (isIos && !standalone) {
+      blockers.push("iPhone: ต้อง Add to Home Screen ก่อน Push ถึงจะทำงาน");
+    }
+  }
+  return blockers;
 }

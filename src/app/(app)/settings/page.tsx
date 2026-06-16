@@ -5,7 +5,7 @@ import { Moon, Sun, Bell, Download, Smartphone, Shield, User, Camera } from "luc
 import { PageHeader } from "@/components/mobile-ui";
 import { Button, Select, Avatar, ProfileRoleBadges } from "@/components/ui";
 import { useTheme } from "@/components/ThemeProvider";
-import { subscribeToPush, unsubscribeFromPush } from "@/components/PWARegister";
+import { subscribeToPush, unsubscribeFromPush, sendTestPush, getPushBlockers } from "@/components/PWARegister";
 import { createClient } from "@/lib/supabase/client";
 import { uploadFile, isImageFile } from "@/lib/upload";
 import { exportToCSV } from "@/lib/activity";
@@ -23,6 +23,9 @@ export default function SettingsPage() {
   const { theme, toggle } = useTheme();
   const [pushOn, setPushOn] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
+  const [pushError, setPushError] = useState("");
+  const [pushTesting, setPushTesting] = useState(false);
+  const [pushBlockers, setPushBlockers] = useState<string[]>([]);
   const [installable, setInstallable] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIos, setIsIos] = useState(false);
@@ -37,6 +40,7 @@ export default function SettingsPage() {
   useEffect(() => {
     checkPush();
     loadProfile();
+    setPushBlockers(getPushBlockers());
     setIsStandalone(
       window.matchMedia("(display-mode: standalone)").matches ||
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -179,21 +183,40 @@ export default function SettingsPage() {
 
   async function checkPush() {
     if (!("serviceWorker" in navigator)) return;
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
-    setPushOn(!!sub);
+    try {
+      if (process.env.NODE_ENV === "production") {
+        await navigator.serviceWorker.register("/sw.js");
+      }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      setPushOn(!!sub);
+    } catch {
+      setPushOn(false);
+    }
   }
 
   async function togglePush() {
     setPushLoading(true);
+    setPushError("");
     if (pushOn) {
-      await unsubscribeFromPush();
-      setPushOn(false);
+      const ok = await unsubscribeFromPush();
+      if (ok) setPushOn(false);
+      else setPushError("ปิด Push ไม่สำเร็จ");
     } else {
-      const ok = await subscribeToPush();
-      setPushOn(ok);
+      const result = await subscribeToPush();
+      if (result.ok) setPushOn(true);
+      else setPushError(result.error);
     }
     setPushLoading(false);
+    setPushBlockers(getPushBlockers());
+  }
+
+  async function testPush() {
+    setPushTesting(true);
+    setPushError("");
+    const result = await sendTestPush();
+    if (!result.ok) setPushError(result.error ?? "ทดสอบไม่สำเร็จ");
+    setPushTesting(false);
   }
 
   async function exportAll() {
@@ -388,17 +411,45 @@ export default function SettingsPage() {
           <Button variant="secondary" onClick={toggle}>สลับ</Button>
         </div>
 
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-3">
-            <Bell size={20} className="text-accent" />
-            <div>
-              <p className="font-medium text-sm">Push Notifications</p>
-              <p className="text-xs text-muted">แจ้งเตือนแม้ออกจากแอพ</p>
+        <div className="p-4 space-y-3 border-b border-border">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Bell size={20} className="text-accent" />
+              <div>
+                <p className="font-medium text-sm">Push Notifications</p>
+                <p className="text-xs text-muted">
+                  {pushOn ? "เปิดอยู่" : "ปิดอยู่"} — แจ้งเตือนแม้ออกจากแอพ
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {pushOn && (
+                <Button
+                  variant="secondary"
+                  loading={pushTesting}
+                  onClick={testPush}
+                  className="text-xs px-3 py-1.5"
+                >
+                  ทดสอบ
+                </Button>
+              )}
+              <Button variant={pushOn ? "secondary" : "primary"} loading={pushLoading} onClick={togglePush}>
+                {pushOn ? "ปิด" : "เปิด"}
+              </Button>
             </div>
           </div>
-          <Button variant={pushOn ? "secondary" : "primary"} loading={pushLoading} onClick={togglePush}>
-            {pushOn ? "ปิด" : "เปิด"}
-          </Button>
+          {pushBlockers.length > 0 && (
+            <ul className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 space-y-1 list-disc pl-5">
+              {pushBlockers.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
+            </ul>
+          )}
+          {pushError && (
+            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+              {pushError}
+            </p>
+          )}
         </div>
 
         {!isStandalone && (
