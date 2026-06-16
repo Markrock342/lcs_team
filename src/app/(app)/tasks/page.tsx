@@ -26,7 +26,8 @@ import { KanbanBoard } from "@/components/KanbanBoard";
 import { TimeTracker } from "@/components/TimeTracker";
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS } from "@/lib/constants";
 import { uploadFile } from "@/lib/upload";
-import { logActivity, notifyUser } from "@/lib/activity";
+import { logActivity } from "@/lib/activity";
+import { sendNotification } from "@/lib/notifications";
 import type { Task, Client, Profile, TaskStatus, TaskPriority } from "@/lib/types";
 
 const emptyTask = {
@@ -262,16 +263,33 @@ export default function TasksPage() {
       image_url,
     };
 
+    let taskId = editing?.id ?? null;
+
     if (editing) {
       await supabase.from("tasks").update(payload).eq("id", editing.id);
     } else {
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from("tasks").insert({ ...payload, created_by: user?.id });
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { data: created } = await supabase
+        .from("tasks")
+        .insert({ ...payload, created_by: user?.id })
+        .select("id")
+        .single();
+      taskId = created?.id ?? null;
     }
 
-    await logActivity(editing ? "update" : "create", "task", editing?.id ?? null, form.title);
-    if (form.assigned_to && form.assigned_to !== editing?.assigned_to) {
-      await notifyUser(form.assigned_to, "📋 มอบหมายงานใหม่", form.title, "/tasks");
+    await logActivity(editing ? "update" : "create", "task", taskId, form.title);
+    if (form.assigned_to && form.assigned_to !== editing?.assigned_to && taskId) {
+      await sendNotification({
+        userId: form.assigned_to,
+        title: "📋 มอบหมายงานใหม่",
+        body: form.title,
+        link: "/tasks",
+        sourceType: "task",
+        sourceId: taskId,
+        kind: "task",
+      });
     }
 
     setSaving(false);

@@ -149,7 +149,9 @@ export function AppShell({
             <span className="font-semibold text-sm truncate">{getPageTitle(pathname)}</span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <NotificationBell />
+            <Suspense fallback={null}>
+              <NotificationBell />
+            </Suspense>
             {profile && (
               <div className="relative" ref={profileRef}>
                 <button onClick={() => setProfileOpen(!profileOpen)} className="p-1 rounded-full">
@@ -184,7 +186,9 @@ export function AppShell({
         }`}
       >
         <div className="hidden lg:flex shrink-0 items-center justify-end gap-2 px-6 py-3 border-b border-border">
-          <NotificationBell />
+          <Suspense fallback={null}>
+            <NotificationBell />
+          </Suspense>
           <Link href="/settings" className="text-sm text-muted hover:text-foreground px-3 py-1.5 rounded-lg hover:bg-card-hover">ตั้งค่า</Link>
         </div>
         <div

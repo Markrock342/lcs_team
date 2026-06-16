@@ -29,6 +29,10 @@ export interface Profile {
   display_roles: TeamRole[] | null;
   avatar_url: string | null;
   last_seen_at: string | null;
+  notify_chat?: boolean | null;
+  notify_mentions?: boolean | null;
+  notify_tasks?: boolean | null;
+  push_enabled?: boolean | null;
   created_at: string;
 }
 

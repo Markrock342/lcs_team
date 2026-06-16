@@ -22,6 +22,9 @@ export async function POST(request: Request) {
         title: string;
         body: string;
         link?: string;
+        sourceType?: string;
+        sourceId?: string;
+        kind?: "chat" | "mention" | "task" | "system";
       }[]
     | undefined;
 
@@ -38,6 +41,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  await deliverNotifications(supabase, valid);
-  return NextResponse.json({ ok: true, sent: valid.length });
+  const result = await deliverNotifications(
+    supabase,
+    valid.map((n) => ({
+      userId: n.userId,
+      title: n.title,
+      body: n.body ?? "",
+      link: n.link,
+      sourceType: n.sourceType,
+      sourceId: n.sourceId,
+      kind: n.kind,
+    }))
+  );
+
+  return NextResponse.json({ ok: true, ...result });
 }

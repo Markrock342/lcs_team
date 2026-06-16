@@ -15,14 +15,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { userId, title, body, link } = await request.json();
+  const body = await request.json();
+  const { userId, title, body: msgBody, link, sourceType, sourceId, kind } =
+    body;
+
   if (!userId || !title) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  await deliverNotifications(supabase, [
-    { userId, title, body: body ?? "", link },
+  const result = await deliverNotifications(supabase, [
+    {
+      userId,
+      title,
+      body: msgBody ?? "",
+      link,
+      sourceType,
+      sourceId,
+      kind,
+    },
   ]);
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, ...result });
 }

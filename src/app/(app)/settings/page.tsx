@@ -17,6 +17,8 @@ import {
   isAdmin,
 } from "@/lib/permissions";
 import { getProfileDisplayRoles } from "@/lib/profile-display";
+import { sendNotification } from "@/lib/notifications";
+import type { NotificationPrefs } from "@/lib/notifications";
 import type { Profile, TeamRole } from "@/lib/types";
 
 export default function SettingsPage() {
@@ -36,6 +38,12 @@ export default function SettingsPage() {
   const [roleError, setRoleError] = useState("");
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [notifyPrefs, setNotifyPrefs] = useState<NotificationPrefs>({
+    notify_chat: true,
+    notify_mentions: true,
+    notify_tasks: true,
+  });
+  const [notifySaving, setNotifySaving] = useState(false);
 
   useEffect(() => {
     checkPush();
@@ -68,6 +76,13 @@ export default function SettingsPage() {
       .eq("id", user.id)
       .single();
     setProfile(data);
+    if (data) {
+      setNotifyPrefs({
+        notify_chat: data.notify_chat !== false,
+        notify_mentions: data.notify_mentions !== false,
+        notify_tasks: data.notify_tasks !== false,
+      });
+    }
 
     if (data && hasPermission(data.role, "manage_team")) {
       const { data: members } = await supabase
@@ -179,6 +194,24 @@ export default function SettingsPage() {
 
     setAvatarUploading(false);
     e.target.value = "";
+  }
+
+  async function saveNotifyPref(key: keyof NotificationPrefs, value: boolean) {
+    if (!profile) return;
+    setNotifySaving(true);
+    const next = { ...notifyPrefs, [key]: value };
+    setNotifyPrefs(next);
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ [key]: value })
+      .eq("id", profile.id);
+
+    setNotifySaving(false);
+    if (error) {
+      setNotifyPrefs(notifyPrefs);
+    }
   }
 
   async function checkPush() {
@@ -450,6 +483,56 @@ export default function SettingsPage() {
               {pushError}
             </p>
           )}
+        </div>
+
+        <div className="p-4 space-y-3">
+          <div>
+            <p className="font-medium text-sm">การแจ้งเตือนในแอพ</p>
+            <p className="text-xs text-muted mt-0.5">
+              ควบคุมประเภทที่อยากได้ — Push ยังใช้สวิตช์ด้านบน
+            </p>
+          </div>
+          {(
+            [
+              {
+                key: "notify_chat" as const,
+                label: "ข้อความแชท",
+                desc: "แจ้งเมื่อมีข้อความใน channel",
+              },
+              {
+                key: "notify_mentions" as const,
+                label: "@mention",
+                desc: "แจ้งเมื่อถูก mention (แนะนำเปิด)",
+              },
+              {
+                key: "notify_tasks" as const,
+                label: "งานที่มอบหมาย",
+                desc: "แจ้งเมื่อได้รับงานใหม่",
+              },
+            ] as const
+          ).map(({ key, label, desc }) => (
+            <div key={key} className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{label}</p>
+                <p className="text-xs text-muted">{desc}</p>
+              </div>
+              <button
+                type="button"
+                disabled={notifySaving}
+                onClick={() => saveNotifyPref(key, !notifyPrefs[key])}
+                className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${
+                  notifyPrefs[key] ? "bg-accent" : "bg-zinc-600"
+                }`}
+                aria-pressed={notifyPrefs[key]}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                    notifyPrefs[key] ? "translate-x-5" : ""
+                  }`}
+                />
+              </button>
+            </div>
+          ))}
         </div>
 
         {!isStandalone && (
