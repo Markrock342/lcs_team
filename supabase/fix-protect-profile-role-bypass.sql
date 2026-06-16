@@ -1,5 +1,5 @@
--- ให้เฉพาะ admin เปลี่ยน role / badge (display_roles) ได้
--- รันใน Supabase SQL Editor
+-- แก้ trigger ที่บล็อก SQL Editor (auth.uid() = null)
+-- รันก่อน fix-restore-admin.sql / fix-team-roles.sql
 
 CREATE OR REPLACE FUNCTION public.protect_profile_role()
 RETURNS TRIGGER
@@ -42,19 +42,3 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-DROP TRIGGER IF EXISTS protect_profile_role_before_update ON profiles;
-CREATE TRIGGER protect_profile_role_before_update
-  BEFORE UPDATE ON profiles
-  FOR EACH ROW EXECUTE FUNCTION public.protect_profile_role();
-
-DROP POLICY IF EXISTS "Admin can manage team roles" ON profiles;
-CREATE POLICY "Admin can manage team roles"
-  ON profiles FOR UPDATE
-  TO authenticated
-  USING (
-    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-  )
-  WITH CHECK (
-    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-  );
