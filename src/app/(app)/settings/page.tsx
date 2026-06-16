@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Moon, Sun, Bell, Download, Smartphone, Shield, User } from "lucide-react";
 import { PageHeader } from "@/components/mobile-ui";
-import { Button, RoleBadge, Select, Avatar, ProfileRoleBadges } from "@/components/ui";
+import { Button, Select, Avatar, ProfileRoleBadges } from "@/components/ui";
 import { useTheme } from "@/components/ThemeProvider";
 import { subscribeToPush, unsubscribeFromPush } from "@/components/PWARegister";
 import { createClient } from "@/lib/supabase/client";
@@ -13,6 +13,7 @@ import {
   ASSIGNABLE_ROLES,
   ROLE_DESCRIPTIONS,
   hasPermission,
+  isAdmin,
 } from "@/lib/permissions";
 import { getProfileDisplayRoles } from "@/lib/profile-display";
 import type { Profile, TeamRole } from "@/lib/types";
@@ -27,7 +28,7 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [team, setTeam] = useState<Profile[]>([]);
   const [roleSaving, setRoleSaving] = useState<string | null>(null);
-  const [displaySaving, setDisplaySaving] = useState(false);
+  const [displaySaving, setDisplaySaving] = useState<string | null>(null);
   const [roleError, setRoleError] = useState("");
 
   useEffect(() => {
@@ -99,31 +100,36 @@ export default function SettingsPage() {
     setRoleSaving(null);
   }
 
-  async function toggleDisplayRole(role: TeamRole) {
-    if (!profile) return;
-    setDisplaySaving(true);
-    const current = getProfileDisplayRoles(profile);
+  async function updateMemberDisplayRole(memberId: string, role: TeamRole) {
+    const member = team.find((m) => m.id === memberId);
+    if (!member || !profile || !isAdmin(profile.role)) return;
+
+    setDisplaySaving(memberId);
+    setRoleError("");
+
+    const current = getProfileDisplayRoles(member);
     let next = current.includes(role)
       ? current.filter((r) => r !== role)
       : [...current, role];
-    if (next.length === 0) next = [profile.role];
+    if (next.length === 0) next = [member.role];
 
     const supabase = createClient();
     const { error } = await supabase
       .from("profiles")
       .update({ display_roles: next })
-      .eq("id", profile.id);
+      .eq("id", memberId);
 
     if (error) {
       setRoleError(error.message);
     } else {
-      const updated = { ...profile, display_roles: next };
-      setProfile(updated);
       setTeam((prev) =>
-        prev.map((m) => (m.id === profile.id ? { ...m, display_roles: next } : m))
+        prev.map((m) => (m.id === memberId ? { ...m, display_roles: next } : m))
       );
+      if (memberId === profile.id) {
+        setProfile({ ...profile, display_roles: next });
+      }
     }
-    setDisplaySaving(false);
+    setDisplaySaving(null);
   }
 
   async function checkPush() {
@@ -206,28 +212,9 @@ export default function SettingsPage() {
               </div>
             </div>
             <p className="text-xs text-muted">
-              สิทธิ์จริง: <strong>{ROLE_LABELS[profile.role]}</strong> — เลือก badge เพิ่มได้ (เช่น Admin + PM)
+              สิทธิ์จริง: <strong>{ROLE_LABELS[profile.role]}</strong>
+              {!isAdmin(profile.role) && " — badge ถูกกำหนดโดย admin"}
             </p>
-            <div className="flex flex-wrap gap-2">
-              {ASSIGNABLE_ROLES.map((role) => {
-                const on = getProfileDisplayRoles(profile).includes(role);
-                return (
-                  <button
-                    key={role}
-                    type="button"
-                    disabled={displaySaving}
-                    onClick={() => toggleDisplayRole(role)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                      on
-                        ? "bg-accent/20 text-accent ring-1 ring-accent/40"
-                        : "bg-background border border-border text-muted hover:text-foreground"
-                    }`}
-                  >
-                    {ROLE_LABELS[role]}
-                  </button>
-                );
-              })}
-            </div>
           </div>
         </section>
       )}
@@ -238,7 +225,7 @@ export default function SettingsPage() {
             <Shield size={20} className="text-red-400" />
             <div>
               <p className="font-medium text-sm">จัดการทีม & สิทธิ์</p>
-              <p className="text-xs text-muted">มอบหมาย role ให้สมาชิก</p>
+              <p className="text-xs text-muted">มอบหมาย role และ badge ให้สมาชิก (เฉพาะ admin)</p>
             </div>
           </div>
           <div className="divide-y divide-border">
@@ -252,7 +239,7 @@ export default function SettingsPage() {
                   <ProfileRoleBadges profile={member} size="xs" />
                 </div>
                 <Select
-                  label="หน้าที่"
+                  label="หน้าที่ (สิทธิ์จริง)"
                   value={member.role}
                   disabled={roleSaving === member.id || member.id === profile?.id}
                   onChange={(e) =>
@@ -265,6 +252,29 @@ export default function SettingsPage() {
                     </option>
                   ))}
                 </Select>
+                <div>
+                  <p className="text-xs text-muted mb-2">Badge ที่ทีมเห็น</p>
+                  <div className="flex flex-wrap gap-2">
+                    {ASSIGNABLE_ROLES.map((role) => {
+                      const on = getProfileDisplayRoles(member).includes(role);
+                      return (
+                        <button
+                          key={role}
+                          type="button"
+                          disabled={displaySaving === member.id}
+                          onClick={() => updateMemberDisplayRole(member.id, role)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            on
+                              ? "bg-accent/20 text-accent ring-1 ring-accent/40"
+                              : "bg-background border border-border text-muted hover:text-foreground"
+                          }`}
+                        >
+                          {ROLE_LABELS[role]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <p className="text-[11px] text-muted">{ROLE_DESCRIPTIONS[member.role]}</p>
                 {member.id === profile?.id && (
                   <p className="text-[11px] text-amber-400">
