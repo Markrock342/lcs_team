@@ -1,18 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Message } from "./types";
+import type { Message, Profile } from "./types";
 
-export const MESSAGE_SELECT_BASIC = "*, sender:profiles(*)";
+/** ระบุ FK ชัดเจน — กัน error "more than one relationship" หลังมี message_reads */
+export const MESSAGE_SELECT_BASIC = "*, sender:profiles!sender_id(*)";
 
 export const MESSAGE_SELECT_FULL = `
   *,
-  sender:profiles(*),
+  sender:profiles!sender_id(*),
   reply_to:messages!reply_to_id(
     id, content, sender_id, deleted_at, file_name,
-    sender:profiles(display_name)
+    sender:profiles!sender_id(display_name)
   ),
-  reads:message_reads(
+  reads:message_reads!message_reads_message_id_fkey(
     user_id, read_at,
-    reader:profiles(id, display_name, username)
+    reader:profiles!user_id(id, display_name, username)
   )
 `;
 
@@ -22,58 +23,107 @@ function isSchemaError(message: string) {
     m.includes("column") ||
     m.includes("relation") ||
     m.includes("schema cache") ||
-    m.includes("does not exist")
+    m.includes("does not exist") ||
+    m.includes("more than one relationship") ||
+    m.includes("could not find")
   );
+}
+
+async function fetchWithProfilesFallback(
+  supabase: SupabaseClient,
+  channelId: string
+): Promise<{ data: Message[]; error: string | null }> {
+  const { data: rows, error } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("channel_id", channelId)
+    .order("created_at", { ascending: true })
+    .limit(200);
+
+  if (error) return { data: [], error: error.message };
+  if (!rows?.length) return { data: [], error: null };
+
+  const senderIds = [...new Set(rows.map((r) => r.sender_id))];
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("*")
+    .in("id", senderIds);
+
+  const profileMap = new Map(
+    (profiles as Profile[] | null)?.map((p) => [p.id, p]) ?? []
+  );
+
+  return {
+    data: rows.map((row) => ({
+      ...(row as Message),
+      sender: profileMap.get(row.sender_id) ?? null,
+    })),
+    error: null,
+  };
 }
 
 export async function fetchChannelMessages(
   supabase: SupabaseClient,
   channelId: string
 ): Promise<{ data: Message[]; error: string | null }> {
-  const full = await supabase
-    .from("messages")
-    .select(MESSAGE_SELECT_FULL)
-    .eq("channel_id", channelId)
-    .order("created_at", { ascending: true })
-    .limit(200);
+  for (const select of [MESSAGE_SELECT_FULL, MESSAGE_SELECT_BASIC]) {
+    const res = await supabase
+      .from("messages")
+      .select(select)
+      .eq("channel_id", channelId)
+      .order("created_at", { ascending: true })
+      .limit(200);
 
-  if (!full.error) {
-    return { data: (full.data as Message[]) ?? [], error: null };
+    if (!res.error) {
+      return { data: (res.data as unknown as Message[]) ?? [], error: null };
+    }
+
+    if (!isSchemaError(res.error.message)) {
+      return { data: [], error: res.error.message };
+    }
   }
 
-  const basic = await supabase
+  return fetchWithProfilesFallback(supabase, channelId);
+}
+
+async function fetchOneWithProfileFallback(
+  supabase: SupabaseClient,
+  id: string
+): Promise<Message | null> {
+  const { data: row, error } = await supabase
     .from("messages")
-    .select(MESSAGE_SELECT_BASIC)
-    .eq("channel_id", channelId)
-    .order("created_at", { ascending: true })
-    .limit(200);
+    .select("*")
+    .eq("id", id)
+    .single();
 
-  if (basic.error) {
-    return { data: [], error: basic.error.message };
-  }
+  if (error || !row) return null;
 
-  return { data: (basic.data as Message[]) ?? [], error: null };
+  const { data: sender } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", row.sender_id)
+    .single();
+
+  return { ...(row as Message), sender: sender ?? null };
 }
 
 export async function fetchMessageById(
   supabase: SupabaseClient,
   id: string
 ): Promise<Message | null> {
-  const full = await supabase
-    .from("messages")
-    .select(MESSAGE_SELECT_FULL)
-    .eq("id", id)
-    .single();
+  for (const select of [MESSAGE_SELECT_FULL, MESSAGE_SELECT_BASIC]) {
+    const res = await supabase
+      .from("messages")
+      .select(select)
+      .eq("id", id)
+      .single();
 
-  if (!full.error && full.data) return full.data as Message;
+    if (!res.error && res.data) return res.data as unknown as Message;
 
-  const basic = await supabase
-    .from("messages")
-    .select(MESSAGE_SELECT_BASIC)
-    .eq("id", id)
-    .single();
+    if (res.error && !isSchemaError(res.error.message)) return null;
+  }
 
-  return basic.data ? (basic.data as Message) : null;
+  return fetchOneWithProfileFallback(supabase, id);
 }
 
 type InsertPayload = {
@@ -118,12 +168,28 @@ export async function insertChatMessage(
       .single();
 
     if (!res.error && res.data) {
-      return { data: res.data as Message, error: null };
+      return { data: res.data as unknown as Message, error: null };
     }
 
     if (res.error) {
       lastError = res.error.message;
-      if (!isSchemaError(res.error.message)) {
+
+      if (isSchemaError(res.error.message)) {
+        const plain = await supabase
+          .from("messages")
+          .insert(clean)
+          .select("*")
+          .single();
+
+        if (!plain.error && plain.data) {
+          const withSender = await fetchMessageById(supabase, plain.data.id);
+          return { data: withSender, error: null };
+        }
+
+        if (plain.error && !isSchemaError(plain.error.message)) {
+          return { data: null, error: plain.error.message };
+        }
+      } else {
         return { data: null, error: lastError };
       }
     }
