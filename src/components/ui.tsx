@@ -208,7 +208,7 @@ export function Textarea({
       )}
       <textarea
         {...props}
-        className={`w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all resize-none ${props.className ?? ""}`}
+        className={`w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all resize-y ${props.className ?? ""}`}
       />
     </div>
   );

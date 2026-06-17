@@ -540,7 +540,8 @@ export default function TasksPage() {
             label="รายละเอียด"
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
-            rows={2}
+            rows={modalMode === "sub" ? 8 : 4}
+            className="min-h-[10rem] sm:min-h-[12rem] resize-y"
           />
           <Select
             label="ลูกค้า"
