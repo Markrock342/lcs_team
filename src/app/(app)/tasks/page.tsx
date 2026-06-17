@@ -132,10 +132,11 @@ function TaskRow({
         {!isSub && (
           <button
             onClick={() => onAddSub(task)}
-            className="p-2 rounded-lg hover:bg-accent/10 text-accent"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-accent/10 text-accent text-xs font-medium touch-manipulation"
             title="เพิ่มงานย่อย"
           >
             <Plus size={14} />
+            <span className="hidden sm:inline">งานย่อย</span>
           </button>
         )}
         <button onClick={() => onEdit(task)} className="p-2 rounded-lg hover:bg-card-hover text-muted">
@@ -181,6 +182,15 @@ export default function TasksPage() {
     setTasks(tasksRes.data ?? []);
     setClients(clientsRes.data ?? []);
     setProfiles(profilesRes.data ?? []);
+
+    const loaded = tasksRes.data ?? [];
+    const withSubs = loaded
+      .filter((t) => t.parent_id)
+      .map((t) => t.parent_id as string);
+    if (withSubs.length) {
+      setExpanded(new Set(withSubs));
+    }
+
     setLoading(false);
   }
 
@@ -239,6 +249,9 @@ export default function TasksPage() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    if (modalMode === "sub" && !form.assigned_to) {
+      return;
+    }
     setSaving(true);
     const supabase = createClient();
     let image_url = editing?.image_url ?? null;
@@ -281,10 +294,17 @@ export default function TasksPage() {
 
     await logActivity(editing ? "update" : "create", "task", taskId, form.title);
     if (form.assigned_to && form.assigned_to !== editing?.assigned_to && taskId) {
+      const parentTitle =
+        form.parent_id &&
+        tasks.find((t) => t.id === form.parent_id)?.title;
       await sendNotification({
         userId: form.assigned_to,
-        title: "📋 มอบหมายงานใหม่",
-        body: form.title,
+        title: parentTitle
+          ? "📋 งานย่อยใหม่"
+          : "📋 มอบหมายงานใหม่",
+        body: parentTitle
+          ? `${form.title} · ${parentTitle}`
+          : form.title,
         link: "/tasks",
         sourceType: "task",
         sourceId: taskId,
@@ -381,7 +401,7 @@ export default function TasksPage() {
         <div className="space-y-4">
           {visibleParents.map((parent) => {
             const subs = (subtasksByParent[parent.id] ?? []).filter(taskMatchesFilter);
-            const isOpen = expanded.has(parent.id);
+            const isOpen = expanded.has(parent.id) || subs.length === 0;
             const subProgress =
               subs.length > 0
                 ? Math.round(subs.reduce((s, t) => s + t.progress, 0) / subs.length)
@@ -435,22 +455,49 @@ export default function TasksPage() {
                   )}
                 </div>
 
-                {isOpen && subs.length > 0 && (
-                  <div className="border-t border-border bg-background/50 p-4 space-y-3">
-                    {subs.map((sub) => (
-                      <TaskRow
-                        key={sub.id}
-                        task={sub}
-                        isSub
-                        profiles={profiles}
-                        onEdit={openEdit}
-                        onDelete={handleDelete}
-                        onAddSub={openCreateSub}
-                        onStatusChange={quickStatusChange}
-                      />
-                    ))}
-                  </div>
-                )}
+                <div className="border-t border-border bg-background/40 px-4 py-3 ml-6 sm:ml-8">
+                  {subs.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => openCreateSub(parent)}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-accent/40 text-accent text-sm font-medium hover:bg-accent/5 transition-colors touch-manipulation"
+                    >
+                      <Plus size={16} />
+                      เพิ่มงานย่อย — มอบหมายเพื่อน
+                    </button>
+                  ) : isOpen ? (
+                    <div className="space-y-3">
+                      {subs.map((sub) => (
+                        <TaskRow
+                          key={sub.id}
+                          task={sub}
+                          isSub
+                          profiles={profiles}
+                          onEdit={openEdit}
+                          onDelete={handleDelete}
+                          onAddSub={openCreateSub}
+                          onStatusChange={quickStatusChange}
+                        />
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => openCreateSub(parent)}
+                        className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs text-accent hover:bg-accent/5 transition-colors touch-manipulation"
+                      >
+                        <Plus size={14} />
+                        เพิ่มงานย่อย
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(parent.id)}
+                      className="text-xs text-muted hover:text-accent"
+                    >
+                      แสดง {subs.length} งานย่อย
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -550,17 +597,28 @@ export default function TasksPage() {
           </div>
 
           <Select
-            label="มอบหมายให้"
+            label={modalMode === "sub" ? "มอบหมายให้ *" : "มอบหมายให้"}
             value={form.assigned_to}
             onChange={(e) => setForm({ ...form, assigned_to: e.target.value })}
+            required={modalMode === "sub"}
           >
-            <option value="">— ยังไม่มอบหมาย / ทีมร่วม —</option>
+            <option value="">
+              {modalMode === "sub"
+                ? "— เลือกเพื่อน —"
+                : "— ยังไม่มอบหมาย / ทีมร่วม —"}
+            </option>
             {profiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.display_name} (@{p.username})
               </option>
             ))}
           </Select>
+
+          {modalMode === "sub" && (
+            <p className="text-xs text-muted -mt-2">
+              เลือกเพื่อนแล้วกดบันทึก — จะแจ้งเตือนให้ทราบทันที
+            </p>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Input label="เริ่ม" type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
