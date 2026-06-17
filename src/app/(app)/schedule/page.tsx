@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { StatusBadge, Avatar, EmptyState } from "@/components/ui";
 import { PageHeader, FilterTabs } from "@/components/mobile-ui";
 import { MonthGanttCalendar } from "@/components/MonthGanttCalendar";
+import { TaskCountdown } from "@/components/TaskCountdown";
 import type { Task } from "@/lib/types";
 
 export default function SchedulePage() {
@@ -78,6 +79,7 @@ export default function SchedulePage() {
                   <th className="text-left px-4 py-3 font-medium">เริ่ม</th>
                   <th className="text-left px-4 py-3 font-medium">ครบ</th>
                   <th className="text-left px-4 py-3 font-medium">ระยะ</th>
+                  <th className="text-left px-4 py-3 font-medium">นับถอยหลัง</th>
                   <th className="text-left px-4 py-3 font-medium">สถานะ</th>
                 </tr>
               </thead>
@@ -124,6 +126,15 @@ export default function SchedulePage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
+                      <TaskCountdown
+                        startDate={task.start_date}
+                        dueDate={task.due_date}
+                        status={task.status}
+                        showDates={false}
+                        size="sm"
+                      />
+                    </td>
+                    <td className="px-4 py-3">
                       <StatusBadge status={task.status} />
                     </td>
                   </tr>
@@ -151,9 +162,16 @@ export default function SchedulePage() {
                 <div>
                   <p className="font-medium text-sm">{task.title}</p>
                   <p className="text-xs text-muted">
-                    {task.client?.name ?? "ไม่ระบุลูกค้า"} ·{" "}
-                    {task.duration_days} วัน
+                    {task.client?.name ?? "ไม่ระบุลูกค้า"}
                   </p>
+                  <div className="mt-1.5">
+                    <TaskCountdown
+                      startDate={task.start_date}
+                      dueDate={task.due_date}
+                      status={task.status}
+                      size="sm"
+                    />
+                  </div>
                 </div>
                 <StatusBadge status={task.status} />
               </div>

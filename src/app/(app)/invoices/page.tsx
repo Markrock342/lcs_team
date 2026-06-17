@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, DollarSign, Download, Eye, Printer, FileText, Pencil, Receipt, FileDown, Trash2 } from "lucide-react";
+import { Plus, DollarSign, Download, Eye, Printer, FileText, Pencil, Receipt, FileDown, Trash2, MoreHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Modal } from "@/components/ui";
 import { PageHeader, FilterTabs } from "@/components/mobile-ui";
@@ -98,6 +98,7 @@ export default function InvoicesPage() {
   const [payMethod, setPayMethod] = useState("โอนเงิน / เงินสด");
   const [saving, setSaving] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [dbError, setDbError] = useState("");
 
   useEffect(() => {
@@ -480,43 +481,81 @@ export default function InvoicesPage() {
                     </p>
                   )}
                 </div>
-                <div className="flex gap-2 shrink-0 flex-wrap">
-                  <Button variant="secondary" onClick={() => openEdit(inv)}>
-                    <Pencil size={16} /> แก้ไข
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button variant="secondary" onClick={() => openPreview(inv)} className="px-3">
+                    <Eye size={16} />
+                    <span className="hidden sm:inline ml-1.5">ดู</span>
                   </Button>
-                  <Button variant="secondary" onClick={() => openPreview(inv)}>
-                    <Eye size={16} /> ดู / พิมพ์
-                  </Button>
-                  {inv.status !== "paid" && docType === "invoice" && (
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
-                        setPayModal(inv);
-                        setPayAmount("");
-                        setPayMethod(inv.payment_method || "โอนเงิน / เงินสด");
-                      }}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMenuOpenId(menuOpenId === inv.id ? null : inv.id)
+                      }
+                      className="p-2.5 rounded-xl border border-border hover:bg-card-hover text-muted touch-manipulation"
+                      title="เมนู"
                     >
-                      <DollarSign size={16} /> ชำระ
-                    </Button>
-                  )}
-                  {docType === "invoice" &&
-                    inv.status === "paid" &&
-                    !linkedReceipt && (
-                      <Button
-                        variant="secondary"
-                        onClick={() => openReceiptFromInvoice(inv, true)}
-                      >
-                        <Receipt size={16} /> สร้างใบเสร็จ
-                      </Button>
+                      <MoreHorizontal size={18} />
+                    </button>
+                    {menuOpenId === inv.id && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setMenuOpenId(null)}
+                        />
+                        <div className="absolute right-0 top-full mt-1 z-50 min-w-[160px] bg-card border border-border rounded-xl shadow-xl py-1 text-sm">
+                          <button
+                            type="button"
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-card-hover text-left"
+                            onClick={() => {
+                              setMenuOpenId(null);
+                              openEdit(inv);
+                            }}
+                          >
+                            <Pencil size={15} /> แก้ไข
+                          </button>
+                          {inv.status !== "paid" && docType === "invoice" && (
+                            <button
+                              type="button"
+                              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-card-hover text-left"
+                              onClick={() => {
+                                setMenuOpenId(null);
+                                setPayModal(inv);
+                                setPayAmount("");
+                                setPayMethod(inv.payment_method || "โอนเงิน / เงินสด");
+                              }}
+                            >
+                              <DollarSign size={15} /> บันทึกชำระ
+                            </button>
+                          )}
+                          {docType === "invoice" &&
+                            inv.status === "paid" &&
+                            !linkedReceipt && (
+                              <button
+                                type="button"
+                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-card-hover text-left"
+                                onClick={() => {
+                                  setMenuOpenId(null);
+                                  openReceiptFromInvoice(inv, true);
+                                }}
+                              >
+                                <Receipt size={15} /> สร้างใบเสร็จ
+                              </button>
+                            )}
+                          <button
+                            type="button"
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-500/10 text-red-400 text-left"
+                            onClick={() => {
+                              setMenuOpenId(null);
+                              deleteInvoice(inv);
+                            }}
+                          >
+                            <Trash2 size={15} /> ลบ
+                          </button>
+                        </div>
+                      </>
                     )}
-                  <button
-                    type="button"
-                    onClick={() => deleteInvoice(inv)}
-                    className="p-2.5 rounded-xl border border-border hover:bg-red-500/10 text-red-400 touch-manipulation"
-                    title="ลบเอกสาร"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  </div>
                 </div>
               </div>
             </div>

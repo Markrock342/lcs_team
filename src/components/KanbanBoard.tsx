@@ -3,6 +3,7 @@
 import type { Task, TaskStatus } from "@/lib/types";
 import { TASK_STATUS_LABELS } from "@/lib/constants";
 import { StatusBadge, Avatar } from "@/components/ui";
+import { TaskCountdown } from "@/components/TaskCountdown";
 
 const COLUMNS: TaskStatus[] = ["pending", "waiting", "in_progress", "review", "done"];
 
@@ -48,9 +49,15 @@ export function KanbanBoard({
                       <span className="text-[10px] text-muted">{task.assignee.display_name}</span>
                     </div>
                   )}
-                  {task.due_date && (
-                    <p className="text-[10px] text-accent mt-1">ครบ {task.due_date}</p>
-                  )}
+                  <div className="mt-2">
+                    <TaskCountdown
+                      startDate={task.start_date}
+                      dueDate={task.due_date}
+                      status={task.status}
+                      showDates={false}
+                      size="sm"
+                    />
+                  </div>
                 </div>
               ))}
             </div>

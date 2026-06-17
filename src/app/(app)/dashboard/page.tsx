@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { StatusBadge, Avatar, ProfileRoleBadges } from "@/components/ui";
+import { TaskCountdown } from "@/components/TaskCountdown";
 import { TEAM } from "@/lib/constants";
 import type { Task, Client, Profile } from "@/lib/types";
 
@@ -140,11 +141,19 @@ export default function DashboardPage() {
               .map((task) => (
                 <div key={task.id} className="px-5 py-3 hover:bg-card-hover transition-colors">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="font-medium text-sm truncate">{task.title}</p>
                       <p className="text-xs text-muted mt-0.5">
-                        {task.client?.name ?? "ไม่ระบุลูกค้า"} · {task.duration_days} วัน
+                        {task.client?.name ?? "ไม่ระบุลูกค้า"}
                       </p>
+                      <div className="mt-1.5">
+                        <TaskCountdown
+                          startDate={task.start_date}
+                          dueDate={task.due_date}
+                          status={task.status}
+                          size="sm"
+                        />
+                      </div>
                     </div>
                     <StatusBadge status={task.status} />
                   </div>

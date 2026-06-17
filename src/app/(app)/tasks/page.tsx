@@ -24,7 +24,13 @@ import {
 import { PageHeader, FilterTabs } from "@/components/mobile-ui";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { TimeTracker } from "@/components/TimeTracker";
+import { TaskCountdown } from "@/components/TaskCountdown";
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS } from "@/lib/constants";
+import {
+  dueDateFromStart,
+  daysBetweenInclusive,
+  suggestedStatusOnSave,
+} from "@/lib/task-schedule";
 import { uploadFile } from "@/lib/upload";
 import { logActivity } from "@/lib/activity";
 import { sendNotification } from "@/lib/notifications";
@@ -128,12 +134,18 @@ function TaskRow({
           <StatusBadge status={task.status} />
         </div>
         <p className="text-xs text-muted">
-          {task.client?.name ?? "ไม่ระบุลูกค้า"} ·{" "}
-          <span className="text-accent">{task.duration_days} วัน</span>
-          {task.start_date && task.due_date && (
-            <> · {task.start_date} → {task.due_date}</>
+          {task.client?.name ?? "ไม่ระบุลูกค้า"}
+          {!task.start_date && !task.due_date && (
+            <> · <span className="text-accent">{task.duration_days} วัน</span></>
           )}
         </p>
+        <div className="mt-2">
+          <TaskCountdown
+            startDate={task.start_date}
+            dueDate={task.due_date}
+            status={task.status}
+          />
+        </div>
         {task.description && (
           <TaskDescription text={task.description} isSub={isSub} />
         )}
@@ -292,6 +304,37 @@ export default function TasksPage() {
     setModalOpen(true);
   }
 
+  function onStartDateChange(start_date: string) {
+    const duration = parseInt(form.duration_days) || 1;
+    setForm({
+      ...form,
+      start_date,
+      due_date: start_date ? dueDateFromStart(start_date, duration) : form.due_date,
+    });
+  }
+
+  function onDurationChange(duration_days: string) {
+    const duration = parseInt(duration_days) || 1;
+    setForm({
+      ...form,
+      duration_days,
+      due_date: form.start_date
+        ? dueDateFromStart(form.start_date, duration)
+        : form.due_date,
+    });
+  }
+
+  function onDueDateChange(due_date: string) {
+    setForm({
+      ...form,
+      due_date,
+      duration_days:
+        form.start_date && due_date
+          ? String(daysBetweenInclusive(form.start_date, due_date))
+          : form.duration_days,
+    });
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (modalMode === "sub" && !form.assigned_to) {
@@ -311,7 +354,7 @@ export default function TasksPage() {
       description: form.description || null,
       client_id: form.client_id || null,
       parent_id: form.parent_id || null,
-      status: form.status,
+      status: suggestedStatusOnSave(form.start_date, form.status),
       priority: form.priority,
       assigned_to: form.assigned_to || null,
       start_date: form.start_date || null,
@@ -666,10 +709,42 @@ export default function TasksPage() {
             </p>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Input label="เริ่ม" type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
-            <Input label="ครบกำหนด" type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
-            <Input label="ระยะ (วัน)" type="number" min="1" value={form.duration_days} onChange={(e) => setForm({ ...form, duration_days: e.target.value })} />
+          <div className="rounded-xl border border-accent/25 bg-accent/5 p-4 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-accent">กำหนดเวลางาน</p>
+              <p className="text-xs text-muted mt-0.5">
+                ใส่วันเริ่ม → ระบบคำนวณวันสิ้นสุดให้ · พอถึงวันเริ่มจะนับถอยหลังอัตโนมัติ
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Input
+                label="วันเริ่มงาน *"
+                type="date"
+                value={form.start_date}
+                onChange={(e) => onStartDateChange(e.target.value)}
+              />
+              <Input
+                label="วันสิ้นสุดงาน"
+                type="date"
+                value={form.due_date}
+                onChange={(e) => onDueDateChange(e.target.value)}
+              />
+              <Input
+                label="ระยะ (วัน)"
+                type="number"
+                min="1"
+                value={form.duration_days}
+                onChange={(e) => onDurationChange(e.target.value)}
+              />
+            </div>
+            {(form.start_date || form.due_date) && (
+              <TaskCountdown
+                startDate={form.start_date}
+                dueDate={form.due_date}
+                status={form.status}
+                size="sm"
+              />
+            )}
           </div>
           <Input label="ความคืบหน้า (%)" type="number" min="0" max="100" value={form.progress} onChange={(e) => setForm({ ...form, progress: e.target.value })} />
 
