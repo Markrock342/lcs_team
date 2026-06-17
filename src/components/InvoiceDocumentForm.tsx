@@ -15,6 +15,7 @@ type Props = {
   form: DocumentFormData;
   clients: Client[];
   saving: boolean;
+  editing?: boolean;
   onChange: (form: DocumentFormData) => void;
   onSubmit: (e: React.FormEvent) => void;
 };
@@ -23,6 +24,7 @@ export function InvoiceDocumentForm({
   form,
   clients,
   saving,
+  editing = false,
   onChange,
   onSubmit,
 }: Props) {
@@ -211,7 +213,7 @@ export function InvoiceDocumentForm({
       />
 
       <Button type="submit" loading={saving} className="w-full">
-        บันทึกเอกสาร
+        {editing ? "บันทึกการแก้ไข" : "บันทึกเอกสาร"}
       </Button>
     </form>
   );

@@ -53,7 +53,7 @@ export type DocumentFormData = {
   notes: string;
   vat_amount: string;
   line_items: DocumentLineItem[];
-  document_meta: ProposalMeta | Record<string, never>;
+  document_meta: ProposalMeta | Record<string, unknown>;
 };
 
 export const LCS_COMPANY = {
@@ -254,6 +254,55 @@ export function marketimesProposalTemplate(): DocumentFormData {
     ],
     document_meta: meta,
   };
+}
+
+/** แปลงใบแจ้งหนี้ที่ชำระแล้ว → ข้อมูลใบเสร็จ */
+export function buildReceiptFromInvoice(source: {
+  id: string;
+  client_id: string;
+  title: string;
+  doc_number?: string | null;
+  payment_method?: string | null;
+  vat_amount?: number | null;
+  line_items?: DocumentLineItem[] | null;
+  total_amount: number;
+}): DocumentFormData {
+  const line_items = source.line_items?.length
+    ? source.line_items
+    : [
+        {
+          description: source.title,
+          quantity: 1,
+          unit: "หน่วย",
+          unitPrice: source.total_amount - (source.vat_amount ?? 0),
+        },
+      ];
+
+  return {
+    document_type: "receipt",
+    client_id: source.client_id,
+    title: source.title,
+    doc_number: generateDocNumber("receipt"),
+    issue_date: todayISO(),
+    status: "paid",
+    due_date: "",
+    payment_method: source.payment_method || "โอนเงิน / เงินสด",
+    notes: "เอกสารนี้เป็นใบรับเงิน/ใบเสร็จรับเงิน ไม่ใช่ใบกำกับภาษี",
+    vat_amount: String(source.vat_amount ?? 0),
+    line_items,
+    document_meta: {
+      source_invoice_id: source.id,
+      source_doc_number: source.doc_number ?? "",
+    },
+  };
+}
+
+export function getReceiptSourceId(
+  meta: Record<string, unknown> | null | undefined
+): string | null {
+  if (!meta || typeof meta !== "object") return null;
+  const id = meta.source_invoice_id;
+  return typeof id === "string" ? id : null;
 }
 
 export const DOCUMENT_TEMPLATES = [

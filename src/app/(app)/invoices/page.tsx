@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, DollarSign, Download, Eye, Printer, FileText } from "lucide-react";
+import { Plus, DollarSign, Download, Eye, Printer, FileText, Pencil, Receipt } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Modal } from "@/components/ui";
 import { PageHeader, FilterTabs } from "@/components/mobile-ui";
@@ -16,7 +16,9 @@ import {
 import {
   DOCUMENT_TEMPLATES,
   DOCUMENT_TYPE_LABELS,
+  buildReceiptFromInvoice,
   computeAmountInWords,
+  getReceiptSourceId,
   sumLineItems,
   type DocumentFormData,
   type DocumentType,
@@ -43,6 +45,38 @@ function invoiceToForm(inv: Invoice): DocumentFormData {
   };
 }
 
+function findReceiptForInvoice(list: (Invoice & { client?: Client })[], invoiceId: string) {
+  return list.find(
+    (i) =>
+      i.document_type === "receipt" && getReceiptSourceId(i.document_meta) === invoiceId
+  );
+}
+
+function buildPayload(form: DocumentFormData) {
+  const subtotal = sumLineItems(form.line_items);
+  const vat = parseFloat(form.vat_amount || "0") || 0;
+  const total = subtotal + vat;
+  return {
+    payload: {
+      client_id: form.client_id,
+      title: form.title,
+      total_amount: total,
+      status: form.status as InvoiceStatus,
+      due_date: form.due_date || null,
+      notes: form.notes || null,
+      document_type: form.document_type,
+      doc_number: form.doc_number,
+      issue_date: form.issue_date,
+      payment_method: form.payment_method,
+      amount_in_words: computeAmountInWords(total),
+      vat_amount: vat,
+      line_items: form.line_items,
+      document_meta: form.document_meta,
+    },
+    total,
+  };
+}
+
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<(Invoice & { client?: Client })[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -53,11 +87,14 @@ export default function InvoicesPage() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [payModal, setPayModal] = useState<Invoice | null>(null);
   const [form, setForm] = useState<DocumentFormData | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [convertModal, setConvertModal] = useState<Invoice | null>(null);
   const [previewData, setPreviewData] = useState<{
     form: DocumentFormData;
     client?: Client | null;
   } | null>(null);
   const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState("โอนเงิน / เงินสด");
   const [saving, setSaving] = useState(false);
   const [dbError, setDbError] = useState("");
 
@@ -86,10 +123,81 @@ export default function InvoicesPage() {
   function openTemplate(id: string) {
     const t = DOCUMENT_TEMPLATES.find((x) => x.id === id);
     if (!t) return;
+    setEditingId(null);
     setForm(t.build());
     setTemplateOpen(false);
     setFormOpen(true);
     setDbError("");
+  }
+
+  function openEdit(inv: Invoice) {
+    setEditingId(inv.id);
+    setForm(invoiceToForm(inv));
+    setFormOpen(true);
+    setDbError("");
+  }
+
+  function openReceiptFromInvoice(inv: Invoice, editFirst = false) {
+    const receiptForm = buildReceiptFromInvoice(inv);
+    if (editFirst) {
+      setEditingId(null);
+      setForm(receiptForm);
+      setFormOpen(true);
+      setConvertModal(null);
+      setDbError("");
+      return;
+    }
+    saveReceipt(receiptForm, inv.id);
+  }
+
+  async function saveReceipt(receiptForm: DocumentFormData, sourceInvoiceId: string) {
+    setSaving(true);
+    setDbError("");
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { payload } = buildPayload(receiptForm);
+
+    const { data: created, error } = await supabase
+      .from("invoices")
+      .insert({ ...payload, created_by: user?.id })
+      .select("id, doc_number")
+      .single();
+
+    if (error) {
+      setSaving(false);
+      if (error.message.includes("column") || error.message.includes("schema")) {
+        setDbError("รัน supabase/add-invoice-documents.sql ใน Supabase ก่อน");
+      } else {
+        setDbError(error.message);
+      }
+      return;
+    }
+
+    const source = invoices.find((i) => i.id === sourceInvoiceId);
+    const sourceMeta = (source?.document_meta as Record<string, unknown>) ?? {};
+    await supabase
+      .from("invoices")
+      .update({
+        document_meta: {
+          ...sourceMeta,
+          receipt_id: created.id,
+          receipt_doc_number: created.doc_number,
+        },
+      })
+      .eq("id", sourceInvoiceId);
+
+    await logActivity("create", "invoice", created.id, receiptForm.title, {
+      type: "receipt",
+      from_invoice: sourceInvoiceId,
+    });
+
+    setSaving(false);
+    setConvertModal(null);
+    setFormOpen(false);
+    setForm(null);
+    load();
   }
 
   function openPreview(inv: Invoice) {
@@ -108,29 +216,40 @@ export default function InvoicesPage() {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const subtotal = sumLineItems(form.line_items);
-    const vat = parseFloat(form.vat_amount || "0") || 0;
-    const total = subtotal + vat;
+    const { payload } = buildPayload(form);
 
-    const payload = {
-      client_id: form.client_id,
-      title: form.title,
-      total_amount: total,
-      status: form.status as InvoiceStatus,
-      due_date: form.due_date || null,
-      notes: form.notes || null,
-      document_type: form.document_type,
-      doc_number: form.doc_number,
-      issue_date: form.issue_date,
-      payment_method: form.payment_method,
-      amount_in_words: computeAmountInWords(total),
-      vat_amount: vat,
-      line_items: form.line_items,
-      document_meta: form.document_meta,
-      created_by: user?.id,
-    };
+    const sourceInvoiceId = getReceiptSourceId(
+      form.document_meta as Record<string, unknown>
+    );
 
-    const { error } = await supabase.from("invoices").insert(payload);
+    let error;
+    let createdId: string | null = null;
+    if (editingId) {
+      ({ error } = await supabase.from("invoices").update(payload).eq("id", editingId));
+    } else {
+      const result = await supabase
+        .from("invoices")
+        .insert({ ...payload, created_by: user?.id })
+        .select("id, doc_number")
+        .single();
+      error = result.error;
+      createdId = result.data?.id ?? null;
+
+      if (!error && sourceInvoiceId && form.document_type === "receipt" && createdId) {
+        const source = invoices.find((i) => i.id === sourceInvoiceId);
+        const sourceMeta = (source?.document_meta as Record<string, unknown>) ?? {};
+        await supabase
+          .from("invoices")
+          .update({
+            document_meta: {
+              ...sourceMeta,
+              receipt_id: createdId,
+              receipt_doc_number: result.data?.doc_number,
+            },
+          })
+          .eq("id", sourceInvoiceId);
+      }
+    }
 
     setSaving(false);
 
@@ -143,11 +262,20 @@ export default function InvoicesPage() {
       return;
     }
 
-    await logActivity("create", "invoice", null, form.title, {
-      type: form.document_type,
-    });
+    if (editingId) {
+      await logActivity("update", "invoice", editingId, form.title, {
+        type: form.document_type,
+      });
+    } else {
+      await logActivity("create", "invoice", createdId, form.title, {
+        type: form.document_type,
+      });
+    }
+
     setFormOpen(false);
     setForm(null);
+    setEditingId(null);
+    setConvertModal(null);
     load();
   }
 
@@ -165,10 +293,33 @@ export default function InvoicesPage() {
       (payModal.payments?.reduce((s, p) => s + p.amount, 0) ?? 0) + amount;
     const newStatus: InvoiceStatus =
       paid >= payModal.total_amount ? "paid" : "partial";
-    await supabase.from("invoices").update({ status: newStatus }).eq("id", payModal.id);
+
+    const updates: Record<string, unknown> = { status: newStatus };
+    if (newStatus === "paid" && payMethod) {
+      updates.payment_method = payMethod;
+    }
+    await supabase.from("invoices").update(updates).eq("id", payModal.id);
+
+    const paidInvoice: Invoice = {
+      ...payModal,
+      status: newStatus,
+      payment_method: payMethod || payModal.payment_method,
+    };
+
     setPayModal(null);
     setPayAmount("");
-    load();
+
+    const docType = (paidInvoice.document_type ?? "invoice") as DocumentType;
+    const shouldOfferReceipt =
+      newStatus === "paid" &&
+      docType === "invoice" &&
+      !findReceiptForInvoice(invoices, paidInvoice.id);
+
+    await load();
+
+    if (shouldOfferReceipt) {
+      setConvertModal(paidInvoice);
+    }
   }
 
   function exportInvoices() {
@@ -238,6 +389,8 @@ export default function InvoicesPage() {
         {filtered.map((inv) => {
           const paid = inv.payments?.reduce((s, p) => s + p.amount, 0) ?? 0;
           const docType = (inv.document_type ?? "invoice") as DocumentType;
+          const linkedReceipt =
+            docType === "invoice" ? findReceiptForInvoice(invoices, inv.id) : undefined;
 
           return (
             <div key={inv.id} className="bg-card border border-border rounded-2xl p-4">
@@ -263,8 +416,16 @@ export default function InvoicesPage() {
                   {paid > 0 && (
                     <p className="text-xs text-emerald-400">ชำระแล้ว ฿{paid.toLocaleString()}</p>
                   )}
+                  {linkedReceipt && (
+                    <p className="text-xs text-muted mt-0.5">
+                      ใบเสร็จ: {linkedReceipt.doc_number}
+                    </p>
+                  )}
                 </div>
-                <div className="flex gap-2 shrink-0">
+                <div className="flex gap-2 shrink-0 flex-wrap">
+                  <Button variant="secondary" onClick={() => openEdit(inv)}>
+                    <Pencil size={16} /> แก้ไข
+                  </Button>
                   <Button variant="secondary" onClick={() => openPreview(inv)}>
                     <Eye size={16} /> ดู / พิมพ์
                   </Button>
@@ -274,11 +435,22 @@ export default function InvoicesPage() {
                       onClick={() => {
                         setPayModal(inv);
                         setPayAmount("");
+                        setPayMethod(inv.payment_method || "โอนเงิน / เงินสด");
                       }}
                     >
                       <DollarSign size={16} /> ชำระ
                     </Button>
                   )}
+                  {docType === "invoice" &&
+                    inv.status === "paid" &&
+                    !linkedReceipt && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => openReceiptFromInvoice(inv, true)}
+                      >
+                        <Receipt size={16} /> สร้างใบเสร็จ
+                      </Button>
+                    )}
                 </div>
               </div>
             </div>
@@ -312,10 +484,13 @@ export default function InvoicesPage() {
         onClose={() => {
           setFormOpen(false);
           setForm(null);
+          setEditingId(null);
         }}
         title={
           form
-            ? `สร้าง${DOCUMENT_TYPE_LABELS[form.document_type]}`
+            ? editingId
+              ? `แก้ไข${DOCUMENT_TYPE_LABELS[form.document_type]}`
+              : `สร้าง${DOCUMENT_TYPE_LABELS[form.document_type]}`
             : "สร้างเอกสาร"
         }
       >
@@ -329,6 +504,7 @@ export default function InvoicesPage() {
             form={form}
             clients={clients}
             saving={saving}
+            editing={!!editingId}
             onChange={setForm}
             onSubmit={handleSave}
           />
@@ -388,10 +564,60 @@ export default function InvoicesPage() {
             onChange={(e) => setPayAmount(e.target.value)}
             required
           />
+          <input
+            type="text"
+            className="w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm"
+            placeholder="ช่องทางชำระ"
+            value={payMethod}
+            onChange={(e) => setPayMethod(e.target.value)}
+          />
           <Button type="submit" className="w-full">
             บันทึก
           </Button>
         </form>
+      </Modal>
+
+      <Modal
+        open={!!convertModal}
+        onClose={() => {
+          setConvertModal(null);
+          setDbError("");
+        }}
+        title="ชำระครบแล้ว — สร้างใบเสร็จ?"
+      >
+        {convertModal && (
+          <div className="space-y-4">
+            {dbError && (
+              <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                {dbError}
+              </div>
+            )}
+            <p className="text-sm text-muted">
+              {convertModal.title} · ฿{convertModal.total_amount.toLocaleString()}
+              <br />
+              ต้องการสร้างใบเสร็จรับเงินจากใบแจ้งหนี้นี้หรือไม่?
+            </p>
+            <div className="flex flex-col gap-2">
+              <Button
+                loading={saving}
+                onClick={() => openReceiptFromInvoice(convertModal)}
+                className="w-full"
+              >
+                <Receipt size={16} /> สร้างใบเสร็จทันที
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => openReceiptFromInvoice(convertModal, true)}
+                className="w-full"
+              >
+                แก้ไขก่อนบันทึก
+              </Button>
+              <Button variant="secondary" onClick={() => setConvertModal(null)} className="w-full">
+                ข้าม
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
