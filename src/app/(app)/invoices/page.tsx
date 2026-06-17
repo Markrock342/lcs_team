@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, DollarSign, Download, Eye, Printer, FileText, Pencil, Receipt, FileDown } from "lucide-react";
+import { Plus, DollarSign, Download, Eye, Printer, FileText, Pencil, Receipt, FileDown, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Modal } from "@/components/ui";
 import { PageHeader, FilterTabs } from "@/components/mobile-ui";
@@ -324,6 +324,46 @@ export default function InvoicesPage() {
     }
   }
 
+  async function deleteInvoice(inv: Invoice) {
+    const docType = (inv.document_type ?? "invoice") as DocumentType;
+    const linkedReceipt =
+      docType === "invoice" ? findReceiptForInvoice(invoices, inv.id) : undefined;
+
+    let msg = `ลบ${DOCUMENT_TYPE_LABELS[docType]} "${inv.title}"?`;
+    if (linkedReceipt) {
+      msg += `\n(ใบเสร็จ ${linkedReceipt.doc_number} จะถูกลบด้วย)`;
+    }
+    if (!confirm(msg)) return;
+
+    const supabase = createClient();
+
+    if (linkedReceipt) {
+      await supabase.from("invoices").delete().eq("id", linkedReceipt.id);
+    }
+
+    if (docType === "receipt") {
+      const sourceId = getReceiptSourceId(inv.document_meta);
+      if (sourceId) {
+        const source = invoices.find((i) => i.id === sourceId);
+        if (source) {
+          const meta = { ...(source.document_meta as Record<string, unknown>) };
+          delete meta.receipt_id;
+          delete meta.receipt_doc_number;
+          await supabase.from("invoices").update({ document_meta: meta }).eq("id", sourceId);
+        }
+      }
+    }
+
+    const { error } = await supabase.from("invoices").delete().eq("id", inv.id);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await logActivity("delete", "invoice", inv.id, inv.title, { type: docType });
+    load();
+  }
+
   async function handleExportPdf() {
     if (!previewData) return;
     setExportingPdf(true);
@@ -469,6 +509,14 @@ export default function InvoicesPage() {
                         <Receipt size={16} /> สร้างใบเสร็จ
                       </Button>
                     )}
+                  <button
+                    type="button"
+                    onClick={() => deleteInvoice(inv)}
+                    className="p-2.5 rounded-xl border border-border hover:bg-red-500/10 text-red-400 touch-manipulation"
+                    title="ลบเอกสาร"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             </div>
