@@ -44,6 +44,51 @@ const emptyTask = {
   progress: "0",
 };
 
+function renderDescriptionText(text: string) {
+  return text.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
+    /^https?:\/\//.test(part) ? (
+      <a
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-accent hover:underline break-all"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {part}
+      </a>
+    ) : (
+      part
+    )
+  );
+}
+
+function TaskDescription({ text, isSub }: { text: string; isSub?: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = text.length > 90 || text.includes("\n");
+
+  return (
+    <div className="mt-1.5">
+      <p
+        className={`text-xs text-zinc-300 whitespace-pre-wrap break-words leading-relaxed ${
+          !expanded && isLong ? (isSub ? "line-clamp-3" : "line-clamp-2") : ""
+        }`}
+      >
+        {renderDescriptionText(text)}
+      </p>
+      {isLong && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-[11px] text-accent hover:underline mt-1 touch-manipulation"
+        >
+          {expanded ? "ย่อ" : "ดูทั้งหมด"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function TaskRow({
   task,
   isSub,
@@ -89,15 +134,15 @@ function TaskRow({
             <> · {task.start_date} → {task.due_date}</>
           )}
         </p>
-                  {task.description && (
-                    <p className="text-xs text-muted mt-1 line-clamp-1">{task.description}</p>
-                  )}
-                  {!isSub && (
-                    <div className="mt-2">
-                      <TimeTracker taskId={task.id} taskTitle={task.title} />
-                    </div>
-                  )}
-                </div>
+        {task.description && (
+          <TaskDescription text={task.description} isSub={isSub} />
+        )}
+        {!isSub && (
+          <div className="mt-2">
+            <TimeTracker taskId={task.id} taskTitle={task.title} />
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center gap-2 flex-wrap">
         {task.assignee ? (
