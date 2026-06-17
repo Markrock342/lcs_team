@@ -162,6 +162,24 @@ input, select, textarea {
   animation: toast-out 0.28s ease-in forwards;
 }
 
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  #document-print-area,
+  #document-print-area * {
+    visibility: visible !important;
+  }
+
+  #document-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
+
 /* Light theme */
 [data-theme="light"] {
   --background: #f0f4f8;

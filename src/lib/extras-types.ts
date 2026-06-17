@@ -33,6 +33,19 @@ export interface Invoice {
   status: InvoiceStatus;
   due_date: string | null;
   notes: string | null;
+  document_type?: "invoice" | "receipt" | "proposal";
+  doc_number?: string | null;
+  issue_date?: string | null;
+  payment_method?: string | null;
+  amount_in_words?: string | null;
+  vat_amount?: number | null;
+  line_items?: {
+    description: string;
+    quantity: number;
+    unit: string;
+    unitPrice: number;
+  }[] | null;
+  document_meta?: Record<string, unknown> | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
