@@ -1,71 +1,60 @@
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendPushToUser } from "@/lib/push-server";
+import { createClient } from "@/lib/supabase/server";
+import { deliverNotifications } from "@/lib/notification-server";
+import { buildTaskDeadlineNotifications } from "@/lib/task-deadline-reminders";
 import { NextResponse } from "next/server";
 
-export async function GET() {
-  const supabase = await createClient();
-  if (!supabase) {
-    return NextResponse.json({ error: "Not configured" }, { status: 500 });
-  }
+function isAuthorized(request: Request): boolean {
+  const secret =
+    process.env.CRON_SECRET?.trim() ||
+    process.env.NOTIFICATION_DISPATCH_SECRET?.trim();
+  const auth = request.headers.get("authorization");
+  if (secret && auth === `Bearer ${secret}`) return true;
+  return false;
+}
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const cronAuth = isAuthorized(request);
+  const admin = createAdminClient();
 
-  const today = new Date().toISOString().slice(0, 10);
-  const in3days = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
-
-  const { data: tasks } = await supabase
-    .from("tasks")
-    .select("id, title, due_date, assigned_to")
-    .neq("status", "done")
-    .not("due_date", "is", null)
-    .lte("due_date", in3days);
-
-  let sent = 0;
-
-  for (const task of tasks ?? []) {
-    if (!task.assigned_to) continue;
-    const isOverdue = task.due_date! < today;
-    const isDueSoon = task.due_date! <= in3days && !isOverdue;
-
-    if (!isOverdue && !isDueSoon) continue;
-
-    const title = isOverdue ? "⚠️ งานเลยกำหนด" : "📅 งานใกล้ครบ";
-    const body = `${task.title} — ครบ ${task.due_date}`;
-
-    const { data: existing } = await supabase
-      .from("notifications")
-      .select("id")
-      .eq("user_id", task.assigned_to)
-      .eq("body", body)
-      .gte("created_at", new Date(Date.now() - 86400000).toISOString())
-      .limit(1);
-
-    if (existing?.length) continue;
-
-    await supabase.from("notifications").insert({
-      user_id: task.assigned_to,
-      title,
-      body,
-      link: "/tasks",
-    });
-
-    const admin = createAdminClient();
-    const db = admin ?? supabase;
-
-    const { data: subs } = await db
-      .from("push_subscriptions")
-      .select("endpoint, p256dh, auth")
-      .eq("user_id", task.assigned_to);
-
-    if (subs?.length) {
-      await sendPushToUser(subs, { title, body, link: "/tasks" });
+  if (!cronAuth) {
+    const supabase = await createClient();
+    if (!supabase) {
+      return NextResponse.json({ error: "Not configured" }, { status: 500 });
     }
-    sent++;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
-  return NextResponse.json({ checked: tasks?.length ?? 0, sent });
+  const db = admin;
+  if (!db) {
+    return NextResponse.json(
+      { error: "SUPABASE_SERVICE_ROLE_KEY required for reminders" },
+      { status: 500 }
+    );
+  }
+
+  const { data: tasks, error } = await db
+    .from("tasks")
+    .select("id, title, due_date, assigned_to, created_by, status")
+    .neq("status", "done")
+    .not("due_date", "is", null);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  const notifications = buildTaskDeadlineNotifications(tasks ?? []);
+  const result = await deliverNotifications(db, notifications);
+
+  return NextResponse.json({
+    checked: tasks?.length ?? 0,
+    candidates: notifications.length,
+    inserted: result.inserted,
+    pushed: result.pushed,
+  });
 }

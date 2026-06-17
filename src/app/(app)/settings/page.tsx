@@ -507,7 +507,7 @@ export default function SettingsPage() {
               {
                 key: "notify_tasks" as const,
                 label: "งานที่มอบหมาย",
-                desc: "แจ้งเมื่อได้รับงานใหม่",
+                desc: "งานใหม่ + เตือนก่อนครบ 3 วัน / 1 วัน / วันครบ / เลยกำหนด",
               },
             ] as const
           ).map(({ key, label, desc }) => (
