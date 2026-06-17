@@ -41,7 +41,10 @@ function InvoiceReceiptBody({ data, client }: Props) {
       : INVOICE_STATUS_LABELS[data.status as InvoiceStatus] ?? data.status;
 
   return (
-    <div className="bg-white text-black text-[11px] leading-relaxed p-8 sm:p-10 min-h-[297mm] font-serif">
+    <div
+      className="bg-white text-black text-[11px] leading-relaxed p-8 sm:p-10 min-h-[297mm]"
+      style={{ fontFamily: "var(--font-ibm-plex), system-ui, sans-serif" }}
+    >
       <div className="text-right mb-6">
         <p className="text-lg font-bold tracking-wide">{LCS_COMPANY.name}</p>
         <p className="text-base font-bold mt-1">
@@ -189,7 +192,10 @@ function ProposalBody({ data, client }: Props) {
   const titles = DOCUMENT_TYPE_TITLES.proposal;
 
   return (
-    <div className="bg-white text-black text-[11px] leading-relaxed p-8 sm:p-10 min-h-[297mm] font-serif space-y-6">
+    <div
+      className="bg-white text-black text-[11px] leading-relaxed p-8 sm:p-10 min-h-[297mm] space-y-6"
+      style={{ fontFamily: "var(--font-ibm-plex), system-ui, sans-serif" }}
+    >
       <div className="text-center border-b border-zinc-300 pb-4">
         <p className="text-xs text-zinc-500">{LCS_COMPANY.name} | Project Proposal & Workflow</p>
         <p className="text-lg font-bold mt-2">{titles.th}</p>

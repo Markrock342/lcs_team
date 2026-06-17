@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, DollarSign, Download, Eye, Printer, FileText, Pencil, Receipt } from "lucide-react";
+import { Plus, DollarSign, Download, Eye, Printer, FileText, Pencil, Receipt, FileDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Modal } from "@/components/ui";
 import { PageHeader, FilterTabs } from "@/components/mobile-ui";
@@ -24,6 +24,7 @@ import {
   type DocumentType,
 } from "@/lib/invoice-documents";
 import { logActivity, exportToCSV } from "@/lib/activity";
+import { documentPdfFilename, exportDocumentPdf } from "@/lib/export-pdf";
 import type { Client } from "@/lib/types";
 
 function invoiceToForm(inv: Invoice): DocumentFormData {
@@ -96,6 +97,7 @@ export default function InvoicesPage() {
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState("โอนเงิน / เงินสด");
   const [saving, setSaving] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [dbError, setDbError] = useState("");
 
   useEffect(() => {
@@ -322,6 +324,22 @@ export default function InvoicesPage() {
     }
   }
 
+  async function handleExportPdf() {
+    if (!previewData) return;
+    setExportingPdf(true);
+    try {
+      await exportDocumentPdf(
+        "document-pdf-root",
+        documentPdfFilename(previewData.form.doc_number, previewData.form.title)
+      );
+    } catch (err) {
+      console.error(err);
+      alert("Export PDF ไม่สำเร็จ — ลองใหม่อีกครั้ง");
+    } finally {
+      setExportingPdf(false);
+    }
+  }
+
   function exportInvoices() {
     exportToCSV(
       "documents.csv",
@@ -518,16 +536,15 @@ export default function InvoicesPage() {
         title="ตัวอย่างเอกสาร"
       >
         <div className="space-y-3">
-          <div className="flex gap-2 justify-end print:hidden">
+          <div className="flex gap-2 justify-end print:hidden flex-wrap">
             <Button variant="secondary" onClick={() => setPreviewOpen(false)}>
               ปิด
             </Button>
-            <Button
-              onClick={() => {
-                printDocument();
-              }}
-            >
-              <Printer size={16} /> พิมพ์ / Save PDF
+            <Button variant="secondary" onClick={() => printDocument()}>
+              <Printer size={16} /> พิมพ์
+            </Button>
+            <Button loading={exportingPdf} onClick={handleExportPdf}>
+              <FileDown size={16} /> Export PDF
             </Button>
           </div>
           <div
@@ -535,17 +552,19 @@ export default function InvoicesPage() {
             className="rounded-xl overflow-hidden border border-zinc-300 max-h-[65vh] overflow-y-auto"
           >
             {previewData && (
-              <LCSDocumentPreview
-                data={{
-                  ...previewData.form,
-                  total_amount: sumLineItems(previewData.form.line_items),
-                  amount_in_words: computeAmountInWords(
-                    sumLineItems(previewData.form.line_items) +
-                      (parseFloat(previewData.form.vat_amount) || 0)
-                  ),
-                }}
-                client={previewData.client}
-              />
+              <div id="document-pdf-root">
+                <LCSDocumentPreview
+                  data={{
+                    ...previewData.form,
+                    total_amount: sumLineItems(previewData.form.line_items),
+                    amount_in_words: computeAmountInWords(
+                      sumLineItems(previewData.form.line_items) +
+                        (parseFloat(previewData.form.vat_amount) || 0)
+                    ),
+                  }}
+                  client={previewData.client}
+                />
+              </div>
             )}
           </div>
         </div>
