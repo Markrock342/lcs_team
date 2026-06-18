@@ -17,6 +17,7 @@ import { sendNotification } from "@/lib/notifications";
 import { uploadFile } from "@/lib/upload";
 import type { TeamPayout } from "@/lib/extras-types";
 import type { Profile } from "@/lib/types";
+import { mergeProfileBank, hasBankInfo } from "@/lib/team-banks";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
 
@@ -34,10 +35,6 @@ function formatPaidDate(iso: string) {
   } catch {
     return iso;
   }
-}
-
-function hasBankInfo(p: Profile) {
-  return !!(p.bank_name && p.bank_account_number && p.bank_account_name);
 }
 
 export default function PayoutsPage() {
@@ -76,7 +73,7 @@ export default function PayoutsPage() {
     ]);
 
     setPayouts(payRes.data ?? []);
-    setMembers(memRes.data ?? []);
+    setMembers((memRes.data ?? []).map(mergeProfileBank));
     setLoading(false);
   }
 

@@ -17,6 +17,7 @@ import {
   isAdmin,
 } from "@/lib/permissions";
 import { getProfileDisplayRoles } from "@/lib/profile-display";
+import { DEFAULT_TEAM_BANKS } from "@/lib/team-banks";
 import { sendNotification } from "@/lib/notifications";
 import type { NotificationPrefs } from "@/lib/notifications";
 import type { Profile, TeamRole } from "@/lib/types";
@@ -90,9 +91,21 @@ export default function SettingsPage() {
         notify_tasks: data.notify_tasks !== false,
       });
       setBankForm({
-        bank_name: data.bank_name ?? "",
-        bank_account_number: data.bank_account_number ?? "",
-        bank_account_name: data.bank_account_name ?? "",
+        bank_name:
+          data.bank_name ??
+          DEFAULT_TEAM_BANKS[data.username.toLowerCase().replace(/_.*$/, "")]
+            ?.bank_name ??
+          "",
+        bank_account_number:
+          data.bank_account_number ??
+          DEFAULT_TEAM_BANKS[data.username.toLowerCase().replace(/_.*$/, "")]
+            ?.bank_account_number ??
+          "",
+        bank_account_name:
+          data.bank_account_name ??
+          DEFAULT_TEAM_BANKS[data.username.toLowerCase().replace(/_.*$/, "")]
+            ?.bank_account_name ??
+          "",
       });
     }
 
