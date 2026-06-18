@@ -10,10 +10,12 @@ import {
   Globe,
   ChevronRight,
   Wallet,
+  CircleDollarSign,
 } from "lucide-react";
 
 const ITEMS = [
   { href: "/schedule", label: "ตารางงาน", desc: "ปฏิทินรายเดือน + Gantt", icon: Calendar, color: "text-accent" },
+  { href: "/finance", label: "การเงิน", desc: "รายรับลูกค้า · รายจ่ายทีม", icon: CircleDollarSign, color: "text-sky-400" },
   { href: "/invoices", label: "ใบแจ้งหนี้", desc: "เก็บเงิน / มัดจำ / งวด", icon: Receipt, color: "text-emerald-400" },
   { href: "/payouts", label: "จ่ายทีม", desc: "โอนจ้างเพื่อน · แนบสลิป", icon: Wallet, color: "text-rose-400" },
   { href: "/templates", label: "เทมเพลตงาน", desc: "สร้างโปรเจกต์จาก template", icon: LayoutTemplate, color: "text-violet-400" },

@@ -15,6 +15,7 @@ import {
   LayoutTemplate,
   Settings,
   Wallet,
+  CircleDollarSign,
 } from "lucide-react";
 import { Suspense, useState, useRef, useEffect } from "react";
 import { InAppNotificationToasts } from "./InAppNotificationToasts";
@@ -35,6 +36,7 @@ const MAIN_NAV = [
 ];
 
 const EXTRA_NAV = [
+  { href: "/finance", label: "การเงิน", icon: CircleDollarSign },
   { href: "/invoices", label: "ใบแจ้งหนี้", icon: Receipt },
   { href: "/payouts", label: "จ่ายทีม", icon: Wallet },
   { href: "/templates", label: "เทมเพลตงาน", icon: LayoutTemplate },

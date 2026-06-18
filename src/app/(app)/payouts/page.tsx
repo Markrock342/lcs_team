@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Plus,
   Trash2,
@@ -188,9 +189,14 @@ export default function PayoutsPage() {
         title="จ่ายทีม"
         description="โอนจ้างเพื่อนในทีม · แนบสลิป · ตรวจสอบย้อนหลัง"
         action={
-          <Button onClick={() => { setModalOpen(true); setDbError(""); }}>
-            <Plus size={18} /> บันทึกการโอน
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Link href="/finance">
+              <Button variant="secondary">ดูการเงิน</Button>
+            </Link>
+            <Button onClick={() => { setModalOpen(true); setDbError(""); }}>
+              <Plus size={18} /> บันทึกการโอน
+            </Button>
+          </div>
         }
       />
 
