@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/client";
 
 export async function uploadFile(
   file: File,
-  folder: "clients" | "tasks" | "chat" | "client-files" | "avatars",
+  folder: "clients" | "tasks" | "chat" | "client-files" | "avatars" | "payouts",
   signal?: AbortSignal
 ): Promise<{ url: string; path: string } | null> {
   const supabase = createClient();

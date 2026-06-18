@@ -33,6 +33,9 @@ export interface Profile {
   notify_mentions?: boolean | null;
   notify_tasks?: boolean | null;
   push_enabled?: boolean | null;
+  bank_name?: string | null;
+  bank_account_number?: string | null;
+  bank_account_name?: string | null;
   created_at: string;
 }
 

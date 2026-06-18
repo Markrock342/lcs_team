@@ -14,6 +14,7 @@ import {
   History,
   LayoutTemplate,
   Settings,
+  Wallet,
 } from "lucide-react";
 import { Suspense, useState, useRef, useEffect } from "react";
 import { InAppNotificationToasts } from "./InAppNotificationToasts";
@@ -35,6 +36,7 @@ const MAIN_NAV = [
 
 const EXTRA_NAV = [
   { href: "/invoices", label: "ใบแจ้งหนี้", icon: Receipt },
+  { href: "/payouts", label: "จ่ายทีม", icon: Wallet },
   { href: "/templates", label: "เทมเพลตงาน", icon: LayoutTemplate },
   { href: "/activity", label: "ประวัติกิจกรรม", icon: History },
   { href: "/settings", label: "ตั้งค่า", icon: Settings },

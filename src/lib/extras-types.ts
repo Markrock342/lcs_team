@@ -62,6 +62,23 @@ export interface InvoicePayment {
   created_at: string;
 }
 
+export interface TeamPayout {
+  id: string;
+  payer_id: string;
+  payee_id: string;
+  amount: number;
+  description: string;
+  paid_at: string;
+  slip_url: string | null;
+  slip_file_name: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  payer?: Profile | null;
+  payee?: Profile | null;
+}
+
 export interface TimeEntry {
   id: string;
   task_id: string;

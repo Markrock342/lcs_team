@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Moon, Sun, Bell, Download, Smartphone, Shield, User, Camera } from "lucide-react";
+import { Moon, Sun, Bell, Download, Smartphone, Shield, User, Camera, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/mobile-ui";
 import { Button, Select, Avatar, ProfileRoleBadges } from "@/components/ui";
 import { useTheme } from "@/components/ThemeProvider";
@@ -44,6 +44,13 @@ export default function SettingsPage() {
     notify_tasks: true,
   });
   const [notifySaving, setNotifySaving] = useState(false);
+  const [bankForm, setBankForm] = useState({
+    bank_name: "",
+    bank_account_number: "",
+    bank_account_name: "",
+  });
+  const [bankSaving, setBankSaving] = useState(false);
+  const [bankSaved, setBankSaved] = useState(false);
 
   useEffect(() => {
     checkPush();
@@ -81,6 +88,11 @@ export default function SettingsPage() {
         notify_chat: data.notify_chat !== false,
         notify_mentions: data.notify_mentions !== false,
         notify_tasks: data.notify_tasks !== false,
+      });
+      setBankForm({
+        bank_name: data.bank_name ?? "",
+        bank_account_number: data.bank_account_number ?? "",
+        bank_account_name: data.bank_account_name ?? "",
       });
     }
 
@@ -278,6 +290,27 @@ export default function SettingsPage() {
     }, 500);
   }
 
+  async function saveBankInfo(e: React.FormEvent) {
+    e.preventDefault();
+    if (!profile) return;
+    setBankSaving(true);
+    setBankSaved(false);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        bank_name: bankForm.bank_name.trim() || null,
+        bank_account_number: bankForm.bank_account_number.trim() || null,
+        bank_account_name: bankForm.bank_account_name.trim() || null,
+      })
+      .eq("id", profile.id);
+    setBankSaving(false);
+    if (!error) {
+      setBankSaved(true);
+      setProfile({ ...profile, ...bankForm });
+    }
+  }
+
   async function installApp() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const prompt = (window as any).__pwaPrompt;
@@ -358,6 +391,52 @@ export default function SettingsPage() {
                 </p>
               )}
           </div>
+        </section>
+      )}
+
+      {profile && (
+        <section className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-3 p-4 border-b border-border">
+            <Wallet size={20} className="text-emerald-400" />
+            <div>
+              <p className="font-medium text-sm">บัญชีรับเงิน</p>
+              <p className="text-xs text-muted">
+                ให้เพื่อนในทีมเห็นตอนโอนจ้าง — หน้า「จ่ายทีม」
+              </p>
+            </div>
+          </div>
+          <form onSubmit={saveBankInfo} className="p-4 space-y-3">
+            <input
+              className="w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm"
+              placeholder="ธนาคาร เช่น กรุงไทย"
+              value={bankForm.bank_name}
+              onChange={(e) =>
+                setBankForm({ ...bankForm, bank_name: e.target.value })
+              }
+            />
+            <input
+              className="w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm font-mono"
+              placeholder="เลขบัญชี"
+              value={bankForm.bank_account_number}
+              onChange={(e) =>
+                setBankForm({ ...bankForm, bank_account_number: e.target.value })
+              }
+            />
+            <input
+              className="w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm"
+              placeholder="ชื่อบัญชี"
+              value={bankForm.bank_account_name}
+              onChange={(e) =>
+                setBankForm({ ...bankForm, bank_account_name: e.target.value })
+              }
+            />
+            <Button type="submit" loading={bankSaving} className="w-full">
+              บันทึกบัญชี
+            </Button>
+            {bankSaved && (
+              <p className="text-xs text-emerald-400 text-center">บันทึกแล้ว ✓</p>
+            )}
+          </form>
         </section>
       )}
 

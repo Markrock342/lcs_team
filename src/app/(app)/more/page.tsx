@@ -9,11 +9,13 @@ import {
   Download,
   Globe,
   ChevronRight,
+  Wallet,
 } from "lucide-react";
 
 const ITEMS = [
   { href: "/schedule", label: "ตารางงาน", desc: "ปฏิทินรายเดือน + Gantt", icon: Calendar, color: "text-accent" },
   { href: "/invoices", label: "ใบแจ้งหนี้", desc: "เก็บเงิน / มัดจำ / งวด", icon: Receipt, color: "text-emerald-400" },
+  { href: "/payouts", label: "จ่ายทีม", desc: "โอนจ้างเพื่อน · แนบสลิป", icon: Wallet, color: "text-rose-400" },
   { href: "/templates", label: "เทมเพลตงาน", desc: "สร้างโปรเจกต์จาก template", icon: LayoutTemplate, color: "text-violet-400" },
   { href: "/activity", label: "ประวัติกิจกรรม", desc: "Log การเปลี่ยนแปลงทั้งหมด", icon: History, color: "text-amber-400" },
   { href: "/notifications", label: "แจ้งเตือน", desc: "In-app + Push notifications", icon: Bell, color: "text-pink-400" },

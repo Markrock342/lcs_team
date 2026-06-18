@@ -9,6 +9,7 @@ const PROTECTED_PREFIXES = [
   "/schedule",
   "/chat",
   "/invoices",
+  "/payouts",
   "/activity",
   "/notifications",
   "/settings",

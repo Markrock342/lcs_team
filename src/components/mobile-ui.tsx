@@ -8,6 +8,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/chat": "แชททีม",
   "/more": "เมนู",
   "/invoices": "ใบแจ้งหนี้",
+  "/payouts": "จ่ายทีม",
   "/activity": "ประวัติ",
   "/notifications": "แจ้งเตือน",
   "/settings": "ตั้งค่า",
