@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Phone, Mail, Building2, Trash2, Pencil, Users, ExternalLink, Link2, Share2, FileUp, Copy, Check } from "lucide-react";
+import { Plus, Phone, Mail, Building2, Trash2, Pencil, Users, ExternalLink, Link2, Share2, FileUp, Copy, Check, ChevronDown, CheckSquare } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
   Button,
@@ -12,6 +12,7 @@ import {
   EmptyState,
 } from "@/components/ui";
 import { PageHeader, FilterTabs } from "@/components/mobile-ui";
+import Link from "next/link";
 import {
   PROJECT_TYPE_LABELS,
   CLIENT_STATUS_LABELS,
@@ -56,6 +57,7 @@ export default function ClientsPage() {
   const [fileUploading, setFileUploading] = useState(false);
   const [copiedPortal, setCopiedPortal] = useState<string | null>(null);
   const [portalEnabled, setPortalEnabled] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     loadClients();
@@ -75,11 +77,13 @@ export default function ClientsPage() {
     setEditing(null);
     setForm(emptyClient);
     setImageFile(null);
+    setShowAdvanced(false);
     setModalOpen(true);
   }
 
   function openEdit(client: Client) {
     setEditing(client);
+    setShowAdvanced(false);
     setPortalEnabled(!!(client as Client & { portal_enabled?: boolean }).portal_enabled);
     loadClientFiles(client.id);
     setForm({
@@ -235,7 +239,7 @@ export default function ClientsPage() {
     <div className="space-y-5 sm:space-y-6 animate-fade-in">
       <PageHeader
         title="ลูกค้า"
-        description="จัดการข้อมูลลูกค้าและโปรเจกต์"
+        description="กดการ์ดเพื่อแก้ไข · เปิด Portal ได้ในเมนูขยาย"
         action={
           <Button onClick={openCreate}>
             <Plus size={18} /> เพิ่มลูกค้า
@@ -343,12 +347,18 @@ export default function ClientsPage() {
                   </div>
                 )}
 
-                <div className="flex gap-2 mt-4 pt-3 border-t border-border sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-2 mt-4 pt-3 border-t border-border">
+                  <Link
+                    href="/tasks"
+                    className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-accent/10 text-accent text-xs font-medium touch-manipulation"
+                  >
+                    <CheckSquare size={12} /> งาน
+                  </Link>
                   {(client as Client & { portal_enabled?: boolean; portal_token?: string }).portal_enabled &&
                     (client as Client & { portal_token?: string }).portal_token && (
                     <button
                       onClick={() => copyPortalLink(client as Client & { portal_token: string })}
-                      className="p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20"
+                      className="p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 touch-manipulation"
                       title="คัดลอกลิงก์ Client Portal"
                     >
                       {copiedPortal === client.id ? <Check size={14} /> : <Share2 size={14} />}
@@ -356,13 +366,13 @@ export default function ClientsPage() {
                   )}
                   <button
                     onClick={() => openEdit(client)}
-                    className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-background border border-border text-xs hover:bg-card-hover"
+                    className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-background border border-border text-xs hover:bg-card-hover touch-manipulation"
                   >
                     <Pencil size={12} /> แก้ไข
                   </button>
                   <button
                     onClick={() => handleDelete(client.id)}
-                    className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                    className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 touch-manipulation"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -459,98 +469,109 @@ export default function ClientsPage() {
             rows={2}
           />
 
-          <div className="pt-2 border-t border-border">
-            <p className="text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2">
-              <Link2 size={16} className="text-accent" /> ลิงก์โปรเจกต์
-            </p>
-            <div className="space-y-3">
-              {CLIENT_LINK_FIELDS.map((f) => (
-                <Input
-                  key={f.key}
-                  label={f.label}
-                  type="url"
-                  value={form[f.key as keyof typeof form] as string}
-                  onChange={(e) =>
-                    setForm({ ...form, [f.key]: e.target.value })
-                  }
-                  placeholder={f.placeholder}
-                />
-              ))}
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="w-full flex items-center justify-between py-2 text-sm text-muted hover:text-foreground touch-manipulation"
+          >
+            <span className="flex items-center gap-2">
+              <Link2 size={16} className="text-accent" />
+              ลิงก์โปรเจกต์ · รูป · Portal
+            </span>
+            <ChevronDown size={16} className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+          </button>
 
-          <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-1.5">
-              รูปภาพ
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-              className="text-sm text-muted file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-accent/20 file:text-accent file:text-sm file:font-medium"
-            />
-          </div>
-
-          {editing && (
+          {showAdvanced && (
             <>
-              <div className="pt-2 border-t border-border">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm font-medium text-zinc-300 flex items-center gap-2">
-                    <Share2 size={16} className="text-accent" /> Client Portal
-                  </p>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={portalEnabled}
-                      onChange={(e) => togglePortal(e.target.checked)}
-                      className="rounded border-border"
-                    />
-                    เปิดใช้งาน
-                  </label>
-                </div>
-                {portalEnabled && (editing as Client & { portal_token?: string }).portal_token && (
-                  <div className="flex gap-2">
-                    <Input
-                      label=""
-                      readOnly
-                      value={`${typeof window !== "undefined" ? window.location.origin : ""}/portal/${(editing as Client & { portal_token: string }).portal_token}`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => copyPortalLink(editing as Client & { portal_token: string })}
-                      className="mt-auto p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 shrink-0"
-                    >
-                      {copiedPortal === editing.id ? <Check size={16} /> : <Copy size={16} />}
-                    </button>
-                  </div>
-                )}
+              <div className="space-y-3 pt-1">
+                {CLIENT_LINK_FIELDS.map((f) => (
+                  <Input
+                    key={f.key}
+                    label={f.label}
+                    type="url"
+                    value={form[f.key as keyof typeof form] as string}
+                    onChange={(e) =>
+                      setForm({ ...form, [f.key]: e.target.value })
+                    }
+                    placeholder={f.placeholder}
+                  />
+                ))}
               </div>
 
-              <div className="pt-2 border-t border-border">
-                <p className="text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2">
-                  <FileUp size={16} className="text-accent" /> ไฟล์ลูกค้า
-                </p>
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                  รูปภาพ
+                </label>
                 <input
                   type="file"
-                  onChange={handleFileUpload}
-                  disabled={fileUploading}
-                  className="text-sm text-muted file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-accent/20 file:text-accent file:text-sm file:font-medium mb-3"
+                  accept="image/*"
+                  onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                  className="text-sm text-muted file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-accent/20 file:text-accent file:text-sm file:font-medium"
                 />
-                {clientFiles.length > 0 && (
-                  <ul className="space-y-2">
-                    {clientFiles.map((f) => (
-                      <li key={f.id} className="flex items-center gap-2 text-sm bg-background rounded-lg px-3 py-2">
-                        <a href={f.file_url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-accent hover:underline">
-                          {f.name}
-                        </a>
-                        <button type="button" onClick={() => deleteClientFile(f.id)} className="text-red-400 hover:text-red-300">
-                          <Trash2 size={14} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
               </div>
+
+              {editing && (
+                <>
+                  <div className="pt-2 border-t border-border">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+                        <Share2 size={16} className="text-accent" /> Client Portal
+                      </p>
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={portalEnabled}
+                          onChange={(e) => togglePortal(e.target.checked)}
+                          className="rounded border-border"
+                        />
+                        เปิดใช้งาน
+                      </label>
+                    </div>
+                    {portalEnabled && (editing as Client & { portal_token?: string }).portal_token && (
+                      <div className="flex gap-2">
+                        <Input
+                          label=""
+                          readOnly
+                          value={`${typeof window !== "undefined" ? window.location.origin : ""}/portal/${(editing as Client & { portal_token: string }).portal_token}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => copyPortalLink(editing as Client & { portal_token: string })}
+                          className="mt-auto p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 shrink-0"
+                        >
+                          {copiedPortal === editing.id ? <Check size={16} /> : <Copy size={16} />}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-border">
+                    <p className="text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2">
+                      <FileUp size={16} className="text-accent" /> ไฟล์ลูกค้า
+                    </p>
+                    <input
+                      type="file"
+                      onChange={handleFileUpload}
+                      disabled={fileUploading}
+                      className="text-sm text-muted file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-accent/20 file:text-accent file:text-sm file:font-medium mb-3"
+                    />
+                    {clientFiles.length > 0 && (
+                      <ul className="space-y-2">
+                        {clientFiles.map((f) => (
+                          <li key={f.id} className="flex items-center gap-2 text-sm bg-background rounded-lg px-3 py-2">
+                            <a href={f.file_url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-accent hover:underline">
+                              {f.name}
+                            </a>
+                            <button type="button" onClick={() => deleteClientFile(f.id)} className="text-red-400 hover:text-red-300">
+                              <Trash2 size={14} />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </>
+              )}
             </>
           )}
 

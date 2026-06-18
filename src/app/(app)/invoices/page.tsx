@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, DollarSign, Download, Eye, Printer, FileText, Pencil, Receipt, FileDown, Trash2, MoreHorizontal } from "lucide-react";
+import Link from "next/link";
+import { Plus, DollarSign, Eye, Printer, FileText, Pencil, Receipt, FileDown, Trash2, MoreHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Modal } from "@/components/ui";
 import { PageHeader, FilterTabs } from "@/components/mobile-ui";
@@ -407,17 +408,12 @@ export default function InvoicesPage() {
   return (
     <div className="space-y-5 animate-fade-in">
       <PageHeader
-        title="ใบแจ้งหนี้ & เอกสาร"
-        description="ใบแจ้งหนี้ · ใบเสร็จ · Workflow Proposal"
+        title="ใบแจ้งหนี้"
+        description="สร้างเอกสาร — รับเงินได้ที่หน้าการเงิน"
         action={
-          <div className="flex gap-2 flex-wrap">
-            <Button variant="secondary" onClick={exportInvoices}>
-              <Download size={16} /> Export
-            </Button>
-            <Button onClick={() => setTemplateOpen(true)}>
-              <Plus size={18} /> สร้างเอกสาร
-            </Button>
-          </div>
+          <Button onClick={() => setTemplateOpen(true)}>
+            <Plus size={18} /> สร้างเอกสาร
+          </Button>
         }
       />
 
@@ -481,7 +477,23 @@ export default function InvoicesPage() {
                     </p>
                   )}
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
+                  {inv.status !== "paid" &&
+                    (docType === "invoice" || docType === "receipt") && (
+                      <Button
+                        onClick={() => {
+                          setPayModal(inv);
+                          const paidAmt =
+                            inv.payments?.reduce((s, p) => s + p.amount, 0) ?? 0;
+                          setPayAmount(String(Math.max(inv.total_amount - paidAmt, 0)));
+                          setPayMethod(inv.payment_method || "โอนเงิน / เงินสด");
+                        }}
+                        className="px-3"
+                      >
+                        <DollarSign size={16} />
+                        <span className="ml-1.5">รับเงิน</span>
+                      </Button>
+                    )}
                   <Button variant="secondary" onClick={() => openPreview(inv)} className="px-3">
                     <Eye size={16} />
                     <span className="hidden sm:inline ml-1.5">ดู</span>

@@ -9,6 +9,8 @@ import {
   ChevronDown,
   ChevronRight,
   ListTree,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -21,7 +23,7 @@ import {
   StatusBadge,
   Avatar,
 } from "@/components/ui";
-import { PageHeader, FilterTabs } from "@/components/mobile-ui";
+import { PageHeader, FilterTabs, FilterSelect, RowMenu } from "@/components/mobile-ui";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { TimeTracker } from "@/components/TimeTracker";
 import { TaskCountdown } from "@/components/TaskCountdown";
@@ -156,52 +158,47 @@ function TaskRow({
         )}
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap shrink-0">
         {task.assignee ? (
-          <div className="flex items-center gap-2 bg-background border border-border rounded-lg px-2 py-1">
-            <Avatar name={task.assignee.display_name} src={task.assignee.avatar_url} size="sm" />
-            <span className="text-xs">{task.assignee.display_name}</span>
-          </div>
+          <Avatar name={task.assignee.display_name} src={task.assignee.avatar_url} size="sm" />
         ) : (
-          <span className="text-xs text-muted px-2">ยังไม่มอบหมาย</span>
+          <span className="text-xs text-muted">ยังไม่มอบหมาย</span>
         )}
-
-        <div className="w-16 hidden md:block">
-          <div className="h-1.5 bg-background rounded-full overflow-hidden">
-            <div
-              className="h-full bg-accent rounded-full"
-              style={{ width: `${task.progress}%` }}
-            />
-          </div>
-          <p className="text-[10px] text-muted text-center">{task.progress}%</p>
-        </div>
 
         <select
           value={task.status}
           onChange={(e) => onStatusChange(task.id, e.target.value as TaskStatus)}
-          className="text-xs px-2 py-1.5 bg-background border border-border rounded-lg"
+          className="text-xs px-2 py-2 bg-background border border-border rounded-lg min-h-[40px] touch-manipulation"
         >
           {Object.entries(TASK_STATUS_LABELS).map(([k, v]) => (
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
 
-        {!isSub && (
-          <button
-            onClick={() => onAddSub(task)}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-accent/10 text-accent text-xs font-medium touch-manipulation"
-            title="เพิ่มงานย่อย"
-          >
-            <Plus size={14} />
-            <span className="hidden sm:inline">งานย่อย</span>
-          </button>
-        )}
-        <button onClick={() => onEdit(task)} className="p-2 rounded-lg hover:bg-card-hover text-muted">
-          <Pencil size={14} />
-        </button>
-        <button onClick={() => onDelete(task.id)} className="p-2 rounded-lg hover:bg-red-500/10 text-red-400">
-          <Trash2 size={14} />
-        </button>
+        <RowMenu
+          items={[
+            ...(!isSub
+              ? [
+                  {
+                    label: "เพิ่มงานย่อย",
+                    icon: <Plus size={15} />,
+                    onClick: () => onAddSub(task),
+                  },
+                ]
+              : []),
+            {
+              label: "แก้ไข",
+              icon: <Pencil size={15} />,
+              onClick: () => onEdit(task),
+            },
+            {
+              label: "ลบ",
+              icon: <Trash2 size={15} />,
+              onClick: () => onDelete(task.id),
+              danger: true,
+            },
+          ]}
+        />
       </div>
     </div>
   );
@@ -217,8 +214,15 @@ export default function TasksPage() {
   const [form, setForm] = useState(emptyTask);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("active");
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("status");
+    if (q && (q === "all" || q === "active" || q in TASK_STATUS_LABELS)) {
+      setStatusFilter(q);
+    }
+  }, []);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [modalMode, setModalMode] = useState<"parent" | "sub">("parent");
 
@@ -429,6 +433,7 @@ export default function TasksPage() {
 
   function taskMatchesFilter(task: Task): boolean {
     if (statusFilter === "all") return true;
+    if (statusFilter === "active") return task.status !== "done";
     return task.status === statusFilter;
   }
 
@@ -452,7 +457,7 @@ export default function TasksPage() {
     <div className="space-y-5 sm:space-y-6 animate-fade-in">
       <PageHeader
         title="งาน"
-        description="งานใหญ่รับผิดชอบร่วมกัน · แบ่งงานย่อยมอบหมายทีม"
+        description="เปลี่ยนสถานะได้เลย · กด ⋯ เพื่อแก้ไขหรือเพิ่มงานย่อย"
         action={
           <Button onClick={openCreateParent}>
             <Plus size={18} /> เพิ่มงานใหญ่
@@ -460,22 +465,68 @@ export default function TasksPage() {
         }
       />
 
-      <FilterTabs
-        active={viewMode === "kanban" ? "kanban" : statusFilter}
-        onChange={(k) => {
-          if (k === "kanban") setViewMode("kanban");
-          else { setViewMode("list"); setStatusFilter(k); }
-        }}
-        tabs={[
-          { key: "kanban", label: "Kanban" },
-          { key: "all", label: "ทั้งหมด", count: tasks.length },
-          ...Object.entries(TASK_STATUS_LABELS).map(([k, v]) => ({
-            key: k,
-            label: v,
-            count: tasks.filter((t) => t.status === k).length,
-          })),
-        ]}
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium min-h-[40px] touch-manipulation ${
+              viewMode === "list"
+                ? "bg-accent/20 text-accent border border-accent/40"
+                : "bg-card border border-border text-muted"
+            }`}
+          >
+            <List size={16} /> รายการ
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("kanban")}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium min-h-[40px] touch-manipulation ${
+              viewMode === "kanban"
+                ? "bg-accent/20 text-accent border border-accent/40"
+                : "bg-card border border-border text-muted"
+            }`}
+          >
+            <LayoutGrid size={16} /> Kanban
+          </button>
+        </div>
+
+        {viewMode === "list" && (
+          <>
+            <div className="sm:hidden flex-1">
+              <FilterSelect
+                label="แสดง"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={[
+                  { key: "active", label: "กำลังทำ", count: tasks.filter((t) => t.status !== "done").length },
+                  { key: "all", label: "ทั้งหมด", count: tasks.length },
+                  ...Object.entries(TASK_STATUS_LABELS).map(([k, v]) => ({
+                    key: k,
+                    label: v,
+                    count: tasks.filter((t) => t.status === k).length,
+                  })),
+                ]}
+              />
+            </div>
+            <div className="hidden sm:block flex-1">
+              <FilterTabs
+                active={statusFilter}
+                onChange={setStatusFilter}
+                tabs={[
+                  { key: "active", label: "กำลังทำ", count: tasks.filter((t) => t.status !== "done").length },
+                  { key: "all", label: "ทั้งหมด", count: tasks.length },
+                  ...Object.entries(TASK_STATUS_LABELS).map(([k, v]) => ({
+                    key: k,
+                    label: v,
+                    count: tasks.filter((t) => t.status === k).length,
+                  })),
+                ]}
+              />
+            </div>
+          </>
+        )}
+      </div>
 
       {viewMode === "kanban" ? (
         <KanbanBoard tasks={tasks} onStatusChange={quickStatusChange} />
@@ -642,25 +693,7 @@ export default function TasksPage() {
             ))}
           </Select>
 
-          {modalMode === "parent" && !editing && (
-            <Select
-              label="ประเภท"
-              value={form.parent_id ? "sub" : "parent"}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  parent_id: e.target.value === "sub" ? parentTasks[0]?.id ?? "" : "",
-                })
-              }
-            >
-              <option value="parent">งานใหญ่ (รับผิดชอบร่วมกัน)</option>
-              {parentTasks.length > 0 && (
-                <option value="sub">งานย่อยภายใต้งานใหญ่</option>
-              )}
-            </Select>
-          )}
-
-          {form.parent_id && modalMode === "parent" && !editing && (
+          {modalMode === "parent" && !editing && parentTasks.length > 0 && form.parent_id && (
             <Select
               label="งานใหญ่"
               value={form.parent_id}

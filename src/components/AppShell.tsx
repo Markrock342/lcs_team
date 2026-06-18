@@ -2,21 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  LayoutDashboard,
-  Users,
-  CheckSquare,
-  MessageCircle,
-  LogOut,
-  MoreHorizontal,
-  Calendar,
-  Receipt,
-  History,
-  LayoutTemplate,
-  Settings,
-  Wallet,
-  CircleDollarSign,
-} from "lucide-react";
+import { LogOut } from "lucide-react";
 import { Suspense, useState, useRef, useEffect } from "react";
 import { InAppNotificationToasts } from "./InAppNotificationToasts";
 import { createClient } from "@/lib/supabase/client";
@@ -25,32 +11,8 @@ import { Logo } from "./Logo";
 import { NotificationBell } from "./NotificationBell";
 import { getPageTitle } from "./mobile-ui";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
+import { MAIN_NAV, EXTRA_NAV, MOBILE_NAV, isNavActive } from "@/lib/nav";
 import type { Profile } from "@/lib/types";
-
-const MAIN_NAV = [
-  { href: "/dashboard", label: "ภาพรวม", icon: LayoutDashboard },
-  { href: "/clients", label: "ลูกค้า", icon: Users },
-  { href: "/tasks", label: "งาน", icon: CheckSquare },
-  { href: "/schedule", label: "ตารางงาน", icon: Calendar },
-  { href: "/chat", label: "แชททีม", icon: MessageCircle },
-];
-
-const EXTRA_NAV = [
-  { href: "/finance", label: "การเงิน", icon: CircleDollarSign },
-  { href: "/invoices", label: "ใบแจ้งหนี้", icon: Receipt },
-  { href: "/payouts", label: "จ่ายทีม", icon: Wallet },
-  { href: "/templates", label: "เทมเพลตงาน", icon: LayoutTemplate },
-  { href: "/activity", label: "ประวัติกิจกรรม", icon: History },
-  { href: "/settings", label: "ตั้งค่า", icon: Settings },
-];
-
-const MOBILE_NAV = [
-  { href: "/dashboard", label: "ภาพรวม", icon: LayoutDashboard },
-  { href: "/tasks", label: "งาน", icon: CheckSquare },
-  { href: "/clients", label: "ลูกค้า", icon: Users },
-  { href: "/chat", label: "แชท", icon: MessageCircle },
-  { href: "/more", label: "อื่นๆ", icon: MoreHorizontal },
-];
 
 export function AppShell({
   profile,
@@ -87,7 +49,7 @@ export function AppShell({
   const NavLinks = ({ items }: { items: typeof MAIN_NAV }) => (
     <>
       {items.map(({ href, label, icon: Icon }) => {
-        const active = pathname === href || pathname.startsWith(href + "/");
+        const active = isNavActive(pathname, href);
         return (
           <Link
             key={href}
@@ -217,7 +179,7 @@ export function AppShell({
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-sidebar/95 backdrop-blur-md border-t border-brand pb-safe">
         <div className="flex items-stretch justify-around min-h-16 px-1">
           {MOBILE_NAV.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || (href === "/more" && EXTRA_NAV.some((n) => pathname.startsWith(n.href)));
+            const active = isNavActive(pathname, href);
             return (
               <Link
                 key={href}

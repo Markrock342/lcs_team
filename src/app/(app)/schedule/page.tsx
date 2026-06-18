@@ -66,7 +66,35 @@ export default function SchedulePage() {
           onMonthChange={setCurrentMonth}
         />
       ) : (
-        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+        <>
+          <div className="md:hidden space-y-2">
+            {tasks.map((task) => (
+              <div
+                key={task.id}
+                className="bg-card border border-border rounded-xl p-3"
+              >
+                <p className="font-medium text-sm">
+                  {task.parent_id && <span className="text-muted mr-1">↳</span>}
+                  {task.title}
+                </p>
+                <p className="text-xs text-muted mt-0.5">
+                  {task.client?.name ?? "—"}
+                  {task.assignee ? ` · ${task.assignee.display_name}` : ""}
+                </p>
+                <div className="flex items-center justify-between mt-2 gap-2">
+                  <TaskCountdown
+                    startDate={task.start_date}
+                    dueDate={task.due_date}
+                    status={task.status}
+                    showDates={false}
+                    size="sm"
+                  />
+                  <StatusBadge status={task.status} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block bg-card border border-border rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -143,6 +171,7 @@ export default function SchedulePage() {
             </table>
           </div>
         </div>
+        </>
       )}
 
       {unscheduled.length > 0 && (
