@@ -350,7 +350,7 @@ export default function TasksPage() {
 
     if (imageFile) {
       const uploaded = await uploadFile(imageFile, "tasks");
-      if (uploaded) image_url = uploaded.url;
+      if (uploaded.ok) image_url = uploaded.url;
     }
 
     const payload = {

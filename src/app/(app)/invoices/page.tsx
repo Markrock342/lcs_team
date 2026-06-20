@@ -285,14 +285,23 @@ export default function InvoicesPage() {
 
   async function addPayment(e: React.FormEvent) {
     e.preventDefault();
-    if (!payModal) return;
+    if (!payModal || saving) return;
+    setSaving(true);
+    setDbError("");
     const supabase = createClient();
     const amount = parseFloat(payAmount);
-    await supabase.from("invoice_payments").insert({
+
+    const { error: payError } = await supabase.from("invoice_payments").insert({
       invoice_id: payModal.id,
       amount,
       paid_at: new Date().toISOString().slice(0, 10),
     });
+    if (payError) {
+      setSaving(false);
+      setDbError(payError.message);
+      return;
+    }
+
     const paid =
       (payModal.payments?.reduce((s, p) => s + p.amount, 0) ?? 0) + amount;
     const newStatus: InvoiceStatus =
@@ -302,7 +311,15 @@ export default function InvoicesPage() {
     if (newStatus === "paid" && payMethod) {
       updates.payment_method = payMethod;
     }
-    await supabase.from("invoices").update(updates).eq("id", payModal.id);
+    const { error: statusError } = await supabase
+      .from("invoices")
+      .update(updates)
+      .eq("id", payModal.id);
+    if (statusError) {
+      setSaving(false);
+      setDbError(statusError.message);
+      return;
+    }
 
     const paidInvoice: Invoice = {
       ...payModal,
@@ -312,6 +329,7 @@ export default function InvoicesPage() {
 
     setPayModal(null);
     setPayAmount("");
+    setSaving(false);
 
     const docType = (paidInvoice.document_type ?? "invoice") as DocumentType;
     const shouldOfferReceipt =
@@ -671,6 +689,11 @@ export default function InvoicesPage() {
 
       <Modal open={!!payModal} onClose={() => setPayModal(null)} title="บันทึกการชำระเงิน">
         <form onSubmit={addPayment} className="space-y-4">
+          {dbError && (
+            <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              {dbError}
+            </div>
+          )}
           <p className="text-sm text-muted">
             {payModal?.title} — ฿{payModal?.total_amount.toLocaleString()}
           </p>
@@ -689,7 +712,7 @@ export default function InvoicesPage() {
             value={payMethod}
             onChange={(e) => setPayMethod(e.target.value)}
           />
-          <Button type="submit" className="w-full">
+          <Button type="submit" loading={saving} className="w-full">
             บันทึก
           </Button>
         </form>

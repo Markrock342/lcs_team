@@ -118,7 +118,7 @@ export function QuickPayoutForm({
           </span>
           <input
             type="file"
-            accept="image/*,.pdf"
+            accept="image/*,.pdf,image/heic,image/heif"
             className="hidden"
             onChange={(e) => onSlipChange(e.target.files?.[0] ?? null)}
           />

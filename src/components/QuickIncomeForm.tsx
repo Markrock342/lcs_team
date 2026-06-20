@@ -19,6 +19,7 @@ export function QuickIncomeForm({ onDone }: Props) {
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     load();
@@ -46,22 +47,36 @@ export function QuickIncomeForm({ onDone }: Props) {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!selected) return;
+    if (!selected || saving) return;
     setSaving(true);
+    setError("");
     const supabase = createClient();
     const payAmount = parseFloat(amount);
-    await supabase.from("invoice_payments").insert({
+
+    const { error: payError } = await supabase.from("invoice_payments").insert({
       invoice_id: selected.id,
       amount: payAmount,
       paid_at: new Date().toISOString().slice(0, 10),
     });
+    if (payError) {
+      setSaving(false);
+      setError(payError.message);
+      return;
+    }
+
     const paid =
       (selected.payments?.reduce((s, p) => s + p.amount, 0) ?? 0) + payAmount;
     const newStatus = paid >= selected.total_amount ? "paid" : "partial";
-    await supabase
+    const { error: statusError } = await supabase
       .from("invoices")
       .update({ status: newStatus })
       .eq("id", selected.id);
+    if (statusError) {
+      setSaving(false);
+      setError(statusError.message);
+      return;
+    }
+
     setSaving(false);
     onDone();
   }
@@ -115,6 +130,11 @@ export function QuickIncomeForm({ onDone }: Props) {
 
   return (
     <form onSubmit={handleSave} className="space-y-4">
+      {error && (
+        <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+          {error}
+        </div>
+      )}
       <button
         type="button"
         onClick={() => setSelected(null)}

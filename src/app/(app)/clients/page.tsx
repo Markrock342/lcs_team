@@ -55,6 +55,7 @@ export default function ClientsPage() {
   const [filter, setFilter] = useState<string>("all");
   const [clientFiles, setClientFiles] = useState<ClientFile[]>([]);
   const [fileUploading, setFileUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const [copiedPortal, setCopiedPortal] = useState<string | null>(null);
   const [portalEnabled, setPortalEnabled] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -77,6 +78,7 @@ export default function ClientsPage() {
     setEditing(null);
     setForm(emptyClient);
     setImageFile(null);
+    setUploadError("");
     setShowAdvanced(false);
     setModalOpen(true);
   }
@@ -106,6 +108,7 @@ export default function ClientsPage() {
       drive_url: client.drive_url ?? "",
     });
     setImageFile(null);
+    setUploadError("");
     setModalOpen(true);
   }
 
@@ -122,19 +125,28 @@ export default function ClientsPage() {
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     if (!editing || !e.target.files?.[0]) return;
     setFileUploading(true);
+    setUploadError("");
     const file = e.target.files[0];
     const supabase = createClient();
     const uploaded = await uploadFile(file, "client-files");
-    if (uploaded) {
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from("client_files").insert({
-        client_id: editing.id,
-        name: file.name,
-        file_url: uploaded.url,
-        file_type: file.type,
-        file_size: file.size,
-        uploaded_by: user?.id,
-      });
+    if (!uploaded.ok) {
+      setUploadError(uploaded.error);
+      setFileUploading(false);
+      e.target.value = "";
+      return;
+    }
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from("client_files").insert({
+      client_id: editing.id,
+      name: file.name,
+      file_url: uploaded.url,
+      file_type: file.type,
+      file_size: file.size,
+      uploaded_by: user?.id,
+    });
+    if (error) {
+      setUploadError(error.message);
+    } else {
       await logActivity("upload", "client_file", editing.id, file.name);
       loadClientFiles(editing.id);
     }
@@ -173,13 +185,19 @@ export default function ClientsPage() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
+    setUploadError("");
 
     const supabase = createClient();
     let image_url = editing?.image_url ?? null;
 
     if (imageFile) {
       const uploaded = await uploadFile(imageFile, "clients");
-      if (uploaded) image_url = uploaded.url;
+      if (!uploaded.ok) {
+        setSaving(false);
+        setUploadError(uploaded.error);
+        return;
+      }
+      image_url = uploaded.url;
     }
 
     const payload = {
@@ -389,6 +407,11 @@ export default function ClientsPage() {
         title={editing ? "แก้ไขลูกค้า" : "เพิ่มลูกค้าใหม่"}
       >
         <form onSubmit={handleSave} className="space-y-4">
+          {uploadError && (
+            <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              {uploadError}
+            </div>
+          )}
           <Input
             label="ชื่อลูกค้า / โปรเจกต์ *"
             value={form.name}
@@ -499,15 +522,29 @@ export default function ClientsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-1.5">
-                  รูปภาพ
+                <p className="block text-sm font-medium text-zinc-300 mb-1.5">
+                  รูปใบสัญญา / เอกสาร
+                </p>
+                <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-accent/40 touch-manipulation">
+                  <FileUp size={20} className="text-muted shrink-0" />
+                  <span className="text-sm text-muted truncate">
+                    {imageFile
+                      ? imageFile.name
+                      : editing?.image_url
+                        ? "มีรูปแล้ว — แตะเลือกใหม่"
+                        : "แตะเลือกรูปใบสัญญา"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf,image/heic,image/heif"
+                    capture="environment"
+                    onChange={(e) => {
+                      setImageFile(e.target.files?.[0] ?? null);
+                      setUploadError("");
+                    }}
+                    className="hidden"
+                  />
                 </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-                  className="text-sm text-muted file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-accent/20 file:text-accent file:text-sm file:font-medium"
-                />
               </div>
 
               {editing && (
@@ -547,14 +584,21 @@ export default function ClientsPage() {
 
                   <div className="pt-2 border-t border-border">
                     <p className="text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2">
-                      <FileUp size={16} className="text-accent" /> ไฟล์ลูกค้า
+                      <FileUp size={16} className="text-accent" /> ไฟล์ลูกค้า / ใบสัญญา
                     </p>
-                    <input
-                      type="file"
-                      onChange={handleFileUpload}
-                      disabled={fileUploading}
-                      className="text-sm text-muted file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-accent/20 file:text-accent file:text-sm file:font-medium mb-3"
-                    />
+                    <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-accent/40 touch-manipulation mb-3">
+                      <FileUp size={18} className="text-muted" />
+                      <span className="text-sm text-muted">
+                        {fileUploading ? "กำลังอัปโหลด..." : "แตะเลือกไฟล์"}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf,image/heic,image/heif"
+                        onChange={handleFileUpload}
+                        disabled={fileUploading}
+                        className="hidden"
+                      />
+                    </label>
                     {clientFiles.length > 0 && (
                       <ul className="space-y-2">
                         {clientFiles.map((f) => (

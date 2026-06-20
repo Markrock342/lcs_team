@@ -196,8 +196,8 @@ export default function SettingsPage() {
     setRoleError("");
 
     const uploaded = await uploadFile(file, "avatars");
-    if (!uploaded) {
-      setRoleError("อัปโหลดรูปไม่สำเร็จ");
+    if (!uploaded.ok) {
+      setRoleError(uploaded.error);
       setAvatarUploading(false);
       e.target.value = "";
       return;

@@ -125,7 +125,7 @@ export default function FinancePageInner() {
 
   async function savePayout(e: React.FormEvent) {
     e.preventDefault();
-    if (!currentUserId) return;
+    if (!currentUserId || saving) return;
     setSaving(true);
     setDbError("");
 
@@ -135,9 +135,9 @@ export default function FinancePageInner() {
 
     if (slipFile) {
       const uploaded = await uploadFile(slipFile, "payouts");
-      if (!uploaded) {
+      if (!uploaded.ok) {
         setSaving(false);
-        setDbError("อัปโหลดสลิปไม่สำเร็จ");
+        setDbError(uploaded.error);
         return;
       }
       slip_url = uploaded.url;
@@ -145,6 +145,7 @@ export default function FinancePageInner() {
     }
 
     const amount = parseFloat(payoutForm.amount);
+    const savedForm = { ...payoutForm };
 
     const { error } = await supabase.from("team_payouts").insert({
       payer_id: currentUserId,
@@ -158,29 +159,31 @@ export default function FinancePageInner() {
       created_by: currentUserId,
     });
 
-    setSaving(false);
     if (error) {
+      setSaving(false);
       setDbError(error.message);
       return;
     }
 
+    // ปิด modal ทันทีหลังบันทึกสำเร็จ — กันกดซ้ำ
+    setPayoutOpen(false);
+    setPayoutForm(emptyPayout);
+    setSlipFile(null);
+    setSaving(false);
+    load();
+
     const payerName =
       members.find((m) => m.id === currentUserId)?.display_name ?? "ทีม";
-    await logActivity("create", "payout", null, payoutForm.description, { amount });
-    if (payoutForm.payee_id !== currentUserId) {
-      await sendNotification({
-        userId: payoutForm.payee_id,
+    void logActivity("create", "payout", null, savedForm.description, { amount });
+    if (savedForm.payee_id !== currentUserId) {
+      void sendNotification({
+        userId: savedForm.payee_id,
         title: "💸 ได้รับเงินจากทีม",
-        body: `${payerName} โอน ฿${amount.toLocaleString()} — ${payoutForm.description}`,
+        body: `${payerName} โอน ฿${amount.toLocaleString()} — ${savedForm.description}`,
         link: "/finance",
         kind: "system",
       });
     }
-
-    setPayoutOpen(false);
-    setPayoutForm(emptyPayout);
-    setSlipFile(null);
-    load();
   }
 
   function exportCsv() {
@@ -339,7 +342,11 @@ export default function FinancePageInner() {
         />
       </Modal>
 
-      <Modal open={payoutOpen} onClose={() => setPayoutOpen(false)} title="จ่ายเพื่อนในทีม">
+      <Modal open={payoutOpen} onClose={() => {
+          if (saving) return;
+          setPayoutOpen(false);
+          setDbError("");
+        }} title="จ่ายเพื่อนในทีม">
         {dbError && (
           <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/10 text-red-400 text-sm">
             {dbError}

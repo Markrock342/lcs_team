@@ -548,7 +548,7 @@ function ChatPageContent() {
         sendAbortRef.current = null;
         return;
       }
-      if (uploaded) {
+      if (uploaded.ok) {
         file_url = uploaded.url;
         file_name = file.name;
         file_type = file.type;
