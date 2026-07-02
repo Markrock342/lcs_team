@@ -876,6 +876,16 @@ export default function TasksPage() {
           </div>
           <Input label="ความคืบหน้า (%)" type="number" min="0" max="100" value={form.progress} onChange={(e) => setForm({ ...form, progress: e.target.value })} />
 
+          {editing ? (
+            <div className="rounded-xl border border-border bg-background/40 p-4">
+              <TaskAttachments taskId={editing.id} currentUserId={currentUserId} />
+            </div>
+          ) : (
+            <p className="text-xs text-muted">
+              บันทึกงานก่อน แล้วเปิดแก้ไขอีกครั้งเพื่อแนบไฟล์
+            </p>
+          )}
+
           <Button type="submit" loading={saving} className="w-full">
             {editing ? "บันทึก" : modalMode === "sub" ? "เพิ่มงานย่อย" : "เพิ่มงานใหญ่"}
           </Button>
