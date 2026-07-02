@@ -1,5 +1,7 @@
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
+import type { AccountingTransaction } from "./extras-types";
+import type { AccountingSummary } from "./finance";
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[/\\?%*:|"<>]/g, "-").trim() || "document";
@@ -68,4 +70,66 @@ export async function exportDocumentPdf(
       scrollParent.style.overflow = prevOverflow;
     }
   }
+}
+
+function money(value: number) {
+  return `฿${value.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
+export function exportAccountingReportPdf(input: {
+  periodLabel: string;
+  summary: AccountingSummary;
+  transactions: AccountingTransaction[];
+}) {
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const margin = 14;
+  let y = margin;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(16);
+  pdf.text("Limit Code Studio — รายงานบัญชี", margin, y);
+  y += 8;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(11);
+  pdf.text(`ช่วงเวลา: ${input.periodLabel}`, margin, y);
+  y += 10;
+
+  const cards = [
+    ["เงินเข้า", money(input.summary.income)],
+    ["เงินออก", money(input.summary.expense)],
+    ["คงเหลือ", money(input.summary.net)],
+    ["กองกลาง", money(input.summary.fund)],
+    ["VAT", money(input.summary.vat)],
+  ];
+  pdf.setFont("helvetica", "bold");
+  cards.forEach(([label, value]) => {
+    pdf.text(`${label}: ${value}`, margin, y);
+    y += 6;
+  });
+  y += 4;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.text("รายการ", margin, y);
+  y += 6;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+
+  for (const t of input.transactions) {
+    if (y > 270) {
+      pdf.addPage();
+      y = margin;
+    }
+    const sign = t.type === "income" ? "+" : "-";
+    const line1 = `${t.transaction_date}  ${sign}${money(t.amount)}  ${t.description}`;
+    const line2 = `${t.category?.name ?? ""} · ${t.client?.name ?? t.member?.display_name ?? ""}`;
+    pdf.text(line1.slice(0, 95), margin, y);
+    y += 4;
+    pdf.setTextColor(120);
+    pdf.text(line2.slice(0, 95), margin, y);
+    pdf.setTextColor(0);
+    y += 5;
+  }
+
+  const filename = `accounting-${input.periodLabel.replace(/\s+/g, "-")}.pdf`;
+  pdf.save(filename);
 }

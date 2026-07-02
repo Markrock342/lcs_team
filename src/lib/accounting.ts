@@ -23,6 +23,9 @@ export type AccountingResult =
   | { ok: false; error: string };
 
 function accountingError(message: string) {
+  if (message.includes("deleted_at") || message.includes("updated_by")) {
+    return "รัน supabase/add-accounting-audit.sql ใน Supabase ก่อน";
+  }
   if (message.includes("relation") || message.includes("column")) {
     return "รัน supabase/add-accounting-ledger.sql ใน Supabase ก่อน";
   }
@@ -104,6 +107,62 @@ export async function saveAccountingTransaction(
 
   if (error) return { ok: false, error: accountingError(error.message) };
   return { ok: true, id: data?.id ?? null };
+}
+
+export async function updateAccountingTransaction(
+  id: string,
+  input: Omit<AccountingTransactionInput, "sourceType" | "sourceId" | "createdBy"> & {
+    keepSlipUrl?: string | null;
+    keepSlipFileName?: string | null;
+  }
+): Promise<AccountingResult> {
+  const supabase = createClient();
+  const category = await getCategoryId(input.categorySlug);
+  if (!category.ok) return category;
+
+  const updatedBy = await currentUserId();
+  const payload = {
+    type: input.type,
+    amount: input.amount,
+    transaction_date: input.transactionDate,
+    category_id: category.id,
+    description: input.description.trim(),
+    member_id: input.memberId ?? null,
+    client_id: input.clientId ?? null,
+    vat_amount: input.vatAmount ?? 0,
+    slip_url: input.slipUrl ?? input.keepSlipUrl ?? null,
+    slip_file_name: input.slipFileName ?? input.keepSlipFileName ?? null,
+    notes: input.notes?.trim() || null,
+    updated_by: updatedBy,
+  };
+
+  const { error } = await supabase
+    .from("accounting_transactions")
+    .update(payload)
+    .eq("id", id)
+    .is("deleted_at", null);
+
+  if (error) return { ok: false, error: accountingError(error.message) };
+  return { ok: true, id };
+}
+
+export async function softDeleteAccountingTransaction(
+  id: string
+): Promise<AccountingResult> {
+  const supabase = createClient();
+  const deletedBy = await currentUserId();
+  const { error } = await supabase
+    .from("accounting_transactions")
+    .update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: deletedBy,
+      updated_by: deletedBy,
+    })
+    .eq("id", id)
+    .is("deleted_at", null);
+
+  if (error) return { ok: false, error: accountingError(error.message) };
+  return { ok: true, id };
 }
 
 export async function syncInvoicePaymentToLedger(input: {

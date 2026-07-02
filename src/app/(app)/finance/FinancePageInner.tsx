@@ -8,12 +8,17 @@ import {
   ArrowUpRight,
   ChevronRight,
   Download,
+  FileText,
+  Paperclip,
+  Pencil,
   PiggyBank,
   Plus,
+  Trash2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { PageHeader, FilterTabs } from "@/components/mobile-ui";
+import { PageHeader, FilterTabs, RowMenu } from "@/components/mobile-ui";
 import { Modal } from "@/components/ui";
+import { SlipPreviewModal } from "@/components/SlipPreviewModal";
 import { QuickIncomeForm } from "@/components/QuickIncomeForm";
 import {
   QuickPayoutForm,
@@ -40,9 +45,12 @@ import { sendNotification } from "@/lib/notifications";
 import { uploadFile } from "@/lib/upload";
 import {
   saveAccountingTransaction,
+  softDeleteAccountingTransaction,
   syncTeamFundContributionToLedger,
   syncTeamPayoutToLedger,
+  updateAccountingTransaction,
 } from "@/lib/accounting";
+import { exportAccountingReportPdf } from "@/lib/export-pdf";
 import type {
   AccountingCategory,
   AccountingEntryType,
@@ -93,6 +101,30 @@ function emptyEntryForm(
   };
 }
 
+function transactionToForm(t: AccountingTransaction): AccountingEntryFormData {
+  return {
+    type: t.type,
+    amount: String(t.amount),
+    transaction_date: t.transaction_date,
+    category_slug: t.category?.slug ?? DEFAULT_EXPENSE_CATEGORY,
+    description: t.description,
+    member_id: t.member_id ?? "",
+    client_id: t.client_id ?? "",
+    vat_amount: String(t.vat_amount ?? 0),
+    notes: t.notes ?? "",
+  };
+}
+
+function periodLabel(period: string) {
+  if (period === "month") {
+    return format(new Date(), "MMMM yyyy", { locale: th });
+  }
+  if (period === "year") {
+    return format(new Date(), "yyyy", { locale: th });
+  }
+  return "ทั้งหมด";
+}
+
 function formatDate(iso: string) {
   try {
     return format(new Date(iso), "d MMM yyyy", { locale: th });
@@ -140,6 +172,12 @@ export default function FinancePageInner() {
   const [slipFile, setSlipFile] = useState<File | null>(null);
   const [fundSlipFile, setFundSlipFile] = useState<File | null>(null);
   const [entrySlipFile, setEntrySlipFile] = useState<File | null>(null);
+  const [editingTransaction, setEditingTransaction] =
+    useState<AccountingTransaction | null>(null);
+  const [slipPreview, setSlipPreview] = useState<{
+    url: string;
+    fileName?: string | null;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const [dbError, setDbError] = useState("");
   const searchParams = useSearchParams();
@@ -175,8 +213,9 @@ export default function FinancePageInner() {
       supabase
         .from("accounting_transactions")
         .select(
-          "*, category:accounting_categories(*), member:profiles!accounting_transactions_member_id_fkey(*), client:clients(*)"
+          "*, category:accounting_categories(*), member:profiles!accounting_transactions_member_id_fkey(*), client:clients(*), updater:profiles!accounting_transactions_updated_by_fkey(*)"
         )
+        .is("deleted_at", null)
         .order("transaction_date", { ascending: false })
         .order("created_at", { ascending: false }),
       supabase
@@ -190,9 +229,11 @@ export default function FinancePageInner() {
     if (ledgerRes.error || categoryRes.error) {
       const msg = ledgerRes.error?.message ?? categoryRes.error?.message ?? "";
       setDbError(
-        msg.includes("relation") || msg.includes("column")
-          ? "รัน supabase/add-accounting-ledger.sql ใน Supabase ก่อน"
-          : msg
+        msg.includes("deleted_at")
+          ? "รัน supabase/add-accounting-audit.sql ใน Supabase ก่อน"
+          : msg.includes("relation") || msg.includes("column")
+            ? "รัน supabase/add-accounting-ledger.sql ใน Supabase ก่อน"
+            : msg
       );
     } else {
       setDbError("");
@@ -220,10 +261,34 @@ export default function FinancePageInner() {
   });
 
   function openManualEntry(type: AccountingEntryType = "expense") {
+    setEditingTransaction(null);
     setEntryForm(emptyEntryForm(type, defaultCategoryForType(type)));
     setEntrySlipFile(null);
     setDbError("");
     setEntryOpen(true);
+  }
+
+  function openEditTransaction(transaction: AccountingTransaction) {
+    setEditingTransaction(transaction);
+    setEntryForm(transactionToForm(transaction));
+    setEntrySlipFile(null);
+    setDbError("");
+    setEntryOpen(true);
+  }
+
+  async function deleteTransaction(transaction: AccountingTransaction) {
+    const ok = window.confirm(
+      `ลบรายการ "${transaction.description}"?\n\nเป็น soft delete — ยังเก็บประวัติไว้ในระบบ`
+    );
+    if (!ok) return;
+    setDbError("");
+    const result = await softDeleteAccountingTransaction(transaction.id);
+    if (!result.ok) {
+      setDbError(result.error);
+      return;
+    }
+    load();
+    void logActivity("delete", "accounting_transaction", transaction.id, transaction.description);
   }
 
   async function savePayout(e: React.FormEvent) {
@@ -418,20 +483,37 @@ export default function FinancePageInner() {
 
     const amount = parseFloat(entryForm.amount);
     const vatAmount = parseFloat(entryForm.vat_amount || "0") || 0;
-    const ledger = await saveAccountingTransaction({
-      type: entryForm.type,
-      amount,
-      transactionDate: entryForm.transaction_date,
-      categorySlug: entryForm.category_slug,
-      description: entryForm.description,
-      memberId: entryForm.member_id || null,
-      clientId: entryForm.client_id || null,
-      vatAmount,
-      slipUrl,
-      slipFileName,
-      notes: entryForm.notes,
-      createdBy: currentUserId,
-    });
+
+    const ledger = editingTransaction
+      ? await updateAccountingTransaction(editingTransaction.id, {
+          type: entryForm.type,
+          amount,
+          transactionDate: entryForm.transaction_date,
+          categorySlug: entryForm.category_slug,
+          description: entryForm.description,
+          memberId: entryForm.member_id || null,
+          clientId: entryForm.client_id || null,
+          vatAmount,
+          slipUrl,
+          slipFileName,
+          keepSlipUrl: editingTransaction.slip_url,
+          keepSlipFileName: editingTransaction.slip_file_name,
+          notes: entryForm.notes,
+        })
+      : await saveAccountingTransaction({
+          type: entryForm.type,
+          amount,
+          transactionDate: entryForm.transaction_date,
+          categorySlug: entryForm.category_slug,
+          description: entryForm.description,
+          memberId: entryForm.member_id || null,
+          clientId: entryForm.client_id || null,
+          vatAmount,
+          slipUrl,
+          slipFileName,
+          notes: entryForm.notes,
+          createdBy: currentUserId,
+        });
 
     if (!ledger.ok) {
       setSaving(false);
@@ -440,15 +522,30 @@ export default function FinancePageInner() {
     }
 
     setEntryOpen(false);
+    setEditingTransaction(null);
     setEntrySlipFile(null);
     setEntryForm(emptyEntryForm("expense", defaultCategoryForType("expense")));
     setSaving(false);
     load();
 
-    void logActivity("create", "accounting_transaction", ledger.id, entryForm.description, {
-      amount,
-      type: entryForm.type,
-      category: entryForm.category_slug,
+    void logActivity(
+      editingTransaction ? "update" : "create",
+      "accounting_transaction",
+      ledger.id,
+      entryForm.description,
+      {
+        amount,
+        type: entryForm.type,
+        category: entryForm.category_slug,
+      }
+    );
+  }
+
+  function exportPdf() {
+    exportAccountingReportPdf({
+      periodLabel: periodLabel(period),
+      summary,
+      transactions: filteredTransactions,
     });
   }
 
@@ -576,6 +673,14 @@ export default function FinancePageInner() {
           Export CSV
           <Download size={16} className="text-muted" />
         </button>
+        <button
+          type="button"
+          onClick={exportPdf}
+          className="col-span-2 flex items-center justify-between p-3 rounded-xl border border-border hover:border-accent/30 text-sm touch-manipulation"
+        >
+          Export PDF สรุปเดือน
+          <FileText size={16} className="text-muted" />
+        </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
@@ -647,6 +752,32 @@ export default function FinancePageInner() {
       <div className="space-y-2">
         {filteredTransactions.map((transaction) => {
           const entry = accountingTransactionToEntry(transaction);
+          const menuItems = [
+            ...(transaction.slip_url
+              ? [
+                  {
+                    label: "ดูสลิป",
+                    icon: <Paperclip size={14} />,
+                    onClick: () =>
+                      setSlipPreview({
+                        url: transaction.slip_url!,
+                        fileName: transaction.slip_file_name,
+                      }),
+                  },
+                ]
+              : []),
+            {
+              label: "แก้ไข",
+              icon: <Pencil size={14} />,
+              onClick: () => openEditTransaction(transaction),
+            },
+            {
+              label: "ลบ",
+              icon: <Trash2 size={14} />,
+              danger: true,
+              onClick: () => deleteTransaction(transaction),
+            },
+          ];
           return (
             <div
               key={transaction.id}
@@ -671,10 +802,28 @@ export default function FinancePageInner() {
                   <span className="hidden sm:inline-flex text-[10px] px-1.5 py-0.5 rounded bg-background text-muted shrink-0">
                     {sourceLabel(transaction.source_type)}
                   </span>
+                  {transaction.slip_url && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSlipPreview({
+                          url: transaction.slip_url!,
+                          fileName: transaction.slip_file_name,
+                        })
+                      }
+                      className="sm:hidden p-1 rounded-lg text-accent touch-manipulation"
+                      aria-label="ดูสลิป"
+                    >
+                      <Paperclip size={14} />
+                    </button>
+                  )}
                 </div>
                 <p className="text-[11px] text-muted truncate">
                   {formatDate(entry.date)} · {entry.subtitle}
                   {transaction.slip_url ? " · มีสลิป" : ""}
+                  {transaction.updater?.display_name
+                    ? ` · แก้โดย ${transaction.updater.display_name}`
+                    : ""}
                 </p>
               </div>
               <p
@@ -685,6 +834,7 @@ export default function FinancePageInner() {
                 {entry.type === "income" ? "+" : "-"}
                 {money(entry.amount)}
               </p>
+              <RowMenu items={menuItems} />
             </div>
           );
         })}
@@ -749,8 +899,9 @@ export default function FinancePageInner() {
       <Modal open={entryOpen} onClose={() => {
           if (saving) return;
           setEntryOpen(false);
+          setEditingTransaction(null);
           setDbError("");
-        }} title="เพิ่มรายการบัญชี">
+        }} title={editingTransaction ? "แก้ไขรายการบัญชี" : "เพิ่มรายการบัญชี"}>
         {dbError && (
           <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/10 text-red-400 text-sm">
             {dbError}
@@ -763,12 +914,22 @@ export default function FinancePageInner() {
           clients={clients}
           slipFile={entrySlipFile}
           saving={saving}
+          editing={!!editingTransaction}
+          existingSlipUrl={editingTransaction?.slip_url}
+          existingSlipFileName={editingTransaction?.slip_file_name}
           onChange={setEntryForm}
           onSlipChange={setEntrySlipFile}
           onSubmit={saveManualEntry}
           defaultCategoryForType={defaultCategoryForType}
         />
       </Modal>
+
+      <SlipPreviewModal
+        open={!!slipPreview}
+        url={slipPreview?.url ?? null}
+        fileName={slipPreview?.fileName}
+        onClose={() => setSlipPreview(null)}
+      />
     </div>
   );
 }

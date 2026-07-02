@@ -57,20 +57,47 @@ export function accountingTransactionToEntry(
   };
 }
 
+export function activeAccountingTransactions(
+  transactions: AccountingTransaction[]
+) {
+  return transactions.filter((t) => !t.deleted_at);
+}
+
 export function summarizeAccounting(
   transactions: AccountingTransaction[]
 ): AccountingSummary {
-  const income = transactions
+  const active = activeAccountingTransactions(transactions);
+  const income = active
     .filter((t) => t.type === "income")
     .reduce((sum, t) => sum + t.amount, 0);
-  const expense = transactions
+  const expense = active
     .filter((t) => t.type === "expense")
     .reduce((sum, t) => sum + t.amount, 0);
-  const fund = transactions
+  const fund = active
     .filter((t) => t.category?.slug === FUND_CATEGORY)
     .reduce((sum, t) => sum + (t.type === "income" ? t.amount : -t.amount), 0);
-  const vat = transactions.reduce((sum, t) => sum + (t.vat_amount ?? 0), 0);
+  const vat = active.reduce((sum, t) => sum + (t.vat_amount ?? 0), 0);
   return { income, expense, net: income - expense, fund, vat };
+}
+
+export function computeOutstandingReceivables(
+  invoices: Array<{
+    status: string;
+    total_amount: number;
+    document_type?: string | null;
+    payments?: { amount: number }[] | null;
+  }>
+) {
+  return invoices
+    .filter(
+      (inv) =>
+        (inv.document_type ?? "invoice") !== "proposal" &&
+        inv.status !== "paid"
+    )
+    .reduce((sum, inv) => {
+      const paid = inv.payments?.reduce((s, p) => s + p.amount, 0) ?? 0;
+      return sum + Math.max(inv.total_amount - paid, 0);
+    }, 0);
 }
 
 export function categoriesByType(
@@ -86,11 +113,12 @@ export function filterAccountingByPeriod(
   transactions: AccountingTransaction[],
   period: string
 ) {
-  if (period === "all") return transactions;
+  const active = activeAccountingTransactions(transactions);
+  if (period === "all") return active;
   const now = new Date();
   const y = now.getFullYear();
   const m = now.getMonth();
-  return transactions.filter((t) => {
+  return active.filter((t) => {
     const d = new Date(t.transaction_date);
     if (period === "month") {
       return d.getFullYear() === y && d.getMonth() === m;

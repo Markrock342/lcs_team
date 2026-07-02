@@ -28,6 +28,9 @@ type Props = {
   clients: Client[];
   slipFile: File | null;
   saving: boolean;
+  editing?: boolean;
+  existingSlipUrl?: string | null;
+  existingSlipFileName?: string | null;
   onChange: (form: AccountingEntryFormData) => void;
   onSlipChange: (file: File | null) => void;
   onSubmit: (e: React.FormEvent) => void;
@@ -41,6 +44,9 @@ export function AccountingEntryForm({
   clients,
   slipFile,
   saving,
+  editing = false,
+  existingSlipUrl,
+  existingSlipFileName,
   onChange,
   onSlipChange,
   onSubmit,
@@ -152,7 +158,11 @@ export function AccountingEntryForm({
         <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-accent/40">
           <Wallet size={20} className="text-muted" />
           <span className="text-sm text-muted truncate">
-            {slipFile ? slipFile.name : "แตะเลือกรูปหรือ PDF"}
+            {slipFile
+              ? slipFile.name
+              : existingSlipUrl
+                ? existingSlipFileName ?? "มีไฟล์เดิม — แตะเลือกใหม่"
+                : "แตะเลือกรูปหรือ PDF"}
           </span>
           <input
             type="file"
@@ -171,7 +181,7 @@ export function AccountingEntryForm({
       />
 
       <Button type="submit" loading={saving} className="w-full">
-        บันทึกรายการบัญชี
+        {editing ? "บันทึกการแก้ไข" : "บันทึกรายการบัญชี"}
       </Button>
     </form>
   );

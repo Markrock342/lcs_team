@@ -13,6 +13,8 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Calendar,
+  PiggyBank,
+  Wallet,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { StatusBadge, Avatar, ProfileRoleBadges } from "@/components/ui";
@@ -20,13 +22,35 @@ import { TaskCountdown } from "@/components/TaskCountdown";
 import { QuickActionGrid } from "@/components/mobile-ui";
 import { TEAM } from "@/lib/constants";
 import { CLIENT_STATUS_LABELS } from "@/lib/constants";
+import {
+  accountingTransactionToEntry,
+  computeOutstandingReceivables,
+  filterAccountingByPeriod,
+  summarizeAccounting,
+} from "@/lib/finance";
+import type { AccountingTransaction } from "@/lib/extras-types";
 import type { Task, Client, Profile } from "@/lib/types";
+import { format } from "date-fns";
+import { th } from "date-fns/locale";
 
 export default function DashboardPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [transactions, setTransactions] = useState<AccountingTransaction[]>([]);
+  const [invoices, setInvoices] = useState<
+    Array<{
+      status: string;
+      total_amount: number;
+      document_type?: string | null;
+      payments?: { amount: number }[] | null;
+    }>
+  >([]);
   const [loading, setLoading] = useState(true);
+
+  function money(value: number) {
+    return `฿${value.toLocaleString()}`;
+  }
 
   useEffect(() => {
     loadData();
@@ -35,18 +59,32 @@ export default function DashboardPage() {
   async function loadData() {
     const supabase = createClient();
 
-    const [tasksRes, clientsRes, profilesRes] = await Promise.all([
+    const [tasksRes, clientsRes, profilesRes, ledgerRes, invoicesRes] =
+      await Promise.all([
       supabase
         .from("tasks")
         .select("*, client:clients(*), assignee:profiles!tasks_assigned_to_fkey(*)")
         .order("created_at", { ascending: false }),
       supabase.from("clients").select("*").order("created_at", { ascending: false }),
       supabase.from("profiles").select("*"),
+      supabase
+        .from("accounting_transactions")
+        .select(
+          "*, category:accounting_categories(*), member:profiles!accounting_transactions_member_id_fkey(*), client:clients(*)"
+        )
+        .is("deleted_at", null)
+        .order("transaction_date", { ascending: false })
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("invoices")
+        .select("status, total_amount, document_type, payments:invoice_payments(amount)"),
     ]);
 
     setTasks(tasksRes.data ?? []);
     setClients(clientsRes.data ?? []);
     setProfiles(profilesRes.data ?? []);
+    setTransactions((ledgerRes.data ?? []) as AccountingTransaction[]);
+    setInvoices(invoicesRes.data ?? []);
     setLoading(false);
   }
 
@@ -55,6 +93,13 @@ export default function DashboardPage() {
   const inProgress = tasks.filter((t) => t.status === "in_progress");
   const activeClients = clients.filter((c) => c.status === "active");
   const openTasks = tasks.filter((t) => t.status !== "done");
+  const monthTransactions = filterAccountingByPeriod(transactions, "month");
+  const financeSummary = summarizeAccounting(monthTransactions);
+  const outstanding = computeOutstandingReceivables(invoices);
+  const recentExpenses = monthTransactions
+    .filter((t) => t.type === "expense")
+    .slice(0, 4);
+  const monthLabel = format(new Date(), "MMMM yyyy", { locale: th });
 
   const stats = [
     {
@@ -158,6 +203,70 @@ export default function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      <section className="bg-card border border-amber-500/25 rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-amber-500/15 bg-amber-500/5">
+          <h2 className="font-semibold text-sm flex items-center gap-2">
+            <Wallet size={16} className="text-amber-300" />
+            บัญชี {monthLabel}
+          </h2>
+          <Link href="/finance" className="text-xs text-accent flex items-center gap-1 touch-manipulation">
+            ดูทั้งหมด <ArrowRight size={12} />
+          </Link>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3">
+              <p className="text-[11px] text-muted flex items-center gap-1">
+                <ArrowDownLeft size={12} /> เงินเข้า
+              </p>
+              <p className="text-lg font-bold text-emerald-300">{money(financeSummary.income)}</p>
+            </div>
+            <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-3">
+              <p className="text-[11px] text-muted flex items-center gap-1">
+                <ArrowUpRight size={12} /> เงินออก
+              </p>
+              <p className="text-lg font-bold text-rose-300">{money(financeSummary.expense)}</p>
+            </div>
+            <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
+              <p className="text-[11px] text-muted flex items-center gap-1">
+                <PiggyBank size={12} /> กองกลาง
+              </p>
+              <p className="text-lg font-bold text-amber-300">{money(financeSummary.fund)}</p>
+            </div>
+            <div className="rounded-xl bg-sky-500/10 border border-sky-500/20 p-3">
+              <p className="text-[11px] text-muted">ค้างรับ</p>
+              <p className="text-lg font-bold text-sky-300">{money(outstanding)}</p>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-muted mb-2">รายจ่ายล่าสุด</p>
+            <div className="space-y-1.5">
+              {recentExpenses.map((t) => {
+                const entry = accountingTransactionToEntry(t);
+                return (
+                  <Link
+                    key={t.id}
+                    href="/finance"
+                    className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-background border border-border hover:border-accent/30 touch-manipulation"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{entry.title}</p>
+                      <p className="text-[11px] text-muted truncate">{entry.subtitle}</p>
+                    </div>
+                    <span className="text-sm font-bold text-rose-300 shrink-0">
+                      -{money(entry.amount)}
+                    </span>
+                  </Link>
+                );
+              })}
+              {recentExpenses.length === 0 && (
+                <p className="text-sm text-muted text-center py-3">ยังไม่มีรายจ่ายเดือนนี้</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className="bg-card border border-[#00a3ff]/25 rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#00a3ff]/15 bg-[#00a3ff]/5">

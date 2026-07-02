@@ -123,11 +123,15 @@ export interface AccountingTransaction {
   slip_file_name: string | null;
   notes: string | null;
   created_by: string | null;
+  updated_by: string | null;
+  deleted_at: string | null;
+  deleted_by: string | null;
   created_at: string;
   updated_at: string;
   category?: AccountingCategory | null;
   member?: Profile | null;
   client?: Client | null;
+  updater?: Profile | null;
 }
 
 export interface TimeEntry {
