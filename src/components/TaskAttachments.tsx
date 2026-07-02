@@ -10,6 +10,7 @@ type Props = {
   taskId: string;
   currentUserId?: string;
   compact?: boolean;
+  onChange?: () => void;
 };
 
 function formatSize(bytes: number | null): string {
@@ -19,7 +20,7 @@ function formatSize(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function TaskAttachments({ taskId, currentUserId, compact }: Props) {
+export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Props) {
   const [items, setItems] = useState<TaskAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -87,7 +88,10 @@ export function TaskAttachments({ taskId, currentUserId, compact }: Props) {
       if (data) added.push(data as TaskAttachment);
     }
 
-    if (added.length) setItems((prev) => [...added, ...prev]);
+    if (added.length) {
+      setItems((prev) => [...added, ...prev]);
+      onChange?.();
+    }
     setUploading(false);
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -96,6 +100,7 @@ export function TaskAttachments({ taskId, currentUserId, compact }: Props) {
     const supabase = createClient();
     await supabase.from("task_attachments").delete().eq("id", id);
     setItems((prev) => prev.filter((i) => i.id !== id));
+    onChange?.();
   }
 
   function onPaste(e: React.ClipboardEvent) {

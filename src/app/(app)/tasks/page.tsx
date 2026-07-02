@@ -12,6 +12,8 @@ import {
   LayoutGrid,
   List,
   Search,
+  Clock,
+  Paperclip,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -100,30 +102,82 @@ function TaskDescription({ text, isSub }: { text: string; isSub?: boolean }) {
   );
 }
 
+function TaskChip({
+  active,
+  onClick,
+  icon,
+  label,
+  badge,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  badge?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors touch-manipulation ${
+        active
+          ? "bg-accent/15 border-accent/40 text-accent"
+          : "bg-background border-border text-muted hover:text-foreground hover:border-accent/30"
+      }`}
+    >
+      {icon}
+      {label}
+      {badge && (
+        <span
+          className={`px-1 rounded text-[10px] ${
+            active ? "bg-accent/20" : "bg-card-hover"
+          }`}
+        >
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
 function TaskRow({
   task,
   isSub,
   profiles,
   currentUserId,
+  checklistCount,
+  attachmentCount,
   onEdit,
   onDelete,
   onAddSub,
   onStatusChange,
   onChecklistProgress,
+  onAttachmentsChange,
 }: {
   task: Task;
   isSub?: boolean;
   profiles: Profile[];
   currentUserId?: string;
+  checklistCount?: { total: number; done: number };
+  attachmentCount?: number;
   onEdit: (t: Task) => void;
   onDelete: (id: string) => void;
   onAddSub: (parent: Task) => void;
   onStatusChange: (id: string, s: TaskStatus) => void;
   onChecklistProgress?: () => void;
+  onAttachmentsChange?: () => void;
 }) {
+  const [panel, setPanel] = useState<null | "time" | "checklist" | "files">(null);
+  const toggle = (p: "time" | "checklist" | "files") =>
+    setPanel((prev) => (prev === p ? null : p));
+
+  const clTotal = checklistCount?.total ?? 0;
+  const clDone = checklistCount?.done ?? 0;
+  const atCount = attachmentCount ?? 0;
+
   return (
     <div
-      className={`flex flex-col sm:flex-row sm:items-center gap-3 ${
+      className={`flex flex-col sm:flex-row sm:items-start gap-3 ${
         isSub ? "pl-6 border-l-2 border-accent/30 ml-3" : ""
       }`}
     >
@@ -158,18 +212,54 @@ function TaskRow({
         {task.description && (
           <TaskDescription text={task.description} isSub={isSub} />
         )}
-        {!isSub && (
-          <div className="mt-2 space-y-2">
-            <TimeTracker taskId={task.id} taskTitle={task.title} />
-            <TaskChecklist
-              taskId={task.id}
-              onProgressChange={onChecklistProgress}
+
+        <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+          {!isSub && (
+            <TaskChip
+              active={panel === "time"}
+              onClick={() => toggle("time")}
+              icon={<Clock size={13} />}
+              label="เวลา"
             />
+          )}
+          {!isSub && (
+            <TaskChip
+              active={panel === "checklist"}
+              onClick={() => toggle("checklist")}
+              icon={<CheckSquare size={13} />}
+              label="Checklist"
+              badge={clTotal > 0 ? `${clDone}/${clTotal}` : undefined}
+            />
+          )}
+          <TaskChip
+            active={panel === "files"}
+            onClick={() => toggle("files")}
+            icon={<Paperclip size={13} />}
+            label="ไฟล์"
+            badge={atCount > 0 ? String(atCount) : undefined}
+          />
+        </div>
+
+        {panel && (
+          <div className="mt-2 rounded-xl border border-border bg-background/50 p-3">
+            {panel === "time" && !isSub && (
+              <TimeTracker taskId={task.id} taskTitle={task.title} />
+            )}
+            {panel === "checklist" && !isSub && (
+              <TaskChecklist
+                taskId={task.id}
+                onProgressChange={onChecklistProgress}
+              />
+            )}
+            {panel === "files" && (
+              <TaskAttachments
+                taskId={task.id}
+                currentUserId={currentUserId}
+                onChange={onAttachmentsChange}
+              />
+            )}
           </div>
         )}
-        <div className="mt-2">
-          <TaskAttachments taskId={task.id} currentUserId={currentUserId} compact />
-        </div>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap shrink-0">
@@ -247,6 +337,10 @@ export default function TasksPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [modalMode, setModalMode] = useState<"parent" | "sub">("parent");
   const [currentUserId, setCurrentUserId] = useState<string>();
+  const [checklistCounts, setChecklistCounts] = useState<
+    Record<string, { total: number; done: number }>
+  >({});
+  const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     loadData();
@@ -254,6 +348,29 @@ export default function TasksPage() {
       .auth.getUser()
       .then(({ data }) => setCurrentUserId(data.user?.id));
   }, []);
+
+  async function loadCounts() {
+    const supabase = createClient();
+    const [checklistRes, attachRes] = await Promise.all([
+      supabase.from("task_checklist_items").select("task_id, done"),
+      supabase.from("task_attachments").select("task_id"),
+    ]);
+
+    const cl: Record<string, { total: number; done: number }> = {};
+    for (const row of (checklistRes.data ?? []) as { task_id: string; done: boolean }[]) {
+      const entry = cl[row.task_id] ?? { total: 0, done: 0 };
+      entry.total += 1;
+      if (row.done) entry.done += 1;
+      cl[row.task_id] = entry;
+    }
+    setChecklistCounts(cl);
+
+    const at: Record<string, number> = {};
+    for (const row of (attachRes.data ?? []) as { task_id: string }[]) {
+      at[row.task_id] = (at[row.task_id] ?? 0) + 1;
+    }
+    setAttachmentCounts(at);
+  }
 
   async function loadData() {
     const supabase = createClient();
@@ -268,6 +385,7 @@ export default function TasksPage() {
     setTasks(tasksRes.data ?? []);
     setClients(clientsRes.data ?? []);
     setProfiles(profilesRes.data ?? []);
+    loadCounts();
 
     const loaded = tasksRes.data ?? [];
     const withSubs = loaded
@@ -660,11 +778,14 @@ export default function TasksPage() {
                         task={parent}
                         profiles={profiles}
                         currentUserId={currentUserId}
+                        checklistCount={checklistCounts[parent.id]}
+                        attachmentCount={attachmentCounts[parent.id]}
                         onEdit={openEdit}
                         onDelete={handleDelete}
                         onAddSub={openCreateSub}
                         onStatusChange={quickStatusChange}
                         onChecklistProgress={loadData}
+                        onAttachmentsChange={loadCounts}
                       />
                     </div>
                   </div>
@@ -707,10 +828,13 @@ export default function TasksPage() {
                           isSub
                           profiles={profiles}
                           currentUserId={currentUserId}
+                          checklistCount={checklistCounts[sub.id]}
+                          attachmentCount={attachmentCounts[sub.id]}
                           onEdit={openEdit}
                           onDelete={handleDelete}
                           onAddSub={openCreateSub}
                           onStatusChange={quickStatusChange}
+                          onAttachmentsChange={loadCounts}
                         />
                       ))}
                       <button
@@ -878,7 +1002,11 @@ export default function TasksPage() {
 
           {editing ? (
             <div className="rounded-xl border border-border bg-background/40 p-4">
-              <TaskAttachments taskId={editing.id} currentUserId={currentUserId} />
+              <TaskAttachments
+                taskId={editing.id}
+                currentUserId={currentUserId}
+                onChange={loadCounts}
+              />
             </div>
           ) : (
             <p className="text-xs text-muted">
