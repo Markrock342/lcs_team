@@ -11,6 +11,7 @@ import {
   ListTree,
   LayoutGrid,
   List,
+  Search,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -27,6 +28,7 @@ import { PageHeader, FilterTabs, FilterSelect, RowMenu } from "@/components/mobi
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { TimeTracker } from "@/components/TimeTracker";
 import { TaskCountdown } from "@/components/TaskCountdown";
+import { TaskChecklist } from "@/components/TaskChecklist";
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS } from "@/lib/constants";
 import {
   dueDateFromStart,
@@ -105,6 +107,7 @@ function TaskRow({
   onDelete,
   onAddSub,
   onStatusChange,
+  onChecklistProgress,
 }: {
   task: Task;
   isSub?: boolean;
@@ -113,6 +116,7 @@ function TaskRow({
   onDelete: (id: string) => void;
   onAddSub: (parent: Task) => void;
   onStatusChange: (id: string, s: TaskStatus) => void;
+  onChecklistProgress?: () => void;
 }) {
   return (
     <div
@@ -152,8 +156,12 @@ function TaskRow({
           <TaskDescription text={task.description} isSub={isSub} />
         )}
         {!isSub && (
-          <div className="mt-2">
+          <div className="mt-2 space-y-2">
             <TimeTracker taskId={task.id} taskTitle={task.title} />
+            <TaskChecklist
+              taskId={task.id}
+              onProgressChange={onChecklistProgress}
+            />
           </div>
         )}
       </div>
@@ -216,12 +224,19 @@ export default function TasksPage() {
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("active");
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [clientFilter, setClientFilter] = useState("all");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
 
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get("status");
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get("status");
     if (q && (q === "all" || q === "active" || q in TASK_STATUS_LABELS)) {
       setStatusFilter(q);
     }
+    const client = params.get("client");
+    if (client) setClientFilter(client);
   }, []);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [modalMode, setModalMode] = useState<"parent" | "sub">("parent");
@@ -432,9 +447,32 @@ export default function TasksPage() {
   }
 
   function taskMatchesFilter(task: Task): boolean {
-    if (statusFilter === "all") return true;
-    if (statusFilter === "active") return task.status !== "done";
-    return task.status === statusFilter;
+    if (statusFilter === "all") {
+      /* pass */
+    } else if (statusFilter === "active") {
+      if (task.status === "done") return false;
+    } else if (task.status !== statusFilter) {
+      return false;
+    }
+
+    if (clientFilter !== "all" && task.client_id !== clientFilter) return false;
+    if (assigneeFilter !== "all" && task.assigned_to !== assigneeFilter) return false;
+    if (priorityFilter !== "all" && task.priority !== priorityFilter) return false;
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const hay = [
+        task.title,
+        task.description ?? "",
+        task.client?.name ?? "",
+        task.assignee?.display_name ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+
+    return true;
   }
 
   function parentVisible(parent: Task): boolean {
@@ -528,6 +566,50 @@ export default function TasksPage() {
         )}
       </div>
 
+      <div className="space-y-2">
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="ค้นหางาน, ลูกค้า, ผู้รับผิดชอบ..."
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-card border border-border text-sm"
+          />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+          <select
+            value={clientFilter}
+            onChange={(e) => setClientFilter(e.target.value)}
+            className="px-3 py-2 rounded-xl bg-card border border-border text-sm"
+          >
+            <option value="all">ทุกลูกค้า</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <select
+            value={assigneeFilter}
+            onChange={(e) => setAssigneeFilter(e.target.value)}
+            className="px-3 py-2 rounded-xl bg-card border border-border text-sm"
+          >
+            <option value="all">ทุกคน</option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>{p.display_name}</option>
+            ))}
+          </select>
+          <select
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value)}
+            className="px-3 py-2 rounded-xl bg-card border border-border text-sm col-span-2 lg:col-span-1"
+          >
+            <option value="all">ทุกความสำคัญ</option>
+            {Object.entries(TASK_PRIORITY_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {viewMode === "kanban" ? (
         <KanbanBoard tasks={tasks} onStatusChange={quickStatusChange} />
       ) : visibleParents.length === 0 ? (
@@ -571,6 +653,7 @@ export default function TasksPage() {
                         onDelete={handleDelete}
                         onAddSub={openCreateSub}
                         onStatusChange={quickStatusChange}
+                        onChecklistProgress={loadData}
                       />
                     </div>
                   </div>

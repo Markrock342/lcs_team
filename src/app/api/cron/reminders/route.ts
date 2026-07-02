@@ -40,7 +40,7 @@ export async function GET(request: Request) {
 
   const { data: tasks, error } = await db
     .from("tasks")
-    .select("id, title, due_date, assigned_to, created_by, status")
+    .select("id, title, due_date, assigned_to, created_by, status, updated_at")
     .neq("status", "done")
     .not("due_date", "is", null);
 

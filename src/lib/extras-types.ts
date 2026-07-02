@@ -177,6 +177,30 @@ export interface ClientFile {
   created_at: string;
 }
 
+export interface PortalComment {
+  author_name: string;
+  content: string;
+  task_id: string | null;
+  created_at: string;
+}
+
+export interface PortalTaskFeedback {
+  task_id: string;
+  author_name: string;
+  status: "approved" | "changes_requested" | "comment";
+  comment: string | null;
+  created_at: string;
+}
+
+export type ClientTimelineItem = {
+  id: string;
+  type: "activity" | "task" | "invoice" | "file" | "portal";
+  title: string;
+  subtitle?: string;
+  date: string;
+  link?: string;
+};
+
 // Re-import for extended Client
 export interface ClientExtended extends Client {
   portal_token: string | null;

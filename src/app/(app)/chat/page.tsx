@@ -34,7 +34,7 @@ import {
   insertChatMessage,
   markMessagesAsReadSafe,
 } from "@/lib/chat-messages";
-import type { Channel, Message, Profile } from "@/lib/types";
+import type { Channel, Message, Profile, MessageReaction, Task } from "@/lib/types";
 import { format, isToday, isYesterday } from "date-fns";
 import { th } from "date-fns/locale";
 
@@ -91,6 +91,9 @@ function ChatPageContent() {
   const [editingChannel, setEditingChannel] = useState(false);
   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [linkedTaskId, setLinkedTaskId] = useState("");
+  const [openTasks, setOpenTasks] = useState<Task[]>([]);
+  const [reactionsMap, setReactionsMap] = useState<Record<string, MessageReaction[]>>({});
   const [chatError, setChatError] = useState("");
   const [sendError, setSendError] = useState("");
   const [, setPresenceTick] = useState(0);
@@ -118,6 +121,45 @@ function ChatPageContent() {
     setMessages(data);
     if (error) setChatError(error);
     else setChatError("");
+
+    if (data.length) {
+      const ids = data.map((m) => m.id);
+      const taskIds = data
+        .map((m) => m.linked_task_id)
+        .filter((id): id is string => !!id);
+
+      const [reactionsRes, tasksRes] = await Promise.all([
+        supabase
+          .from("message_reactions")
+          .select("*, user:profiles(id, display_name)")
+          .in("message_id", ids),
+        taskIds.length
+          ? supabase.from("tasks").select("id, title, status").in("id", taskIds)
+          : Promise.resolve({ data: [] as Task[] }),
+      ]);
+
+      const taskMap = new Map(
+        ((tasksRes.data ?? []) as Task[]).map((t) => [t.id, t])
+      );
+      setMessages(
+        data.map((m) => ({
+          ...m,
+          linked_task: m.linked_task_id
+            ? taskMap.get(m.linked_task_id) ?? null
+            : null,
+        }))
+      );
+
+      const grouped: Record<string, MessageReaction[]> = {};
+      for (const r of (reactionsRes.data ?? []) as MessageReaction[]) {
+        if (!grouped[r.message_id]) grouped[r.message_id] = [];
+        grouped[r.message_id].push(r);
+      }
+      setReactionsMap(grouped);
+    } else {
+      setReactionsMap({});
+    }
+
     return data;
   }, []);
 
@@ -138,14 +180,22 @@ function ChatPageContent() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      const [channelsRes, profilesRes] = await Promise.all([
+      const [channelsRes, profilesRes, tasksRes] = await Promise.all([
         supabase.from("channels").select("*").order("created_at", { ascending: true }),
         supabase.from("profiles").select("*"),
+        supabase
+          .from("tasks")
+          .select("id, title, status")
+          .neq("status", "done")
+          .is("parent_id", null)
+          .order("title")
+          .limit(50),
       ]);
 
       const channelList = channelsRes.data ?? [];
       setChannels(channelList);
       setProfiles(profilesRes.data ?? []);
+      setOpenTasks((tasksRes.data ?? []) as Task[]);
 
       if (user) {
         const profile = profilesRes.data?.find((p) => p.id === user.id);
@@ -526,6 +576,38 @@ function ChatPageContent() {
     setSending(false);
   }
 
+  async function toggleReaction(messageId: string, emoji: string) {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const existing = reactionsMap[messageId]?.find(
+      (r) => r.user_id === user.id && r.emoji === emoji
+    );
+
+    if (existing) {
+      await supabase.from("message_reactions").delete().eq("id", existing.id);
+      setReactionsMap((prev) => ({
+        ...prev,
+        [messageId]: (prev[messageId] ?? []).filter((r) => r.id !== existing.id),
+      }));
+    } else {
+      const { data } = await supabase
+        .from("message_reactions")
+        .insert({ message_id: messageId, user_id: user.id, emoji })
+        .select("*, user:profiles(id, display_name)")
+        .single();
+      if (data) {
+        setReactionsMap((prev) => ({
+          ...prev,
+          [messageId]: [...(prev[messageId] ?? []), data as MessageReaction],
+        }));
+      }
+    }
+  }
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (!content.trim() && !file) return;
@@ -569,6 +651,7 @@ function ChatPageContent() {
         file_type,
         mentioned_ids: mentionIds,
         reply_to_id: replyId,
+        linked_task_id: linkedTaskId || null,
       }
     );
 
@@ -599,6 +682,7 @@ function ChatPageContent() {
 
     setContent("");
     setFile(null);
+    setLinkedTaskId("");
     setReplyTo(null);
     setSending(false);
     sendAbortRef.current = null;
@@ -827,6 +911,8 @@ function ChatPageContent() {
                         formatTime={formatMsgTime}
                         onReply={setReplyTo}
                         onDelete={handleDeleteMessage}
+                        reactions={reactionsMap[msg.id] ?? []}
+                        onReaction={toggleReaction}
                       />
                     </div>
                   );
@@ -893,6 +979,20 @@ function ChatPageContent() {
               onPaste={handlePaste}
               className="p-4 border-t border-brand shrink-0"
             >
+              {openTasks.length > 0 && (
+                <select
+                  value={linkedTaskId}
+                  onChange={(e) => setLinkedTaskId(e.target.value)}
+                  className="w-full mb-2 px-3 py-2 rounded-lg bg-background border border-border text-xs"
+                >
+                  <option value="">แนบลิงก์งาน (ไม่บังคับ)</option>
+                  {openTasks.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.title}
+                    </option>
+                  ))}
+                </select>
+              )}
               <div className="flex items-end gap-2 bg-background border border-border rounded-xl px-2 py-2 focus-within:ring-2 focus-within:ring-accent/30">
                 <input
                   ref={fileInputRef}

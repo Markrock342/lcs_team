@@ -111,11 +111,32 @@ export interface Message {
   reply_to_id: string | null;
   deleted_at: string | null;
   mentioned_ids?: string[] | null;
+  linked_task_id?: string | null;
   created_at: string;
   sender?: Profile | null;
+  linked_task?: Pick<Task, "id" | "title" | "status"> | null;
+  reactions?: MessageReaction[];
   reply_to?: Pick<
     Message,
     "id" | "content" | "sender_id" | "deleted_at" | "file_name"
   > & { sender?: Pick<Profile, "display_name"> | null } | null;
   reads?: MessageRead[];
+}
+
+export interface MessageReaction {
+  id: string;
+  message_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+  user?: Pick<Profile, "id" | "display_name"> | null;
+}
+
+export interface TaskChecklistItem {
+  id: string;
+  task_id: string;
+  title: string;
+  done: boolean;
+  sort_order: number;
+  created_at: string;
 }

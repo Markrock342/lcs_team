@@ -7,13 +7,15 @@ import { StatusBadge, Avatar, EmptyState } from "@/components/ui";
 import { PageHeader, FilterTabs } from "@/components/mobile-ui";
 import { MonthGanttCalendar } from "@/components/MonthGanttCalendar";
 import { TaskCountdown } from "@/components/TaskCountdown";
-import type { Task } from "@/lib/types";
+import type { Task, Profile } from "@/lib/types";
 
 export default function SchedulePage() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [view, setView] = useState<"month" | "list">("month");
+  const [view, setView] = useState<"month" | "list" | "team">("month");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
 
   useEffect(() => {
     loadTasks();
@@ -21,19 +23,37 @@ export default function SchedulePage() {
 
   async function loadTasks() {
     const supabase = createClient();
-    const { data } = await supabase
-      .from("tasks")
-      .select(
-        "*, client:clients(*), assignee:profiles!tasks_assigned_to_fkey(*)"
-      )
-      .order("start_date", { ascending: true });
-    setTasks(data ?? []);
+    const [tasksRes, profilesRes] = await Promise.all([
+      supabase
+        .from("tasks")
+        .select(
+          "*, client:clients(*), assignee:profiles!tasks_assigned_to_fkey(*)"
+        )
+        .order("start_date", { ascending: true }),
+      supabase.from("profiles").select("*").order("display_name"),
+    ]);
+    setTasks(tasksRes.data ?? []);
+    setProfiles(profilesRes.data ?? []);
     setLoading(false);
   }
 
-  const unscheduled = tasks.filter(
+  const filteredTasks =
+    assigneeFilter === "all"
+      ? tasks
+      : assigneeFilter === "unassigned"
+        ? tasks.filter((t) => !t.assigned_to)
+        : tasks.filter((t) => t.assigned_to === assigneeFilter);
+
+  const unscheduled = filteredTasks.filter(
     (t) => !t.start_date && !t.due_date && t.status !== "done"
   );
+
+  const tasksByMember = profiles.map((member) => ({
+    member,
+    tasks: filteredTasks.filter(
+      (t) => t.assigned_to === member.id && t.status !== "done"
+    ),
+  }));
 
   if (loading) {
     return (
@@ -52,23 +72,67 @@ export default function SchedulePage() {
 
       <FilterTabs
         active={view}
-        onChange={(k) => setView(k as "month" | "list")}
+        onChange={(k) => setView(k as "month" | "list" | "team")}
         tabs={[
           { key: "month", label: "ปฏิทิน" },
           { key: "list", label: "รายการ" },
+          { key: "team", label: "ทีม" },
         ]}
       />
+
+      <select
+        value={assigneeFilter}
+        onChange={(e) => setAssigneeFilter(e.target.value)}
+        className="w-full sm:w-auto px-3 py-2 rounded-xl bg-card border border-border text-sm"
+      >
+        <option value="all">ทุกคน</option>
+        <option value="unassigned">ยังไม่มอบหมาย</option>
+        {profiles.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.display_name}
+          </option>
+        ))}
+      </select>
 
       {view === "month" ? (
         <MonthGanttCalendar
           month={currentMonth}
-          tasks={tasks}
+          tasks={filteredTasks}
           onMonthChange={setCurrentMonth}
         />
+      ) : view === "team" ? (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {tasksByMember.map(({ member, tasks: memberTasks }) => (
+            <div
+              key={member.id}
+              className="bg-card border border-border rounded-2xl overflow-hidden"
+            >
+              <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                <Avatar name={member.display_name} src={member.avatar_url} size="sm" />
+                <div>
+                  <p className="text-sm font-medium">{member.display_name}</p>
+                  <p className="text-xs text-muted">{memberTasks.length} งานค้าง</p>
+                </div>
+              </div>
+              <div className="divide-y divide-border max-h-64 overflow-y-auto">
+                {memberTasks.map((task) => (
+                  <div key={task.id} className="px-4 py-2.5">
+                    <p className="text-sm font-medium truncate">{task.title}</p>
+                    <p className="text-xs text-muted">{task.client?.name ?? "—"}</p>
+                    <StatusBadge status={task.status} />
+                  </div>
+                ))}
+                {memberTasks.length === 0 && (
+                  <p className="text-xs text-muted text-center py-4">ว่าง</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <>
           <div className="md:hidden space-y-2">
-            {tasks.map((task) => (
+            {filteredTasks.map((task) => (
               <div
                 key={task.id}
                 className="bg-card border border-border rounded-xl p-3"
@@ -112,7 +176,7 @@ export default function SchedulePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {tasks.map((task) => (
+                {filteredTasks.map((task) => (
                   <tr
                     key={task.id}
                     className="hover:bg-card-hover transition-colors"

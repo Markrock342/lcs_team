@@ -12,7 +12,7 @@ import { Avatar } from "@/components/ui";
 import { isImageFile } from "@/lib/upload";
 import { downloadChatFile, getReadReceiptNames } from "@/lib/chat";
 import { getMessageReplyPreview } from "@/lib/chat-messages";
-import type { Message, Profile, TeamRole } from "@/lib/types";
+import type { Message, Profile, TeamRole, MessageReaction } from "@/lib/types";
 import { isAdmin } from "@/lib/permissions";
 
 type ChatMessageItemProps = {
@@ -23,7 +23,11 @@ type ChatMessageItemProps = {
   formatTime: (date: string) => string;
   onReply: (msg: Message) => void;
   onDelete: (msg: Message) => void;
+  reactions?: MessageReaction[];
+  onReaction?: (messageId: string, emoji: string) => void;
 };
+
+const QUICK_EMOJIS = ["👍", "❤️", "😂", "🎉"];
 
 export function ChatMessageItem({
   msg,
@@ -33,6 +37,8 @@ export function ChatMessageItem({
   formatTime,
   onReply,
   onDelete,
+  reactions = [],
+  onReaction,
 }: ChatMessageItemProps) {
   const isOwn = msg.sender_id === currentUserId;
   const canDelete =
@@ -148,6 +154,14 @@ export function ChatMessageItem({
                 </button>
               </div>
             )}
+            {msg.linked_task && (
+              <a
+                href="/tasks"
+                className="inline-flex items-center gap-1 mt-1 text-xs text-violet-300 hover:underline"
+              >
+                📋 {msg.linked_task.title}
+              </a>
+            )}
             {msg.file_url && !isImageFile(msg.file_type) && (
               <a
                 href={msg.file_url}
@@ -159,6 +173,45 @@ export function ChatMessageItem({
               </a>
             )}
           </>
+        )}
+
+        {!deleted && onReaction && (
+          <div className="flex flex-wrap items-center gap-1 mt-1">
+            {Object.entries(
+              reactions.reduce(
+                (acc, r) => {
+                  acc[r.emoji] = (acc[r.emoji] ?? 0) + 1;
+                  return acc;
+                },
+                {} as Record<string, number>
+              )
+            ).map(([emoji, count]) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => onReaction(msg.id, emoji)}
+                className={`text-xs px-1.5 py-0.5 rounded-full border ${
+                  reactions.some((r) => r.user_id === currentUserId && r.emoji === emoji)
+                    ? "border-accent/50 bg-accent/15"
+                    : "border-border bg-background"
+                }`}
+              >
+                {emoji} {count}
+              </button>
+            ))}
+            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 max-lg:opacity-100 transition-opacity">
+              {QUICK_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => onReaction(msg.id, emoji)}
+                  className="text-xs p-1 rounded hover:bg-card-hover"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         {isOwn && !deleted && readBy.length > 0 && (

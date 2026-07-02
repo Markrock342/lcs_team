@@ -157,6 +157,7 @@ type InsertPayload = {
   file_type: string | null;
   mentioned_ids?: string[];
   reply_to_id?: string | null;
+  linked_task_id?: string | null;
 };
 
 export async function insertChatMessage(

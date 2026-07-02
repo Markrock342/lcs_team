@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, Search } from "lucide-react";
 import { Suspense, useState, useRef, useEffect } from "react";
 import { InAppNotificationToasts } from "./InAppNotificationToasts";
+import { GlobalSearchModal } from "./GlobalSearchModal";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar, ProfileRoleBadges } from "./ui";
 import { Logo } from "./Logo";
@@ -25,7 +26,19 @@ export function AppShell({
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const isChat = pathname === "/chat" || pathname.startsWith("/chat/");
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   usePresenceHeartbeat();
 
@@ -115,6 +128,14 @@ export function AppShell({
             <span className="font-semibold text-sm truncate">{getPageTitle(pathname)}</span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className="p-2 rounded-lg text-muted hover:text-accent touch-manipulation"
+              aria-label="ค้นหา"
+            >
+              <Search size={18} />
+            </button>
             <Suspense fallback={null}>
               <NotificationBell />
             </Suspense>
@@ -152,6 +173,14 @@ export function AppShell({
         }`}
       >
         <div className="hidden lg:flex shrink-0 items-center justify-end gap-2 px-6 py-3 border-b border-border">
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-sm text-muted hover:text-foreground hover:border-accent/30"
+          >
+            <Search size={14} /> ค้นหา
+            <kbd className="text-[10px] px-1 rounded bg-background border border-border">⌘K</kbd>
+          </button>
           <Suspense fallback={null}>
             <NotificationBell />
           </Suspense>
@@ -195,6 +224,8 @@ export function AppShell({
           })}
         </div>
       </nav>
+
+      <GlobalSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
 }

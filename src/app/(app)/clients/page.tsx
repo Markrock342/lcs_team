@@ -59,6 +59,7 @@ export default function ClientsPage() {
   const [copiedPortal, setCopiedPortal] = useState<string | null>(null);
   const [portalEnabled, setPortalEnabled] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     loadClients();
@@ -243,7 +244,17 @@ export default function ClientsPage() {
   }
 
   const filtered =
-    filter === "all" ? clients : clients.filter((c) => c.status === filter);
+    (filter === "all" ? clients : clients.filter((c) => c.status === filter)).filter(
+      (c) => {
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase();
+        return (
+          c.name.toLowerCase().includes(q) ||
+          (c.company?.toLowerCase().includes(q) ?? false) ||
+          (c.contact_name?.toLowerCase().includes(q) ?? false)
+        );
+      }
+    );
 
   if (loading) {
     return (
@@ -263,6 +274,13 @@ export default function ClientsPage() {
             <Plus size={18} /> เพิ่มลูกค้า
           </Button>
         }
+      />
+
+      <input
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="ค้นหาชื่อลูกค้า, บริษัท, ผู้ติดต่อ..."
+        className="w-full px-3 py-2.5 rounded-xl bg-card border border-border text-sm"
       />
 
       <FilterTabs
@@ -367,7 +385,13 @@ export default function ClientsPage() {
 
                 <div className="flex gap-2 mt-4 pt-3 border-t border-border">
                   <Link
-                    href="/tasks"
+                    href={`/clients/${client.id}`}
+                    className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-violet-500/10 text-violet-300 text-xs font-medium touch-manipulation"
+                  >
+                    <Users size={12} /> รายละเอียด
+                  </Link>
+                  <Link
+                    href={`/tasks?client=${client.id}`}
                     className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-accent/10 text-accent text-xs font-medium touch-manipulation"
                   >
                     <CheckSquare size={12} /> งาน
