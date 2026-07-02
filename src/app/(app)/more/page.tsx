@@ -1,9 +1,18 @@
+"use client";
+
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/mobile-ui";
-import { MORE_SECTIONS } from "@/lib/nav";
+import { MORE_SECTIONS, filterNavByAccess } from "@/lib/nav";
+import { useRole } from "@/components/RoleProvider";
 
 export default function MorePage() {
+  const { canViewFinance } = useRole();
+  const sections = MORE_SECTIONS.map((section) => ({
+    ...section,
+    items: filterNavByAccess(section.items, { canViewFinance }),
+  })).filter((section) => section.items.length > 0);
+
   return (
     <div className="space-y-6 animate-fade-in max-w-lg mx-auto">
       <PageHeader
@@ -11,7 +20,7 @@ export default function MorePage() {
         description="ฟีเจอร์อื่นๆ ที่ไม่อยู่ในแถบด้านล่าง"
       />
 
-      {MORE_SECTIONS.map((section) => (
+      {sections.map((section) => (
         <section key={section.title}>
           <p className="text-xs font-medium text-muted uppercase tracking-wider mb-2 px-1">
             {section.title}

@@ -7,12 +7,15 @@ import { createClient } from "@/lib/supabase/client";
 import { Button, Avatar } from "@/components/ui";
 import { PageHeader } from "@/components/mobile-ui";
 import { mergeProfileBank, hasBankInfo } from "@/lib/team-banks";
+import { AccessDenied } from "@/components/AccessDenied";
+import { useRole } from "@/components/RoleProvider";
 import type { TeamPayout } from "@/lib/extras-types";
 import type { Profile } from "@/lib/types";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
 
 export default function PayoutsPage() {
+  const { canViewFinance } = useRole();
   const [payouts, setPayouts] = useState<TeamPayout[]>([]);
   const [members, setMembers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +39,10 @@ export default function PayoutsPage() {
     setPayouts(payRes.data ?? []);
     setMembers((memRes.data ?? []).map(mergeProfileBank));
     setLoading(false);
+  }
+
+  if (!canViewFinance) {
+    return <AccessDenied />;
   }
 
   if (loading) {

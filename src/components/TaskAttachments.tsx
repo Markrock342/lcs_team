@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { FileText, Loader2, Paperclip, Trash2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { uploadFile, isImageFile } from "@/lib/upload";
+import { useRole } from "@/components/RoleProvider";
 import type { TaskAttachment } from "@/lib/types";
 
 type Props = {
@@ -21,6 +22,7 @@ function formatSize(bytes: number | null): string {
 }
 
 export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Props) {
+  const { canEdit } = useRole();
   const [items, setItems] = useState<TaskAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -104,6 +106,7 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
   }
 
   function onPaste(e: React.ClipboardEvent) {
+    if (!canEdit) return;
     const files = Array.from(e.clipboardData?.items ?? [])
       .filter((i) => i.kind === "file")
       .map((i) => i.getAsFile())
@@ -122,19 +125,21 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
         <p className="text-xs font-medium text-muted flex items-center gap-1.5">
           <Paperclip size={12} /> ไฟล์แนบ{items.length > 0 ? ` (${items.length})` : ""}
         </p>
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={uploading}
-          className="text-xs text-accent hover:text-accent-dim font-medium flex items-center gap-1 disabled:opacity-50 touch-manipulation"
-        >
-          {uploading ? (
-            <Loader2 size={13} className="animate-spin" />
-          ) : (
-            <Paperclip size={13} />
-          )}
-          แนบไฟล์
-        </button>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className="text-xs text-accent hover:text-accent-dim font-medium flex items-center gap-1 disabled:opacity-50 touch-manipulation"
+          >
+            {uploading ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Paperclip size={13} />
+            )}
+            แนบไฟล์
+          </button>
+        )}
       </div>
 
       <input
@@ -193,13 +198,15 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
                     <p className="text-[10px] text-muted">{formatSize(att.file_size)}</p>
                   ) : null}
                 </a>
-                <button
-                  type="button"
-                  onClick={() => removeItem(att.id)}
-                  className="p-1 rounded text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 touch-manipulation shrink-0"
-                >
-                  <Trash2 size={13} />
-                </button>
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => removeItem(att.id)}
+                    className="p-1 rounded text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 touch-manipulation shrink-0"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
               </div>
             );
           })}

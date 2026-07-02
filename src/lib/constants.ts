@@ -63,6 +63,7 @@ export const ROLE_LABELS: Record<TeamRole, string> = {
   pm: "PM",
   backend: "Backend",
   design: "Design/Frontend",
+  guest: "Guest",
 };
 
 export const ROLE_COLORS: Record<TeamRole, string> = {
@@ -70,6 +71,7 @@ export const ROLE_COLORS: Record<TeamRole, string> = {
   pm: "bg-orange-500/20 text-orange-300",
   backend: "bg-[#00a3ff]/20 text-[#00a3ff]",
   design: "bg-pink-500/20 text-pink-300",
+  guest: "bg-zinc-500/20 text-zinc-300",
 };
 
 export const CLIENT_LINK_FIELDS = [

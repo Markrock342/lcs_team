@@ -32,6 +32,7 @@ import { TimeTracker } from "@/components/TimeTracker";
 import { TaskCountdown } from "@/components/TaskCountdown";
 import { TaskChecklist } from "@/components/TaskChecklist";
 import { TaskAttachments } from "@/components/TaskAttachments";
+import { useRole } from "@/components/RoleProvider";
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS } from "@/lib/constants";
 import {
   dueDateFromStart,
@@ -147,6 +148,7 @@ function TaskRow({
   currentUserId,
   checklistCount,
   attachmentCount,
+  readOnly,
   onEdit,
   onDelete,
   onAddSub,
@@ -160,6 +162,7 @@ function TaskRow({
   currentUserId?: string;
   checklistCount?: { total: number; done: number };
   attachmentCount?: number;
+  readOnly?: boolean;
   onEdit: (t: Task) => void;
   onDelete: (id: string) => void;
   onAddSub: (parent: Task) => void;
@@ -214,7 +217,7 @@ function TaskRow({
         )}
 
         <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-          {!isSub && (
+          {!isSub && !readOnly && (
             <TaskChip
               active={panel === "time"}
               onClick={() => toggle("time")}
@@ -269,46 +272,53 @@ function TaskRow({
           <span className="text-xs text-muted">ยังไม่มอบหมาย</span>
         )}
 
-        <select
-          value={task.status}
-          onChange={(e) => onStatusChange(task.id, e.target.value as TaskStatus)}
-          className="text-xs px-2 py-2 bg-background border border-border rounded-lg min-h-[40px] touch-manipulation"
-        >
-          {Object.entries(TASK_STATUS_LABELS).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
-          ))}
-        </select>
+        {readOnly ? (
+          <StatusBadge status={task.status} />
+        ) : (
+          <select
+            value={task.status}
+            onChange={(e) => onStatusChange(task.id, e.target.value as TaskStatus)}
+            className="text-xs px-2 py-2 bg-background border border-border rounded-lg min-h-[40px] touch-manipulation"
+          >
+            {Object.entries(TASK_STATUS_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+        )}
 
-        <RowMenu
-          items={[
-            ...(!isSub
-              ? [
-                  {
-                    label: "เพิ่มงานย่อย",
-                    icon: <Plus size={15} />,
-                    onClick: () => onAddSub(task),
-                  },
-                ]
-              : []),
-            {
-              label: "แก้ไข",
-              icon: <Pencil size={15} />,
-              onClick: () => onEdit(task),
-            },
-            {
-              label: "ลบ",
-              icon: <Trash2 size={15} />,
-              onClick: () => onDelete(task.id),
-              danger: true,
-            },
-          ]}
-        />
+        {!readOnly && (
+          <RowMenu
+            items={[
+              ...(!isSub
+                ? [
+                    {
+                      label: "เพิ่มงานย่อย",
+                      icon: <Plus size={15} />,
+                      onClick: () => onAddSub(task),
+                    },
+                  ]
+                : []),
+              {
+                label: "แก้ไข",
+                icon: <Pencil size={15} />,
+                onClick: () => onEdit(task),
+              },
+              {
+                label: "ลบ",
+                icon: <Trash2 size={15} />,
+                onClick: () => onDelete(task.id),
+                danger: true,
+              },
+            ]}
+          />
+        )}
       </div>
     </div>
   );
 }
 
 export default function TasksPage() {
+  const { canEdit } = useRole();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -623,11 +633,17 @@ export default function TasksPage() {
     <div className="space-y-5 sm:space-y-6 animate-fade-in">
       <PageHeader
         title="งาน"
-        description="เปลี่ยนสถานะได้เลย · กด ⋯ เพื่อแก้ไขหรือเพิ่มงานย่อย"
+        description={
+          canEdit
+            ? "เปลี่ยนสถานะได้เลย · กด ⋯ เพื่อแก้ไขหรือเพิ่มงานย่อย"
+            : "โหมดดูอย่างเดียว (Guest)"
+        }
         action={
-          <Button onClick={openCreateParent}>
-            <Plus size={18} /> เพิ่มงานใหญ่
-          </Button>
+          canEdit ? (
+            <Button onClick={openCreateParent}>
+              <Plus size={18} /> เพิ่มงานใหญ่
+            </Button>
+          ) : undefined
         }
       />
 
@@ -739,7 +755,10 @@ export default function TasksPage() {
       </div>
 
       {viewMode === "kanban" ? (
-        <KanbanBoard tasks={tasks} onStatusChange={quickStatusChange} />
+        <KanbanBoard
+          tasks={tasks}
+          onStatusChange={canEdit ? quickStatusChange : () => {}}
+        />
       ) : visibleParents.length === 0 ? (
         <EmptyState
           icon={<CheckSquare size={28} />}
@@ -780,6 +799,7 @@ export default function TasksPage() {
                         currentUserId={currentUserId}
                         checklistCount={checklistCounts[parent.id]}
                         attachmentCount={attachmentCounts[parent.id]}
+                        readOnly={!canEdit}
                         onEdit={openEdit}
                         onDelete={handleDelete}
                         onAddSub={openCreateSub}
@@ -811,14 +831,18 @@ export default function TasksPage() {
 
                 <div className="border-t border-border bg-background/40 px-4 py-3 ml-6 sm:ml-8">
                   {subs.length === 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => openCreateSub(parent)}
-                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-accent/40 text-accent text-sm font-medium hover:bg-accent/5 transition-colors touch-manipulation"
-                    >
-                      <Plus size={16} />
-                      เพิ่มงานย่อย — มอบหมายเพื่อน
-                    </button>
+                    canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => openCreateSub(parent)}
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-accent/40 text-accent text-sm font-medium hover:bg-accent/5 transition-colors touch-manipulation"
+                      >
+                        <Plus size={16} />
+                        เพิ่มงานย่อย — มอบหมายเพื่อน
+                      </button>
+                    ) : (
+                      <p className="text-xs text-muted text-center py-2">ยังไม่มีงานย่อย</p>
+                    )
                   ) : isOpen ? (
                     <div className="space-y-3">
                       {subs.map((sub) => (
@@ -830,6 +854,7 @@ export default function TasksPage() {
                           currentUserId={currentUserId}
                           checklistCount={checklistCounts[sub.id]}
                           attachmentCount={attachmentCounts[sub.id]}
+                          readOnly={!canEdit}
                           onEdit={openEdit}
                           onDelete={handleDelete}
                           onAddSub={openCreateSub}
@@ -837,14 +862,16 @@ export default function TasksPage() {
                           onAttachmentsChange={loadCounts}
                         />
                       ))}
-                      <button
-                        type="button"
-                        onClick={() => openCreateSub(parent)}
-                        className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs text-accent hover:bg-accent/5 transition-colors touch-manipulation"
-                      >
-                        <Plus size={14} />
-                        เพิ่มงานย่อย
-                      </button>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => openCreateSub(parent)}
+                          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs text-accent hover:bg-accent/5 transition-colors touch-manipulation"
+                        >
+                          <Plus size={14} />
+                          เพิ่มงานย่อย
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <button

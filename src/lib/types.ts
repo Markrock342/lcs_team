@@ -1,4 +1,4 @@
-export type TeamRole = "admin" | "pm" | "backend" | "design";
+export type TeamRole = "admin" | "pm" | "backend" | "design" | "guest";
 
 export type TaskStatus =
   | "pending"

@@ -17,6 +17,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useRole } from "@/components/RoleProvider";
 import { StatusBadge, Avatar, ProfileRoleBadges } from "@/components/ui";
 import { TaskCountdown } from "@/components/TaskCountdown";
 import { QuickActionGrid } from "@/components/mobile-ui";
@@ -34,6 +35,7 @@ import { format } from "date-fns";
 import { th } from "date-fns/locale";
 
 export default function DashboardPage() {
+  const { canViewFinance } = useRole();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -204,6 +206,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
+      {canViewFinance && (
       <section className="bg-card border border-amber-500/25 rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-amber-500/15 bg-amber-500/5">
           <h2 className="font-semibold text-sm flex items-center gap-2">
@@ -267,6 +270,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </section>
+      )}
 
       <section className="bg-card border border-[#00a3ff]/25 rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#00a3ff]/15 bg-[#00a3ff]/5">

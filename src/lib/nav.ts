@@ -81,6 +81,21 @@ export const MORE_SECTIONS: { title: string; items: NavItem[] }[] = [
 
 export const ALL_APP_PATHS = [...MAIN_NAV, ...EXTRA_NAV, { href: "/more", label: "เมนู", icon: MoreHorizontal }];
 
+/** หน้าเกี่ยวกับการเงินทีม — guest ห้ามเห็น */
+export const FINANCE_PATHS = ["/finance", "/payouts"];
+
+export function isFinancePath(href: string): boolean {
+  return FINANCE_PATHS.some((p) => href === p || href.startsWith(p + "/"));
+}
+
+/** กรองเมนูตามสิทธิ์ — ซ่อนการเงินทีมถ้าไม่มีสิทธิ์ */
+export function filterNavByAccess<T extends { href: string }>(
+  items: T[],
+  opts: { canViewFinance: boolean }
+): T[] {
+  return items.filter((n) => opts.canViewFinance || !isFinancePath(n.href));
+}
+
 export function isMoreSectionPath(pathname: string): boolean {
   if (pathname === "/more") return true;
   return EXTRA_NAV.some(

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, GripVertical, Plus, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useRole } from "@/components/RoleProvider";
 import type { TaskChecklistItem } from "@/lib/types";
 
 type Props = {
@@ -17,6 +18,7 @@ function calcProgress(items: TaskChecklistItem[]) {
 }
 
 export function TaskChecklist({ taskId, onProgressChange }: Props) {
+  const { canEdit } = useRole();
   const [items, setItems] = useState<TaskChecklistItem[]>([]);
   const [newTitle, setNewTitle] = useState("");
   const [loading, setLoading] = useState(true);
@@ -115,8 +117,9 @@ export function TaskChecklist({ taskId, onProgressChange }: Props) {
             <GripVertical size={14} className="text-muted/40 shrink-0" />
             <button
               type="button"
-              onClick={() => toggleItem(item)}
-              className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 touch-manipulation ${
+              onClick={() => canEdit && toggleItem(item)}
+              disabled={!canEdit}
+              className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 touch-manipulation disabled:cursor-default ${
                 item.done
                   ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
                   : "border-border text-transparent"
@@ -131,31 +134,35 @@ export function TaskChecklist({ taskId, onProgressChange }: Props) {
             >
               {item.title}
             </span>
-            <button
-              type="button"
-              onClick={() => removeItem(item.id)}
-              className="p-1 rounded opacity-0 group-hover:opacity-100 text-muted hover:text-red-400 touch-manipulation"
-            >
-              <Trash2 size={14} />
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => removeItem(item.id)}
+                className="p-1 rounded opacity-0 group-hover:opacity-100 text-muted hover:text-red-400 touch-manipulation"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
           </div>
         ))}
       </div>
-      <form onSubmit={addItem} className="flex gap-2">
-        <input
-          value={newTitle}
-          onChange={(e) => setNewTitle(e.target.value)}
-          placeholder="เพิ่มรายการ checklist..."
-          className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm"
-        />
-        <button
-          type="submit"
-          disabled={!newTitle.trim()}
-          className="px-3 py-2 rounded-lg bg-accent/15 text-accent text-sm font-medium disabled:opacity-40"
-        >
-          <Plus size={16} />
-        </button>
-      </form>
+      {canEdit && (
+        <form onSubmit={addItem} className="flex gap-2">
+          <input
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            placeholder="เพิ่มรายการ checklist..."
+            className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm"
+          />
+          <button
+            type="submit"
+            disabled={!newTitle.trim()}
+            className="px-3 py-2 rounded-lg bg-accent/15 text-accent text-sm font-medium disabled:opacity-40"
+          >
+            <Plus size={16} />
+          </button>
+        </form>
+      )}
     </div>
   );
 }

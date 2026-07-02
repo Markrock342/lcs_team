@@ -12,7 +12,9 @@ import { Logo } from "./Logo";
 import { NotificationBell } from "./NotificationBell";
 import { getPageTitle } from "./mobile-ui";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
-import { MAIN_NAV, EXTRA_NAV, MOBILE_NAV, isNavActive } from "@/lib/nav";
+import { MAIN_NAV, EXTRA_NAV, MOBILE_NAV, isNavActive, filterNavByAccess } from "@/lib/nav";
+import { RoleProvider } from "./RoleProvider";
+import { canViewFinance } from "@/lib/permissions";
 import type { Profile } from "@/lib/types";
 
 export function AppShell({
@@ -28,6 +30,11 @@ export function AppShell({
   const profileRef = useRef<HTMLDivElement>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const isChat = pathname === "/chat" || pathname.startsWith("/chat/");
+
+  const financeAccess = canViewFinance(profile?.role);
+  const mainNav = filterNavByAccess(MAIN_NAV, { canViewFinance: financeAccess });
+  const extraNav = filterNavByAccess(EXTRA_NAV, { canViewFinance: financeAccess });
+  const mobileNav = filterNavByAccess(MOBILE_NAV, { canViewFinance: financeAccess });
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -82,6 +89,7 @@ export function AppShell({
   );
 
   return (
+    <RoleProvider profile={profile}>
     <div className="flex min-h-screen min-h-[100dvh]">
       {profile && (
         <Suspense fallback={null}>
@@ -96,10 +104,10 @@ export function AppShell({
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1">
-          <NavLinks items={MAIN_NAV} />
+          <NavLinks items={mainNav} />
           <div className="pt-3 mt-3 border-t border-border">
             <p className="px-3 py-1 text-[10px] text-muted uppercase tracking-wider">เพิ่มเติม</p>
-            <NavLinks items={EXTRA_NAV} />
+            <NavLinks items={extraNav} />
           </div>
         </nav>
         {profile && (
@@ -207,7 +215,7 @@ export function AppShell({
 
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-sidebar/95 backdrop-blur-md border-t border-brand pb-safe">
         <div className="flex items-stretch justify-around min-h-16 px-1">
-          {MOBILE_NAV.map(({ href, label, icon: Icon }) => {
+          {mobileNav.map(({ href, label, icon: Icon }) => {
             const active = isNavActive(pathname, href);
             return (
               <Link
@@ -227,5 +235,6 @@ export function AppShell({
 
       <GlobalSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
+    </RoleProvider>
   );
 }

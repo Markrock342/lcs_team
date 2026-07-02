@@ -19,6 +19,8 @@ import { createClient } from "@/lib/supabase/client";
 import { PageHeader, FilterTabs, RowMenu } from "@/components/mobile-ui";
 import { Modal } from "@/components/ui";
 import { SlipPreviewModal } from "@/components/SlipPreviewModal";
+import { AccessDenied } from "@/components/AccessDenied";
+import { useRole } from "@/components/RoleProvider";
 import { QuickIncomeForm } from "@/components/QuickIncomeForm";
 import {
   QuickPayoutForm,
@@ -145,6 +147,7 @@ function sourceLabel(sourceType: string | null) {
 }
 
 export default function FinancePageInner() {
+  const { canViewFinance } = useRole();
   const [transactions, setTransactions] = useState<AccountingTransaction[]>([]);
   const [categories, setCategories] = useState<AccountingCategory[]>([]);
   const [members, setMembers] = useState<Profile[]>([]);
@@ -564,6 +567,10 @@ export default function FinancePageInner() {
         t.notes ?? "",
       ])
     );
+  }
+
+  if (!canViewFinance) {
+    return <AccessDenied />;
   }
 
   if (loading) {

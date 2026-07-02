@@ -12,6 +12,7 @@ import {
   EmptyState,
 } from "@/components/ui";
 import { PageHeader, FilterTabs } from "@/components/mobile-ui";
+import { useRole } from "@/components/RoleProvider";
 import Link from "next/link";
 import {
   PROJECT_TYPE_LABELS,
@@ -45,6 +46,7 @@ const emptyClient = {
 };
 
 export default function ClientsPage() {
+  const { canEdit } = useRole();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -268,11 +270,17 @@ export default function ClientsPage() {
     <div className="space-y-5 sm:space-y-6 animate-fade-in">
       <PageHeader
         title="ลูกค้า"
-        description="กดการ์ดเพื่อแก้ไข · เปิด Portal ได้ในเมนูขยาย"
+        description={
+          canEdit
+            ? "กดการ์ดเพื่อแก้ไข · เปิด Portal ได้ในเมนูขยาย"
+            : "โหมดดูอย่างเดียว (Guest)"
+        }
         action={
-          <Button onClick={openCreate}>
-            <Plus size={18} /> เพิ่มลูกค้า
-          </Button>
+          canEdit ? (
+            <Button onClick={openCreate}>
+              <Plus size={18} /> เพิ่มลูกค้า
+            </Button>
+          ) : undefined
         }
       />
 
@@ -396,7 +404,8 @@ export default function ClientsPage() {
                   >
                     <CheckSquare size={12} /> งาน
                   </Link>
-                  {(client as Client & { portal_enabled?: boolean; portal_token?: string }).portal_enabled &&
+                  {canEdit &&
+                    (client as Client & { portal_enabled?: boolean; portal_token?: string }).portal_enabled &&
                     (client as Client & { portal_token?: string }).portal_token && (
                     <button
                       onClick={() => copyPortalLink(client as Client & { portal_token: string })}
@@ -406,18 +415,22 @@ export default function ClientsPage() {
                       {copiedPortal === client.id ? <Check size={14} /> : <Share2 size={14} />}
                     </button>
                   )}
-                  <button
-                    onClick={() => openEdit(client)}
-                    className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-background border border-border text-xs hover:bg-card-hover touch-manipulation"
-                  >
-                    <Pencil size={12} /> แก้ไข
-                  </button>
-                  <button
-                    onClick={() => handleDelete(client.id)}
-                    className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 touch-manipulation"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  {canEdit && (
+                    <>
+                      <button
+                        onClick={() => openEdit(client)}
+                        className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-background border border-border text-xs hover:bg-card-hover touch-manipulation"
+                      >
+                        <Pencil size={12} /> แก้ไข
+                      </button>
+                      <button
+                        onClick={() => handleDelete(client.id)}
+                        className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 touch-manipulation"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

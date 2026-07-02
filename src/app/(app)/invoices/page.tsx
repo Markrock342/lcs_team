@@ -6,6 +6,7 @@ import { Plus, DollarSign, Eye, Printer, FileText, Pencil, Receipt, FileDown, Tr
 import { createClient } from "@/lib/supabase/client";
 import { Button, Modal } from "@/components/ui";
 import { PageHeader, FilterTabs } from "@/components/mobile-ui";
+import { useRole } from "@/components/RoleProvider";
 import { LCSDocumentPreview, printDocument } from "@/components/LCSDocumentPreview";
 import { InvoiceDocumentForm } from "@/components/InvoiceDocumentForm";
 import {
@@ -81,6 +82,7 @@ function buildPayload(form: DocumentFormData) {
 }
 
 export default function InvoicesPage() {
+  const { canEdit } = useRole();
   const [invoices, setInvoices] = useState<(Invoice & { client?: Client })[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -455,11 +457,17 @@ export default function InvoicesPage() {
     <div className="space-y-5 animate-fade-in">
       <PageHeader
         title="ใบแจ้งหนี้"
-        description="สร้างเอกสาร — รับเงินได้ที่หน้าการเงิน"
+        description={
+          canEdit
+            ? "สร้างเอกสาร — รับเงินได้ที่หน้าการเงิน"
+            : "โหมดดูอย่างเดียว (Guest)"
+        }
         action={
-          <Button onClick={() => setTemplateOpen(true)}>
-            <Plus size={18} /> สร้างเอกสาร
-          </Button>
+          canEdit ? (
+            <Button onClick={() => setTemplateOpen(true)}>
+              <Plus size={18} /> สร้างเอกสาร
+            </Button>
+          ) : undefined
         }
       />
 
@@ -524,7 +532,8 @@ export default function InvoicesPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {inv.status !== "paid" &&
+                  {canEdit &&
+                    inv.status !== "paid" &&
                     (docType === "invoice" || docType === "receipt") && (
                       <Button
                         onClick={() => {
@@ -544,6 +553,7 @@ export default function InvoicesPage() {
                     <Eye size={16} />
                     <span className="hidden sm:inline ml-1.5">ดู</span>
                   </Button>
+                  {canEdit && (
                   <div className="relative">
                     <button
                       type="button"
@@ -614,6 +624,7 @@ export default function InvoicesPage() {
                       </>
                     )}
                   </div>
+                  )}
                 </div>
               </div>
             </div>
