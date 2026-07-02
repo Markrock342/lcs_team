@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input } from "@/components/ui";
+import { syncInvoicePaymentToLedger } from "@/lib/accounting";
 import type { Invoice } from "@/lib/extras-types";
 import type { Client } from "@/lib/types";
 
@@ -52,15 +53,25 @@ export function QuickIncomeForm({ onDone }: Props) {
     setError("");
     const supabase = createClient();
     const payAmount = parseFloat(amount);
+    const paidAt = new Date().toISOString().slice(0, 10);
 
-    const { error: payError } = await supabase.from("invoice_payments").insert({
-      invoice_id: selected.id,
-      amount: payAmount,
-      paid_at: new Date().toISOString().slice(0, 10),
-    });
+    const { data: payment, error: payError } = await supabase
+      .from("invoice_payments")
+      .insert({
+        invoice_id: selected.id,
+        amount: payAmount,
+        paid_at: paidAt,
+      })
+      .select("id")
+      .single();
     if (payError) {
       setSaving(false);
       setError(payError.message);
+      return;
+    }
+    if (!payment?.id) {
+      setSaving(false);
+      setError("บันทึกรายรับแล้ว แต่ไม่พบเลขอ้างอิงรายการ");
       return;
     }
 
@@ -74,6 +85,22 @@ export function QuickIncomeForm({ onDone }: Props) {
     if (statusError) {
       setSaving(false);
       setError(statusError.message);
+      return;
+    }
+
+    const ledger = await syncInvoicePaymentToLedger({
+      paymentId: payment.id,
+      invoiceId: selected.id,
+      amount: payAmount,
+      paidAt,
+      invoiceTitle: selected.title,
+      clientId: selected.client_id,
+      invoiceTotal: selected.total_amount,
+      invoiceVat: selected.vat_amount,
+    });
+    if (!ledger.ok) {
+      setSaving(false);
+      setError(`บันทึกรายรับแล้ว แต่ลงบัญชีไม่สำเร็จ: ${ledger.error}`);
       return;
     }
 

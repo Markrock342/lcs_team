@@ -31,7 +31,14 @@ function fileExtension(file: File): string {
 
 export async function uploadFile(
   file: File,
-  folder: "clients" | "tasks" | "chat" | "client-files" | "avatars" | "payouts",
+  folder:
+    | "clients"
+    | "tasks"
+    | "chat"
+    | "client-files"
+    | "avatars"
+    | "payouts"
+    | "accounting",
   signal?: AbortSignal
 ): Promise<UploadResult> {
   const supabase = createClient();

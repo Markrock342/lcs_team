@@ -79,6 +79,57 @@ export interface TeamPayout {
   payee?: Profile | null;
 }
 
+export interface TeamFundContribution {
+  id: string;
+  contributor_id: string;
+  amount: number;
+  description: string;
+  paid_at: string;
+  slip_url: string | null;
+  slip_file_name: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  contributor?: Profile | null;
+}
+
+export type AccountingEntryType = "income" | "expense";
+
+export interface AccountingCategory {
+  id: string;
+  slug: string;
+  name: string;
+  type: AccountingEntryType;
+  is_system: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccountingTransaction {
+  id: string;
+  type: AccountingEntryType;
+  amount: number;
+  transaction_date: string;
+  category_id: string | null;
+  description: string;
+  member_id: string | null;
+  client_id: string | null;
+  source_type: string | null;
+  source_id: string | null;
+  vat_amount: number;
+  slip_url: string | null;
+  slip_file_name: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  category?: AccountingCategory | null;
+  member?: Profile | null;
+  client?: Client | null;
+}
+
 export interface TimeEntry {
   id: string;
   task_id: string;

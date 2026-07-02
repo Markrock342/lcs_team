@@ -1,12 +1,11 @@
 "use client";
 
-import { Building2, Wallet } from "lucide-react";
-import { Button, Input, Textarea, Avatar } from "@/components/ui";
-import { hasBankInfo } from "@/lib/team-banks";
+import { PiggyBank, Wallet } from "lucide-react";
+import { Avatar, Button, Input, Textarea } from "@/components/ui";
 import type { Profile } from "@/lib/types";
 
-export type QuickPayoutFormData = {
-  payee_id: string;
+export type QuickFundFormData = {
+  contributor_id: string;
   amount: string;
   description: string;
   paid_at: string;
@@ -14,16 +13,16 @@ export type QuickPayoutFormData = {
 };
 
 type Props = {
-  form: QuickPayoutFormData;
+  form: QuickFundFormData;
   members: Profile[];
   slipFile: File | null;
   saving: boolean;
-  onChange: (form: QuickPayoutFormData) => void;
+  onChange: (form: QuickFundFormData) => void;
   onSlipChange: (file: File | null) => void;
   onSubmit: (e: React.FormEvent) => void;
 };
 
-export function QuickPayoutForm({
+export function QuickFundForm({
   form,
   members,
   slipFile,
@@ -32,32 +31,28 @@ export function QuickPayoutForm({
   onSlipChange,
   onSubmit,
 }: Props) {
-  const selectedPayee = members.find((m) => m.id === form.payee_id);
-
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div>
-        <p className="text-sm font-medium mb-2">โอนให้ใคร?</p>
+        <p className="text-sm font-medium mb-2">ใครจ่ายเข้ากองกลาง?</p>
         <div className="grid grid-cols-2 gap-2">
           {members.map((m) => {
-            const active = form.payee_id === m.id;
+            const active = form.contributor_id === m.id;
             return (
               <button
                 key={m.id}
                 type="button"
-                onClick={() => onChange({ ...form, payee_id: m.id })}
+                onClick={() => onChange({ ...form, contributor_id: m.id })}
                 className={`flex items-center gap-2 p-3 rounded-xl border text-left transition-colors touch-manipulation ${
                   active
-                    ? "border-accent bg-accent/10"
-                    : "border-border hover:border-accent/30"
+                    ? "border-emerald-400 bg-emerald-500/10"
+                    : "border-border hover:border-emerald-400/30"
                 }`}
               >
                 <Avatar name={m.display_name} src={m.avatar_url} size="sm" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{m.display_name}</p>
-                  <p className="text-[10px] text-muted truncate">
-                    {hasBankInfo(m) ? m.bank_name : "ยังไม่มีบัญชี"}
-                  </p>
+                  <p className="text-[10px] text-muted truncate">@{m.username}</p>
                 </div>
               </button>
             );
@@ -65,19 +60,11 @@ export function QuickPayoutForm({
         </div>
       </div>
 
-      {selectedPayee && hasBankInfo(selectedPayee) && (
-        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3 text-sm">
-          <p className="text-xs font-medium text-emerald-300 flex items-center gap-1 mb-1">
-            <Building2 size={14} /> คัดลอกเลขบัญชีนี้
-          </p>
-          <p className="font-mono text-base tracking-wide">
-            {selectedPayee.bank_account_number}
-          </p>
-          <p className="text-muted text-xs mt-0.5">
-            {selectedPayee.bank_name} · {selectedPayee.bank_account_name}
-          </p>
-        </div>
-      )}
+      <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3 text-sm">
+        <p className="text-xs font-medium text-emerald-300 flex items-center gap-1">
+          <PiggyBank size={14} /> รายการนี้จะนับเป็นรายรับกองกลาง
+        </p>
+      </div>
 
       <Input
         label="จำนวนเงิน (บาท)"
@@ -91,15 +78,15 @@ export function QuickPayoutForm({
       />
 
       <Input
-        label="ค่าอะไร"
+        label="รายการ"
         value={form.description}
         onChange={(e) => onChange({ ...form, description: e.target.value })}
-        placeholder="เช่น ค่าจ้างออกแบบ, ค่า dev"
+        placeholder="เช่น เก็บเงินกองกลาง, เติมเงินทีม"
         required
       />
 
       <Input
-        label="วันที่โอน"
+        label="วันที่รับเงิน"
         type="date"
         value={form.paid_at}
         onChange={(e) => onChange({ ...form, paid_at: e.target.value })}
@@ -107,7 +94,7 @@ export function QuickPayoutForm({
       />
 
       <div>
-        <p className="text-sm font-medium mb-1.5">แนบสลิป</p>
+        <p className="text-sm font-medium mb-1.5">แนบสลิป (ไม่บังคับ)</p>
         <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-accent/40">
           <Wallet size={20} className="text-muted" />
           <span className="text-sm text-muted">
@@ -132,10 +119,10 @@ export function QuickPayoutForm({
       <Button
         type="submit"
         loading={saving}
-        disabled={!form.payee_id}
+        disabled={!form.contributor_id}
         className="w-full"
       >
-        บันทึกการโอน
+        บันทึกเข้ากองกลาง
       </Button>
     </form>
   );

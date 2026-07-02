@@ -26,6 +26,7 @@ import {
 } from "@/lib/invoice-documents";
 import { logActivity, exportToCSV } from "@/lib/activity";
 import { documentPdfFilename, exportDocumentPdf } from "@/lib/export-pdf";
+import { syncInvoicePaymentToLedger } from "@/lib/accounting";
 import type { Client } from "@/lib/types";
 
 function invoiceToForm(inv: Invoice): DocumentFormData {
@@ -291,14 +292,24 @@ export default function InvoicesPage() {
     const supabase = createClient();
     const amount = parseFloat(payAmount);
 
-    const { error: payError } = await supabase.from("invoice_payments").insert({
-      invoice_id: payModal.id,
-      amount,
-      paid_at: new Date().toISOString().slice(0, 10),
-    });
+    const paidAt = new Date().toISOString().slice(0, 10);
+    const { data: payment, error: payError } = await supabase
+      .from("invoice_payments")
+      .insert({
+        invoice_id: payModal.id,
+        amount,
+        paid_at: paidAt,
+      })
+      .select("id")
+      .single();
     if (payError) {
       setSaving(false);
       setDbError(payError.message);
+      return;
+    }
+    if (!payment?.id) {
+      setSaving(false);
+      setDbError("บันทึกชำระแล้ว แต่ไม่พบเลขอ้างอิงรายการ");
       return;
     }
 
@@ -318,6 +329,23 @@ export default function InvoicesPage() {
     if (statusError) {
       setSaving(false);
       setDbError(statusError.message);
+      return;
+    }
+
+    const ledger = await syncInvoicePaymentToLedger({
+      paymentId: payment.id,
+      invoiceId: payModal.id,
+      amount,
+      paidAt,
+      invoiceTitle: payModal.title,
+      clientId: payModal.client_id,
+      invoiceTotal: payModal.total_amount,
+      invoiceVat: payModal.vat_amount,
+      note: payMethod || null,
+    });
+    if (!ledger.ok) {
+      setSaving(false);
+      setDbError(`บันทึกชำระแล้ว แต่ลงบัญชีไม่สำเร็จ: ${ledger.error}`);
       return;
     }
 
