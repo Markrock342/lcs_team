@@ -28,6 +28,7 @@ import {
   markChatChannelNotificationsRead,
 } from "@/lib/notifications";
 import { isOnline, formatPresenceStatus } from "@/lib/presence";
+import { useOnlinePresence, useTypingIndicator } from "@/hooks/usePresence";
 import {
   fetchChannelMessages,
   fetchMessageById,
@@ -387,6 +388,19 @@ function ChatPageContent() {
     return () => clearInterval(id);
   }, []);
 
+  const presenceUser = useMemo(
+    () =>
+      currentUser
+        ? { id: currentUser.id, display_name: currentUser.display_name }
+        : null,
+    [currentUser]
+  );
+  const onlineIds = useOnlinePresence(presenceUser);
+  const { typingUsers, notifyTyping, stopTyping } = useTypingIndicator(
+    activeChannel?.id ?? null,
+    presenceUser
+  );
+
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const el = messagesScrollRef.current;
     if (!el) return;
@@ -542,14 +556,22 @@ function ChatPageContent() {
     if (!items) return;
 
     for (const item of Array.from(items)) {
-      if (!item.type.startsWith("image/")) continue;
-      e.preventDefault();
+      if (item.kind !== "file") continue;
       const blob = item.getAsFile();
-      if (!blob) return;
-      const ext = blob.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
-      setFile(
-        new File([blob], `pasted-${Date.now()}.${ext}`, { type: blob.type })
-      );
+      if (!blob) continue;
+      e.preventDefault();
+      if (blob.name && blob.name.includes(".")) {
+        setFile(blob);
+      } else {
+        const ext =
+          blob.type.split("/")[1]?.replace("jpeg", "jpg") ||
+          (blob.type.startsWith("image/") ? "png" : "bin");
+        setFile(
+          new File([blob], `pasted-${Date.now()}.${ext}`, {
+            type: blob.type || "application/octet-stream",
+          })
+        );
+      }
       return;
     }
   }
@@ -684,6 +706,7 @@ function ChatPageContent() {
     setFile(null);
     setLinkedTaskId("");
     setReplyTo(null);
+    stopTyping();
     setSending(false);
     sendAbortRef.current = null;
 
@@ -777,12 +800,12 @@ function ChatPageContent() {
           <p className="text-[10px] uppercase tracking-wider text-muted mb-2 flex items-center gap-1">
             <Users size={12} /> ทีม — {profiles.length}
             <span className="normal-case tracking-normal">
-              · {profiles.filter((p) => isOnline(p.last_seen_at)).length} ออนไลน์
+              · {profiles.filter((p) => onlineIds.has(p.id) || isOnline(p.last_seen_at)).length} ออนไลน์
             </span>
           </p>
           <div className="space-y-2 max-h-36 overflow-y-auto overscroll-contain scroll-touch">
             {profiles.map((p) => {
-              const online = isOnline(p.last_seen_at);
+              const online = onlineIds.has(p.id) || isOnline(p.last_seen_at);
               return (
                 <div key={p.id} className="flex items-start gap-2 text-xs min-w-0">
                   <div
@@ -801,7 +824,7 @@ function ChatPageContent() {
                         online ? "text-emerald-400" : "text-muted"
                       }`}
                     >
-                      {formatPresenceStatus(p.last_seen_at)}
+                      {onlineIds.has(p.id) ? "ออนไลน์" : formatPresenceStatus(p.last_seen_at)}
                     </p>
                   </div>
                 </div>
@@ -921,6 +944,21 @@ function ChatPageContent() {
               <div ref={messagesEndRef} />
             </div>
 
+            {typingUsers.length > 0 && (
+              <div className="mx-4 mb-1 flex items-center gap-2 text-xs text-muted">
+                <span className="flex gap-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce [animation-delay:-0.15s]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce" />
+                </span>
+                {typingUsers.length === 1
+                  ? `${typingUsers[0].display_name} กำลังพิมพ์...`
+                  : typingUsers.length === 2
+                    ? `${typingUsers[0].display_name} และ ${typingUsers[1].display_name} กำลังพิมพ์...`
+                    : `${typingUsers.length} คนกำลังพิมพ์...`}
+              </div>
+            )}
+
             {/* Reply preview */}
             {replyTo && (
               <div className="mx-4 mb-2 flex items-center gap-2 px-3 py-2 bg-accent/10 border border-accent/30 rounded-xl">
@@ -1010,7 +1048,10 @@ function ChatPageContent() {
                 </button>
                 <ChatMentionInput
                   value={content}
-                  onChange={setContent}
+                  onChange={(v) => {
+                    setContent(v);
+                    if (v.trim()) notifyTyping();
+                  }}
                   profiles={profiles}
                   currentUserId={currentUser?.id}
                   onPaste={handlePaste}

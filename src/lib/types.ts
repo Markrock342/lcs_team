@@ -140,3 +140,14 @@ export interface TaskChecklistItem {
   sort_order: number;
   created_at: string;
 }
+
+export interface TaskAttachment {
+  id: string;
+  task_id: string;
+  file_url: string;
+  file_name: string;
+  file_type: string | null;
+  file_size: number | null;
+  uploaded_by: string | null;
+  created_at: string;
+}

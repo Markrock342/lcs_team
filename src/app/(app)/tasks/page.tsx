@@ -29,6 +29,7 @@ import { KanbanBoard } from "@/components/KanbanBoard";
 import { TimeTracker } from "@/components/TimeTracker";
 import { TaskCountdown } from "@/components/TaskCountdown";
 import { TaskChecklist } from "@/components/TaskChecklist";
+import { TaskAttachments } from "@/components/TaskAttachments";
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS } from "@/lib/constants";
 import {
   dueDateFromStart,
@@ -103,6 +104,7 @@ function TaskRow({
   task,
   isSub,
   profiles,
+  currentUserId,
   onEdit,
   onDelete,
   onAddSub,
@@ -112,6 +114,7 @@ function TaskRow({
   task: Task;
   isSub?: boolean;
   profiles: Profile[];
+  currentUserId?: string;
   onEdit: (t: Task) => void;
   onDelete: (id: string) => void;
   onAddSub: (parent: Task) => void;
@@ -164,6 +167,9 @@ function TaskRow({
             />
           </div>
         )}
+        <div className="mt-2">
+          <TaskAttachments taskId={task.id} currentUserId={currentUserId} compact />
+        </div>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap shrink-0">
@@ -240,9 +246,13 @@ export default function TasksPage() {
   }, []);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [modalMode, setModalMode] = useState<"parent" | "sub">("parent");
+  const [currentUserId, setCurrentUserId] = useState<string>();
 
   useEffect(() => {
     loadData();
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => setCurrentUserId(data.user?.id));
   }, []);
 
   async function loadData() {
@@ -649,6 +659,7 @@ export default function TasksPage() {
                       <TaskRow
                         task={parent}
                         profiles={profiles}
+                        currentUserId={currentUserId}
                         onEdit={openEdit}
                         onDelete={handleDelete}
                         onAddSub={openCreateSub}
@@ -695,6 +706,7 @@ export default function TasksPage() {
                           task={sub}
                           isSub
                           profiles={profiles}
+                          currentUserId={currentUserId}
                           onEdit={openEdit}
                           onDelete={handleDelete}
                           onAddSub={openCreateSub}
