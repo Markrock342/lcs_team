@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FileText, Loader2, Paperclip, Trash2, X } from "lucide-react";
+import { FileText, Download, Loader2, Paperclip, Trash2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { uploadFile, isImageFile, isTextPreviewFile, normalizeStoredFileType } from "@/lib/upload";
+import { uploadFile, isImageFile, isTextPreviewFile, normalizeStoredFileType, downloadFile } from "@/lib/upload";
 import { useRole } from "@/components/RoleProvider";
 import { TextFilePreviewModal } from "@/components/TextFilePreviewModal";
 import type { TaskAttachment } from "@/lib/types";
@@ -34,6 +34,7 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
     url: string;
     name: string;
   } | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -119,6 +120,17 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
     if (files.length) {
       e.preventDefault();
       handleFiles(files);
+    }
+  }
+
+  async function handleDownload(att: TaskAttachment) {
+    setDownloadingId(att.id);
+    try {
+      await downloadFile(att.file_url, att.file_name);
+    } catch {
+      setError("ดาวน์โหลดไม่สำเร็จ");
+    } finally {
+      setDownloadingId(null);
     }
   }
 
@@ -235,6 +247,19 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
                     ) : null}
                   </a>
                 )}
+                <button
+                  type="button"
+                  onClick={() => handleDownload(att)}
+                  disabled={downloadingId === att.id}
+                  className="p-1 rounded text-muted hover:text-accent touch-manipulation shrink-0 disabled:opacity-50"
+                  title="ดาวน์โหลด"
+                >
+                  {downloadingId === att.id ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <Download size={13} />
+                  )}
+                </button>
                 {canEdit && (
                   <button
                     type="button"
@@ -255,13 +280,31 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
           onClick={() => setPreview(null)}
         >
-          <button
-            type="button"
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white"
-            onClick={() => setPreview(null)}
-          >
-            <X size={20} />
-          </button>
+          <div className="absolute top-4 right-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={async (e) => {
+                e.stopPropagation();
+                await handleDownload(preview);
+              }}
+              disabled={downloadingId === preview.id}
+              className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 disabled:opacity-50"
+              title="ดาวน์โหลด"
+            >
+              {downloadingId === preview.id ? (
+                <Loader2 size={20} className="animate-spin" />
+              ) : (
+                <Download size={20} />
+              )}
+            </button>
+            <button
+              type="button"
+              className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20"
+              onClick={() => setPreview(null)}
+            >
+              <X size={20} />
+            </button>
+          </div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={preview.file_url}

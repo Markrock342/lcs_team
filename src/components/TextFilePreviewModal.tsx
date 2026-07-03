@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ExternalLink, Loader2, X } from "lucide-react";
+import { Download, ExternalLink, Loader2, X } from "lucide-react";
+import { downloadFile } from "@/lib/upload";
 
 type Props = {
   open: boolean;
@@ -19,6 +20,7 @@ export function TextFilePreviewModal({
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     if (!open || !fileUrl) return;
@@ -60,6 +62,28 @@ export function TextFilePreviewModal({
       >
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
           <p className="flex-1 font-medium text-sm truncate">{fileName}</p>
+          <button
+            type="button"
+            disabled={downloading}
+            onClick={async () => {
+              setDownloading(true);
+              try {
+                await downloadFile(fileUrl, fileName);
+              } catch {
+                setError("ดาวน์โหลดไม่สำเร็จ");
+              } finally {
+                setDownloading(false);
+              }
+            }}
+            className="p-2 rounded-lg text-muted hover:text-accent hover:bg-card-hover disabled:opacity-50"
+            title="ดาวน์โหลด"
+          >
+            {downloading ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Download size={16} />
+            )}
+          </button>
           <a
             href={fileUrl}
             target="_blank"

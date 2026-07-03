@@ -132,3 +132,18 @@ export async function uploadFile(
 export function isImageFile(type: string | null | undefined): boolean {
   return !!type?.startsWith("image/");
 }
+
+/** ดาวน์โหลดไฟล์จาก URL พร้อมชื่อไฟล์ */
+export async function downloadFile(url: string, fileName: string): Promise<void> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("ดาวน์โหลดไม่สำเร็จ");
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(objectUrl);
+}
