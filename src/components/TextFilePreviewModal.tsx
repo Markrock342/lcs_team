@@ -32,9 +32,11 @@ export function TextFilePreviewModal({
     fetch(fileUrl)
       .then((res) => {
         if (!res.ok) throw new Error(`โหลดไม่สำเร็จ (${res.status})`);
-        return res.text();
+        return res.arrayBuffer();
       })
-      .then((text) => {
+      .then((buf) => {
+        // บังคับ decode เป็น UTF-8 เสมอ — ไฟล์เก่าที่ไม่มี charset ก็อ่านไทยได้
+        const text = new TextDecoder("utf-8").decode(buf);
         if (!cancelled) setContent(text);
       })
       .catch((e) => {
