@@ -13,7 +13,59 @@ const MIME_EXT: Record<string, string> = {
   "image/heif": "heif",
   "image/gif": "gif",
   "application/pdf": "pdf",
+  "text/markdown": "md",
+  "text/plain": "txt",
 };
+
+/** MIME สำหรับไฟล์ข้อความ — ใส่ charset=utf-8 เพื่อให้เปิดแล้วอ่านไทยได้ */
+const EXT_CONTENT_TYPE: Record<string, string> = {
+  md: "text/markdown; charset=utf-8",
+  markdown: "text/markdown; charset=utf-8",
+  txt: "text/plain; charset=utf-8",
+  json: "application/json; charset=utf-8",
+  csv: "text/csv; charset=utf-8",
+  log: "text/plain; charset=utf-8",
+  sql: "text/plain; charset=utf-8",
+};
+
+export function resolveUploadContentType(file: File): string | undefined {
+  const ext = file.name.includes(".")
+    ? file.name.split(".").pop()?.toLowerCase()
+    : null;
+  if (ext && EXT_CONTENT_TYPE[ext]) return EXT_CONTENT_TYPE[ext];
+  if (file.type?.startsWith("text/")) {
+    return file.type.includes("charset")
+      ? file.type
+      : `${file.type}; charset=utf-8`;
+  }
+  if (file.type === "application/json") {
+    return "application/json; charset=utf-8";
+  }
+  return file.type || undefined;
+}
+
+/** เก็บใน DB — ไม่มี charset suffix */
+export function normalizeStoredFileType(file: File): string | null {
+  const resolved = resolveUploadContentType(file);
+  if (!resolved) return file.type || null;
+  return resolved.split(";")[0].trim() || null;
+}
+
+export function isTextPreviewFile(
+  fileName: string,
+  fileType?: string | null
+): boolean {
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  if (
+    ext &&
+    ["md", "markdown", "txt", "json", "csv", "log", "sql"].includes(ext)
+  ) {
+    return true;
+  }
+  if (fileType?.startsWith("text/")) return true;
+  if (fileType === "application/json") return true;
+  return false;
+}
 
 function fileExtension(file: File): string {
   const fromName = file.name.includes(".")
@@ -48,7 +100,7 @@ export async function uploadFile(
   const { error } = await supabase.storage.from("uploads").upload(path, file, {
     cacheControl: "3600",
     upsert: false,
-    contentType: file.type || undefined,
+    contentType: resolveUploadContentType(file),
   });
 
   if (signal?.aborted) {

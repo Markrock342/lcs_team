@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText, Loader2, Paperclip, Trash2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { uploadFile, isImageFile } from "@/lib/upload";
+import { uploadFile, isImageFile, isTextPreviewFile, normalizeStoredFileType } from "@/lib/upload";
 import { useRole } from "@/components/RoleProvider";
+import { TextFilePreviewModal } from "@/components/TextFilePreviewModal";
 import type { TaskAttachment } from "@/lib/types";
 
 type Props = {
@@ -29,6 +30,10 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
   const [dbError, setDbError] = useState("");
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<TaskAttachment | null>(null);
+  const [textPreview, setTextPreview] = useState<{
+    url: string;
+    name: string;
+  } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -72,7 +77,7 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
           task_id: taskId,
           file_url: uploaded.url,
           file_name: file.name,
-          file_type: file.type || null,
+          file_type: normalizeStoredFileType(file),
           file_size: file.size,
           uploaded_by: currentUserId ?? null,
         })
@@ -157,6 +162,7 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
         <div className={compact ? "flex flex-wrap gap-2" : "space-y-1"}>
           {items.map((att) => {
             const image = isImageFile(att.file_type);
+            const textFile = isTextPreviewFile(att.file_name, att.file_type);
             return (
               <div
                 key={att.id}
@@ -175,6 +181,16 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
                       className="w-9 h-9 rounded object-cover"
                     />
                   </button>
+                ) : textFile ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTextPreview({ url: att.file_url, name: att.file_name })
+                    }
+                    className="w-9 h-9 rounded bg-accent/10 flex items-center justify-center shrink-0 hover:bg-accent/20"
+                  >
+                    <FileText size={16} className="text-accent" />
+                  </button>
                 ) : (
                   <a
                     href={att.file_url}
@@ -185,19 +201,40 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
                     <FileText size={16} className="text-accent" />
                   </a>
                 )}
-                <a
-                  href={att.file_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="min-w-0 flex-1"
-                >
-                  <p className="text-xs truncate max-w-36 hover:text-accent">
-                    {att.file_name}
-                  </p>
-                  {att.file_size ? (
-                    <p className="text-[10px] text-muted">{formatSize(att.file_size)}</p>
-                  ) : null}
-                </a>
+                {textFile ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTextPreview({ url: att.file_url, name: att.file_name })
+                    }
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <p className="text-xs truncate max-w-36 hover:text-accent">
+                      {att.file_name}
+                    </p>
+                    {att.file_size ? (
+                      <p className="text-[10px] text-muted">
+                        {formatSize(att.file_size)}
+                      </p>
+                    ) : null}
+                  </button>
+                ) : (
+                  <a
+                    href={att.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-w-0 flex-1"
+                  >
+                    <p className="text-xs truncate max-w-36 hover:text-accent">
+                      {att.file_name}
+                    </p>
+                    {att.file_size ? (
+                      <p className="text-[10px] text-muted">
+                        {formatSize(att.file_size)}
+                      </p>
+                    ) : null}
+                  </a>
+                )}
                 {canEdit && (
                   <button
                     type="button"
@@ -234,6 +271,13 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
           />
         </div>
       )}
+
+      <TextFilePreviewModal
+        open={!!textPreview}
+        onClose={() => setTextPreview(null)}
+        fileUrl={textPreview?.url ?? ""}
+        fileName={textPreview?.name ?? ""}
+      />
     </div>
   );
 }
