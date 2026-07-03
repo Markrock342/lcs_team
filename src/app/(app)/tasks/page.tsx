@@ -327,6 +327,7 @@ export default function TasksPage() {
   const [editing, setEditing] = useState<Task | null>(null);
   const [form, setForm] = useState(emptyTask);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [pastedImages, setPastedImages] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("active");
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
@@ -425,6 +426,7 @@ export default function TasksPage() {
     setModalMode("parent");
     setForm({ ...emptyTask });
     setImageFile(null);
+    setPastedImages([]);
     setModalOpen(true);
   }
 
@@ -438,6 +440,7 @@ export default function TasksPage() {
     });
     setExpanded((prev) => new Set(prev).add(parent.id));
     setImageFile(null);
+    setPastedImages([]);
     setModalOpen(true);
   }
 
@@ -458,7 +461,19 @@ export default function TasksPage() {
       progress: String(task.progress),
     });
     setImageFile(null);
+    setPastedImages([]);
     setModalOpen(true);
+  }
+
+  function handleDescriptionPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const files = Array.from(e.clipboardData?.items ?? [])
+      .filter((i) => i.kind === "file" && i.type.startsWith("image/"))
+      .map((i) => i.getAsFile())
+      .filter((f): f is File => !!f);
+    if (files.length) {
+      e.preventDefault();
+      setPastedImages((prev) => [...prev, ...files]);
+    }
   }
 
   function onStartDateChange(start_date: string) {
@@ -535,6 +550,37 @@ export default function TasksPage() {
         .select("id")
         .single();
       taskId = created?.id ?? null;
+    }
+
+    if (pastedImages.length && taskId) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const rows: {
+        task_id: string;
+        file_url: string;
+        file_name: string;
+        file_type: string | null;
+        file_size: number;
+        uploaded_by: string | null;
+      }[] = [];
+      for (const img of pastedImages) {
+        const uploaded = await uploadFile(img, "tasks");
+        if (uploaded.ok) {
+          const ext = img.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
+          rows.push({
+            task_id: taskId,
+            file_url: uploaded.url,
+            file_name: img.name || `pasted-${Date.now()}.${ext}`,
+            file_type: img.type || "image/png",
+            file_size: img.size,
+            uploaded_by: user?.id ?? null,
+          });
+        }
+      }
+      if (rows.length) {
+        await supabase.from("task_attachments").insert(rows);
+      }
     }
 
     await logActivity(editing ? "update" : "create", "task", taskId, form.title);
@@ -921,13 +967,49 @@ export default function TasksPage() {
             }
             required
           />
-          <Textarea
-            label="รายละเอียด"
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            rows={modalMode === "sub" ? 8 : 4}
-            className="min-h-[10rem] sm:min-h-[12rem] resize-y"
-          />
+          <div className="space-y-2">
+            <Textarea
+              label="รายละเอียด"
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              onPaste={handleDescriptionPaste}
+              rows={modalMode === "sub" ? 8 : 4}
+              className="min-h-[10rem] sm:min-h-[12rem] resize-y"
+            />
+            <p className="text-[11px] text-muted flex items-center gap-1">
+              <Paperclip size={11} /> วางรูปจากคลิปบอร์ด (Ctrl/⌘+V) เพื่อแนบเข้างานได้เลย
+            </p>
+            {pastedImages.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {pastedImages.map((img, idx) => {
+                  const url = URL.createObjectURL(img);
+                  return (
+                    <div
+                      key={idx}
+                      className="relative w-16 h-16 rounded-lg overflow-hidden border border-border group"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={url}
+                        alt={`แนบ ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                        onLoad={() => URL.revokeObjectURL(url)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPastedImages((prev) => prev.filter((_, i) => i !== idx))
+                        }
+                        className="absolute top-0.5 right-0.5 p-0.5 rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 touch-manipulation"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <Select
             label="ลูกค้า"
             value={form.client_id}
