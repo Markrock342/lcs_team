@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useId, useRef, useState, type HTMLAttributes } from "react";
+import { useEffect, useId, useRef, useState, type HTMLAttributes, type RefObject } from "react";
 import type {
   ClientStatus,
   SalesStage,
@@ -46,6 +46,27 @@ function trapFocus(container: HTMLElement, event: KeyboardEvent) {
     event.preventDefault();
     first.focus();
   }
+}
+
+function useDialogFocus(open: boolean, onClose: () => void, dialogRef: RefObject<HTMLElement | null>) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onCloseRef.current();
+      if (dialogRef.current) trapFocus(dialogRef.current, event);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previousFocusRef.current?.focus();
+    };
+  }, [open, dialogRef]);
 }
 
 export function Card({
@@ -326,22 +347,7 @@ export function Modal({
   children: React.ReactNode;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
-    dialogRef.current?.focus();
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-      if (dialogRef.current) trapFocus(dialogRef.current, event);
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      previousFocusRef.current?.focus();
-    };
-  }, [open, onClose]);
+  useDialogFocus(open, onClose, dialogRef);
 
   if (!open) return null;
 
@@ -483,22 +489,7 @@ export function Drawer({
   children: React.ReactNode;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
-    dialogRef.current?.focus();
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-      if (dialogRef.current) trapFocus(dialogRef.current, event);
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      previousFocusRef.current?.focus();
-    };
-  }, [open, onClose]);
+  useDialogFocus(open, onClose, dialogRef);
 
   if (!open) return null;
 
