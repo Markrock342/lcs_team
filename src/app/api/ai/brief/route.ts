@@ -7,7 +7,6 @@ import {
   DEFAULT_BRIEF_QUESTION,
   buildWorkspaceBriefPrompt,
 } from "@/lib/workspace-brief";
-import type { TeamRole } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,11 +39,11 @@ export async function POST(request: Request) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name, role")
+    .select("display_name, role, display_roles")
     .eq("id", user.id)
     .single();
 
-  const includeFinance = canViewFinance(profile?.role as TeamRole | undefined);
+  const includeFinance = canViewFinance(profile);
   const prompt = await buildWorkspaceBriefPrompt(supabase, question, {
     includeFinance,
     userId: user.id,

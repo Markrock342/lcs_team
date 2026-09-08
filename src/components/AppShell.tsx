@@ -63,7 +63,7 @@ export function AppShell({
   const [searchOpen, setSearchOpen] = useState(false);
   const isChat = pathname === "/chat" || pathname.startsWith("/chat/");
 
-  const financeAccess = canViewFinance(profile?.role);
+  const financeAccess = canViewFinance(profile);
   const mainNav = filterNavByAccess(MAIN_NAV, { canViewFinance: financeAccess });
   const extraNav = filterNavByAccess(EXTRA_NAV, { canViewFinance: financeAccess });
   const mobileNav = filterNavByAccess(MOBILE_NAV, { canViewFinance: financeAccess });

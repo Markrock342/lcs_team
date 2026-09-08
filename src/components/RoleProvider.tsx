@@ -27,7 +27,7 @@ const RoleContext = createContext<RoleContextValue>({
   isGuest: false,
   isAdmin: false,
   canEdit: true,
-  canViewFinance: true,
+  canViewFinance: false,
   can: () => false,
 });
 
@@ -45,8 +45,11 @@ export function RoleProvider({
     isGuest: isGuestFn(role),
     isAdmin: role ? isAdminFn(role) : false,
     canEdit: canEditFn(role),
-    canViewFinance: canViewFinanceFn(role),
-    can: (permission) => (role ? hasPermissionFn(role, permission) : false),
+    canViewFinance: canViewFinanceFn(profile),
+    can: (permission) => {
+      if (permission === "view_finance") return canViewFinanceFn(profile);
+      return role ? hasPermissionFn(role, permission) : false;
+    },
   };
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>;
 }

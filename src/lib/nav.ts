@@ -35,7 +35,7 @@ export const MAIN_NAV: NavItem[] = [
   { href: "/tasks", label: "งาน", icon: CheckSquare, desc: "งานใหญ่ · งานย่อย · กระดาน" },
   { href: "/clients", label: "ลูกค้า", icon: Users, desc: "ข้อมูลลูกค้า · พอร์ทัล" },
   { href: "/sales", label: "แผนกขาย", icon: Handshake, desc: "รายชื่อเป้าหมาย · ติดตาม · ท่อขาย · ร่างข้อความ", color: "text-emerald-400" },
-  { href: "/finance", label: "การเงิน", icon: CircleDollarSign, desc: "รับเงิน · จ่ายทีม · สรุป", color: "text-sky-400" },
+  { href: "/finance", label: "การเงิน", icon: CircleDollarSign, desc: "สลิป · ยอดเงิน · กองกลาง — แอดมินและบัญชี", color: "text-sky-400" },
   { href: "/chat", label: "แชททีม", icon: MessageCircle, desc: "แชทกลุ่มทีม" },
 ];
 

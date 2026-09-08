@@ -104,7 +104,7 @@ function buildPayload(form: DocumentFormData) {
 }
 
 export default function InvoicesPage() {
-  const { canEdit } = useRole();
+  const { canEdit, canViewFinance } = useRole();
   const { toast, confirm } = useActionFeedback();
   const [invoices, setInvoices] = useState<(Invoice & { client?: Client })[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -373,17 +373,19 @@ export default function InvoicesPage() {
       return;
     }
 
-    const ledger = await syncInvoicePaymentToLedger({
-      paymentId: payment.id,
-      invoiceId: payModal.id,
-      amount,
-      paidAt,
-      invoiceTitle: payModal.title,
-      clientId: payModal.client_id,
-      invoiceTotal: payModal.total_amount,
-      invoiceVat: payModal.vat_amount,
-      note: payMethod || null,
-    });
+    const ledger = canViewFinance
+      ? await syncInvoicePaymentToLedger({
+          paymentId: payment.id,
+          invoiceId: payModal.id,
+          amount,
+          paidAt,
+          invoiceTitle: payModal.title,
+          clientId: payModal.client_id,
+          invoiceTotal: payModal.total_amount,
+          invoiceVat: payModal.vat_amount,
+          note: payMethod || null,
+        })
+      : { ok: true as const, id: null };
     if (!ledger.ok) {
       setSaving(false);
       setDbError(`บันทึกชำระแล้ว แต่ลงบัญชีไม่สำเร็จ: ${ledger.error}`);

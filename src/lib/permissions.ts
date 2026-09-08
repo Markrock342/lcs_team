@@ -1,4 +1,5 @@
-import type { TeamRole } from "./types";
+import type { Profile, TeamRole } from "./types";
+import { getProfileDisplayRoles } from "./profile-display";
 
 export type Permission =
   | "manage_team"
@@ -25,24 +26,24 @@ export const ROLE_PERMISSIONS: Record<TeamRole, Permission[]> = {
     "manage_invoices",
     "manage_templates",
     "export_data",
-    "view_finance",
   ],
-  backend: ["manage_tasks", "view_finance"],
-  design: ["manage_tasks", "view_finance"],
+  accounting: ["manage_tasks", "export_data", "view_finance"],
+  backend: ["manage_tasks"],
+  design: ["manage_tasks"],
   sale: [
     "manage_clients",
     "manage_invoices",
     "export_data",
-    "view_finance",
   ],
   guest: [],
 };
 
 export const ROLE_DESCRIPTIONS: Record<TeamRole, string> = {
-  admin: "แอดมิน — สิทธิ์ครบ รวมจัดการทีม ลูกค้า และงาน",
-  pm: "PM — จัดการลูกค้า งาน ใบแจ้งหนี้ เทมเพลต",
-  backend: "Backend — รับงาน dev/API ที่มอบหมาย",
-  design: "Design/Frontend — รับงาน UI/UX ที่มอบหมาย",
+  admin: "Admin — สิทธิ์ครบ รวมหน้าการเงินและจัดการทีม",
+  pm: "PM — ลูกค้า งาน ใบแจ้งหนี้ เทมเพลต ไม่เห็นสลิปและยอดกองกลาง",
+  accounting: "FN — แผนกบัญชี จัดการหน้าการเงิน สลิป และยอดเงิน",
+  backend: "BE — รับงาน dev/API ที่มอบหมาย",
+  design: "UI — รับงานออกแบบและ frontend ที่มอบหมาย",
   sale: "Sale — ลีด ดีล ใบเสนอราคา และลูกค้า",
   guest: "Guest — ดูได้อย่างเดียว + แชท ไม่เห็นการเงินทีม",
 };
@@ -51,6 +52,7 @@ export const ROLE_DESCRIPTIONS: Record<TeamRole, string> = {
 export const ASSIGNABLE_ROLES: TeamRole[] = [
   "admin",
   "pm",
+  "accounting",
   "backend",
   "design",
   "sale",
@@ -74,7 +76,18 @@ export function canEdit(role: TeamRole | null | undefined): boolean {
   return !!role && role !== "guest";
 }
 
-/** เห็นข้อมูลการเงินทีม (finance / payouts) ได้ไหม */
-export function canViewFinance(role: TeamRole | null | undefined): boolean {
-  return !!role && hasPermission(role, "view_finance");
+type FinanceActor =
+  | TeamRole
+  | Pick<Profile, "role" | "display_roles">
+  | null
+  | undefined;
+
+/** หน้าการเงิน / สลิป / ยอดเงิน — เฉพาะแอดมิน หรือป้าย/สิทธิ์บัญชี (FN) */
+export function canViewFinance(actor: FinanceActor): boolean {
+  if (!actor) return false;
+  if (typeof actor === "string") {
+    return actor === "admin" || actor === "accounting";
+  }
+  if (actor.role === "admin" || actor.role === "accounting") return true;
+  return getProfileDisplayRoles(actor).includes("accounting");
 }

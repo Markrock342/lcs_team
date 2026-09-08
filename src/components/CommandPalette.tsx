@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Modal } from "@/components/ui";
+import { useRole } from "@/components/RoleProvider";
 
 type SearchResult = {
   type: "task" | "client" | "message" | "invoice" | "prospect" | "deal";
@@ -52,6 +53,7 @@ export function CommandPalette({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const { canViewFinance } = useRole();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -148,7 +150,9 @@ export function CommandPalette({
 
         {query.length < 2 && (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {QUICK_CREATE.map((action) => (
+            {QUICK_CREATE.filter(
+              (action) => canViewFinance || !action.href.startsWith("/finance")
+            ).map((action) => (
               <button
                 key={action.href}
                 type="button"

@@ -200,8 +200,12 @@ export default function FinancePageInner() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
+    if (!canViewFinance) {
+      setLoading(false);
+      return;
+    }
     load();
-  }, []);
+  }, [canViewFinance]);
 
   useEffect(() => {
     // URL actions intentionally open a modal after client-side navigation.
@@ -589,7 +593,12 @@ export default function FinancePageInner() {
   }
 
   if (!canViewFinance) {
-    return <AccessDenied />;
+    return (
+      <AccessDenied
+        title="ไม่มีสิทธิ์เข้าการเงิน"
+        message="หน้านี้จำกัดเฉพาะแอดมินและแผนกบัญชี (FN) — สลิปและยอดเงินดูได้ที่นี่เท่านั้น"
+      />
+    );
   }
 
   if (loading) {

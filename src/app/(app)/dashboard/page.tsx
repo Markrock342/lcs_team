@@ -81,6 +81,7 @@ export default function DashboardPage() {
     const supabase = createClient();
     setError(null);
 
+    const skip = { data: [] as never[], error: null };
     const [tasksRes, clientsRes, profilesRes, ledgerRes, invoicesRes, dealsRes] =
       await Promise.all([
       supabase
@@ -89,17 +90,21 @@ export default function DashboardPage() {
         .order("created_at", { ascending: false }),
       supabase.from("clients").select("*").order("created_at", { ascending: false }),
       supabase.from("profiles").select("*"),
-      supabase
-        .from("accounting_transactions")
-        .select(
-          "*, category:accounting_categories(*), member:profiles!accounting_transactions_member_id_fkey(*), client:clients(*)"
-        )
-        .is("deleted_at", null)
-        .order("transaction_date", { ascending: false })
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("invoices")
-        .select("status, total_amount, document_type, payments:invoice_payments(amount)"),
+      canViewFinance
+        ? supabase
+            .from("accounting_transactions")
+            .select(
+              "*, category:accounting_categories(*), member:profiles!accounting_transactions_member_id_fkey(*), client:clients(*)"
+            )
+            .is("deleted_at", null)
+            .order("transaction_date", { ascending: false })
+            .order("created_at", { ascending: false })
+        : Promise.resolve(skip),
+      canViewFinance
+        ? supabase
+            .from("invoices")
+            .select("status, total_amount, document_type, payments:invoice_payments(amount)")
+        : Promise.resolve(skip),
       supabase
         .from("sales_deals")
         .select("id, title, value, stage, next_follow_up, client:clients(name)")
@@ -140,8 +145,8 @@ export default function DashboardPage() {
   useEffect(() => {
     // Updates happen only after the remote requests resolve.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadData();
-  }, []);
+    void loadData();
+  }, [canViewFinance]);
 
   const pending = tasks.filter((t) => t.status === "pending");
   const waiting = tasks.filter((t) => t.status === "waiting");
@@ -188,7 +193,11 @@ export default function DashboardPage() {
     <PageShell width="wide">
       <PageHeader
         title={`สวัสดี ทีม ${TEAM.shortName}`}
-        description="ภาพรวมงาน ลูกค้า การขาย และการเงิน พร้อมรายการที่ต้องลงมือทำต่อ"
+        description={
+          canViewFinance
+            ? "ภาพรวมงาน ลูกค้า การขาย และการเงิน พร้อมรายการที่ต้องลงมือทำต่อ"
+            : "ภาพรวมงาน ลูกค้า และการขาย พร้อมรายการที่ต้องลงมือทำต่อ"
+        }
       />
 
       <WorkspaceBrief />
@@ -213,12 +222,16 @@ export default function DashboardPage() {
             icon: <Handshake size={26} className="text-emerald-300" />,
             className: "border-emerald-500/35 bg-card hover:bg-card-hover",
           },
-          {
-            href: "/finance?income=1",
-            label: "รับเงิน",
-            icon: <ArrowDownLeft size={26} className="text-sky-300" />,
-            className: "border-sky-500/35 bg-card hover:bg-card-hover",
-          },
+          ...(canViewFinance
+            ? [
+                {
+                  href: "/finance?income=1",
+                  label: "รับเงิน",
+                  icon: <ArrowDownLeft size={26} className="text-sky-300" />,
+                  className: "border-sky-500/35 bg-card hover:bg-card-hover",
+                },
+              ]
+            : []),
           {
             href: "/clients",
             label: "ลูกค้า",

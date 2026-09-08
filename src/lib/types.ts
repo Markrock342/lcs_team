@@ -1,4 +1,14 @@
-export type TeamRole = "admin" | "pm" | "backend" | "design" | "sale" | "guest";
+export const TEAM_ROLES = [
+  "admin",
+  "pm",
+  "accounting",
+  "backend",
+  "design",
+  "sale",
+  "guest",
+] as const;
+
+export type TeamRole = (typeof TEAM_ROLES)[number];
 
 export type SalesStage = "lead" | "talking" | "quoted" | "won" | "lost";
 

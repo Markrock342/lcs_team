@@ -34,8 +34,12 @@ export default function PayoutsPage() {
   const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
+    if (!canViewFinance) {
+      setLoading(false);
+      return;
+    }
     load();
-  }, []);
+  }, [canViewFinance]);
 
   async function load() {
     setLoadError("");
@@ -59,7 +63,12 @@ export default function PayoutsPage() {
   }
 
   if (!canViewFinance) {
-    return <AccessDenied />;
+    return (
+      <AccessDenied
+        title="ไม่มีสิทธิ์เข้าการเงิน"
+        message="หน้านี้จำกัดเฉพาะแอดมินและแผนกบัญชี (FN)"
+      />
+    );
   }
 
   if (loading) {

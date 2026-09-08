@@ -80,8 +80,19 @@ export const TASK_PRIORITY_COLORS: Record<TaskPriority, string> = {
 export const ROLE_LABELS: Record<TeamRole, string> = {
   admin: "Admin",
   pm: "PM",
-  backend: "Backend",
-  design: "Design/Frontend",
+  accounting: "FN",
+  backend: "BE",
+  design: "UI",
+  sale: "Sale",
+  guest: "Guest",
+};
+
+export const ROLE_ASSIGN_LABELS: Record<TeamRole, string> = {
+  admin: "Admin",
+  pm: "PM",
+  accounting: "บัญชี (FN)",
+  backend: "Backend (BE)",
+  design: "Design (UI)",
   sale: "Sale",
   guest: "Guest",
 };
@@ -89,6 +100,7 @@ export const ROLE_LABELS: Record<TeamRole, string> = {
 export const ROLE_COLORS: Record<TeamRole, string> = {
   admin: "bg-red-500/20 text-red-300",
   pm: "bg-orange-500/20 text-orange-300",
+  accounting: "bg-teal-500/20 text-teal-200",
   backend: "bg-sky-500/20 text-sky-300",
   design: "bg-pink-500/20 text-pink-300",
   sale: "bg-emerald-500/20 text-emerald-300",

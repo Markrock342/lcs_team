@@ -11,7 +11,7 @@ import { subscribeToPush, unsubscribeFromPush, sendTestPush, getPushBlockers } f
 import { createClient } from "@/lib/supabase/client";
 import { uploadFile, isImageFile } from "@/lib/upload";
 import { exportToCSV } from "@/lib/activity";
-import { ROLE_LABELS } from "@/lib/constants";
+import { ROLE_ASSIGN_LABELS, ROLE_LABELS } from "@/lib/constants";
 import {
   ASSIGNABLE_ROLES,
   ROLE_DESCRIPTIONS,
@@ -456,7 +456,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <p className="text-sm text-muted">
-              สิทธิ์จริง: <strong>{ROLE_LABELS[profile.role]}</strong>
+              สิทธิ์จริง: <strong>{ROLE_ASSIGN_LABELS[profile.role]}</strong>
               {!isAdmin(profile.role) && " — badge ถูกกำหนดโดย admin"}
             </p>
             {!isAdmin(profile.role) &&
@@ -530,7 +530,7 @@ export default function SettingsPage() {
             <Shield size={20} className="text-accent" />
             <div>
               <h2 className="font-semibold">จัดการทีมและสิทธิ์</h2>
-              <p className="text-sm text-muted">กำหนดสิทธิ์จริงและป้ายหน้าที่ของสมาชิก</p>
+              <p className="text-sm text-muted">กำหนดสิทธิ์จริงและป้าย BE / FN / UI ของสมาชิก</p>
             </div>
           </div>
           <div className="divide-y divide-border">
@@ -553,12 +553,12 @@ export default function SettingsPage() {
                 >
                   {ASSIGNABLE_ROLES.map((role) => (
                     <option key={role} value={role}>
-                      {ROLE_LABELS[role]}
+                      {ROLE_ASSIGN_LABELS[role]}
                     </option>
                   ))}
                 </Select>
                 <div>
-                  <p className="text-sm text-muted mb-2">ป้ายที่ทีมเห็น</p>
+                  <p className="text-sm text-muted mb-2">ป้ายที่ทีมเห็น — BE / FN / UI</p>
                   <div className="flex flex-wrap gap-2">
                     {ASSIGNABLE_ROLES.map((role) => {
                       const on = getProfileDisplayRoles(member).includes(role);
@@ -579,6 +579,9 @@ export default function SettingsPage() {
                       );
                     })}
                   </div>
+                  <p className="mt-2 text-sm text-muted">
+                    ป้าย FN หรือสิทธิ์บัญชี/แอดมิน ถึงจะเข้าหน้าการเงิน สลิป และยอดเงินได้
+                  </p>
                 </div>
                 <p className="text-sm text-muted">{ROLE_DESCRIPTIONS[member.role]}</p>
                 {member.id === profile?.id && (
