@@ -83,6 +83,7 @@ function ChatPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const channelParam = searchParams.get("channel");
+  const msgParam = searchParams.get("msg");
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -115,6 +116,7 @@ function ChatPageContent() {
   const [threadCounts, setThreadCounts] = useState<Record<string, number>>({});
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [slashNotice, setSlashNotice] = useState("");
+  const [highlightMsgId, setHighlightMsgId] = useState<string | null>(null);
   const [, setPresenceTick] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
@@ -299,10 +301,34 @@ function ChatPageContent() {
 
     async function sync() {
       const msgs = await loadMessages(activeChannel!.id);
-      if (!cancelled) {
-        await markMessagesAsRead(msgs, currentUser!.id);
-        await markChannelRead(createClient(), activeChannel!.id, currentUser!.id);
-        setUnread((prev) => ({ ...prev, [activeChannel!.id]: 0 }));
+      if (cancelled) return;
+      await markMessagesAsRead(msgs, currentUser!.id);
+      await markChannelRead(createClient(), activeChannel!.id, currentUser!.id);
+      setUnread((prev) => ({ ...prev, [activeChannel!.id]: 0 }));
+
+      if (msgParam) {
+        pendingScrollBottomRef.current = false;
+        isNearBottomRef.current = false;
+        const inList = msgs.find((m) => m.id === msgParam);
+        if (inList) {
+          setHighlightMsgId(msgParam);
+        } else {
+          const full = await fetchMessageById(createClient(), msgParam);
+          if (full) {
+            setHighlightMsgId(msgParam);
+            const rootId = full.thread_id ?? full.id;
+            const root = msgs.find((m) => m.id === rootId) ?? full;
+            setThreadRoot(root);
+            const threaded = await fetchChannelMessages(
+              createClient(),
+              root.channel_id,
+              { threadId: root.id }
+            );
+            setThreadMessages(threaded.data);
+          }
+        }
+      } else {
+        setHighlightMsgId(null);
       }
     }
 
@@ -410,7 +436,7 @@ function ChatPageContent() {
       cancelled = true;
       supabase.removeChannel(msgChannel);
     };
-  }, [activeChannel, loadMessages, markMessagesAsRead, currentUser, profiles]);
+  }, [activeChannel, loadMessages, markMessagesAsRead, currentUser, profiles, msgParam]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -522,6 +548,7 @@ function ChatPageContent() {
 
   useLayoutEffect(() => {
     if (showMobileChannels || !messagesScrollRef.current) return;
+    if (highlightMsgId) return;
 
     if (pendingScrollBottomRef.current) {
       scrollToBottom("auto");
@@ -532,7 +559,16 @@ function ChatPageContent() {
     if (isNearBottomRef.current) {
       scrollToBottom("auto");
     }
-  }, [messages, showMobileChannels, activeChannel?.id, scrollToBottom]);
+  }, [messages, showMobileChannels, activeChannel?.id, scrollToBottom, highlightMsgId]);
+
+  useLayoutEffect(() => {
+    if (!highlightMsgId) return;
+    const node = document.getElementById(`msg-${highlightMsgId}`);
+    if (!node) return;
+    node.scrollIntoView({ block: "center", behavior: "smooth" });
+    pendingScrollBottomRef.current = false;
+    isNearBottomRef.current = false;
+  }, [highlightMsgId, messages, threadMessages]);
 
   function selectChannel(ch: Channel) {
     setActiveChannel(ch);
@@ -545,6 +581,15 @@ function ChatPageContent() {
     pendingScrollBottomRef.current = true;
     router.replace(chatChannelHref(ch.id), { scroll: false });
   }
+
+  useEffect(() => {
+    if (!activeChannel) return;
+    try {
+      setContent(sessionStorage.getItem(`lcs-chat-draft:${activeChannel.id}`) ?? "");
+    } catch {
+      setContent("");
+    }
+  }, [activeChannel?.id]);
 
   useEffect(() => {
     const scrollEl = messagesScrollRef.current;
@@ -847,7 +892,13 @@ function ChatPageContent() {
       setMessages((prev) => prev.map((m) => (m.id === next.id ? next : m)));
       setThreadMessages((prev) => prev.map((m) => (m.id === next.id ? next : m)));
       setEditingMessage(null);
-      setContent("");
+      try {
+        setContent(
+          sessionStorage.getItem(`lcs-chat-draft:${activeChannel.id}`) ?? ""
+        );
+      } catch {
+        setContent("");
+      }
       return;
     }
 
@@ -935,6 +986,11 @@ function ChatPageContent() {
 
     await logActivity("comment", "message", msgData?.id ?? null, `#${activeChannel.name}`);
 
+    try {
+      sessionStorage.removeItem(`lcs-chat-draft:${activeChannel.id}`);
+    } catch {
+      /* ignore */
+    }
     setContent("");
     setFile(null);
     setLinkedTaskId("");
@@ -1206,13 +1262,20 @@ function ChatPageContent() {
             </div>
 
             {pinnedMessages.length > 0 && (
-              <div className="flex items-center gap-2 border-b border-border bg-surface-soft px-4 py-2 text-sm">
+              <button
+                type="button"
+                onClick={() => {
+                  const id = pinnedMessages[0].id;
+                  setHighlightMsgId(id);
+                }}
+                className="flex min-h-11 w-full items-center gap-2 border-b border-border bg-surface-soft px-4 py-2 text-left text-sm hover:bg-card-hover"
+              >
                 <Pin size={14} className="text-accent shrink-0" />
                 <p className="min-w-0 flex-1 truncate">
                   {pinnedMessages[0].content || pinnedMessages[0].file_name || "ข้อความที่ปักหมุด"}
                   {pinnedMessages.length > 1 ? ` · อีก ${pinnedMessages.length - 1} รายการ` : ""}
                 </p>
-              </div>
+              </button>
             )}
 
             {/* Messages — Discord layout */}
@@ -1252,7 +1315,15 @@ function ChatPageContent() {
                   lastDate = msgDate;
 
                   return (
-                    <div key={msg.id}>
+                    <div
+                      key={msg.id}
+                      id={`msg-${msg.id}`}
+                      className={
+                        highlightMsgId === msg.id
+                          ? "rounded-xl bg-accent/10"
+                          : undefined
+                      }
+                    >
                       {showDivider && (
                         <div className="flex items-center gap-3 my-4">
                           <div className="flex-1 h-px bg-border" />
@@ -1307,8 +1378,16 @@ function ChatPageContent() {
                 </div>
                 <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-4 space-y-1">
                   {threadMessages.map((msg) => (
-                    <ChatMessageItem
+                    <div
                       key={msg.id}
+                      id={`msg-${msg.id}`}
+                      className={
+                        highlightMsgId === msg.id
+                          ? "rounded-xl bg-accent/10"
+                          : undefined
+                      }
+                    >
+                    <ChatMessageItem
                       msg={msg}
                       currentUserId={currentUser?.id}
                       currentUserRole={currentUser?.role}
@@ -1321,6 +1400,7 @@ function ChatPageContent() {
                       reactions={reactionsMap[msg.id] ?? []}
                       onReaction={toggleReaction}
                     />
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1375,7 +1455,15 @@ function ChatPageContent() {
                   type="button"
                   onClick={() => {
                     setEditingMessage(null);
-                    setContent("");
+                    try {
+                      setContent(
+                        sessionStorage.getItem(
+                          `lcs-chat-draft:${activeChannel.id}`
+                        ) ?? ""
+                      );
+                    } catch {
+                      setContent("");
+                    }
                   }}
                   className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover"
                   aria-label="ยกเลิกการแก้ไข"
@@ -1456,6 +1544,15 @@ function ChatPageContent() {
                   onChange={(v) => {
                     setContent(v);
                     if (v.trim()) notifyTyping();
+                    if (activeChannel && !editingMessage) {
+                      try {
+                        const key = `lcs-chat-draft:${activeChannel.id}`;
+                        if (!v.trim()) sessionStorage.removeItem(key);
+                        else sessionStorage.setItem(key, v);
+                      } catch {
+                        /* ignore */
+                      }
+                    }
                   }}
                   profiles={profiles}
                   currentUserId={currentUser?.id}

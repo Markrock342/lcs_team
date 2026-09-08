@@ -2,6 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Channel, Profile } from "./types";
 import { isSchemaError } from "./chat-messages";
 
+export const CHAT_UNREAD_EVENT = "lcs-chat-unread";
+
+export function notifyChatUnreadChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(CHAT_UNREAD_EVENT));
+}
+
 export function dmKeyFor(userA: string, userB: string) {
   return [userA, userB].sort().join(":");
 }
@@ -111,6 +118,7 @@ export async function markChannelRead(
   if (error && !isSchemaError(error.message)) {
     console.error("markChannelRead:", error.message);
   }
+  notifyChatUnreadChanged();
 }
 
 export async function fetchUnreadCounts(

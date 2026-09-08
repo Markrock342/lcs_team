@@ -22,6 +22,10 @@ export function chatDmHref(userId: string): string {
   return `/chat?dm=${encodeURIComponent(userId)}`;
 }
 
+export function chatMessageHref(channelId: string, messageId: string): string {
+  return `/chat?channel=${encodeURIComponent(channelId)}&msg=${encodeURIComponent(messageId)}`;
+}
+
 export function getChatChannelIdFromLink(link: string | null | undefined): string | null {
   if (!link?.startsWith("/chat")) return null;
   try {

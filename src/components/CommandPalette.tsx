@@ -17,14 +17,10 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { Modal } from "@/components/ui";
 import { useRole } from "@/components/RoleProvider";
-
-type SearchResult = {
-  type: "task" | "client" | "message" | "invoice" | "prospect" | "deal";
-  id: string;
-  title: string;
-  subtitle: string;
-  href: string;
-};
+import {
+  searchWorkspace,
+  type WorkspaceSearchHit,
+} from "@/lib/workspace-search";
 
 const ICONS = {
   task: CheckSquare,
@@ -56,48 +52,14 @@ export function CommandPalette({
   const router = useRouter();
   const { canViewFinance } = useRole();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [results, setResults] = useState<WorkspaceSearchHit[]>([]);
   const [loading, setLoading] = useState(false);
 
   async function search(q: string) {
     setLoading(true);
-    const supabase = createClient();
-    const pattern = `%${q}%`;
-    const [tasksRes, clientsRes, messagesRes, invoicesRes, prospectsRes, dealsRes] =
-      await Promise.all([
-        supabase.from("tasks").select("id, title, client:clients(name)").ilike("title", pattern).limit(6),
-        supabase.from("clients").select("id, name, company").ilike("name", pattern).limit(6),
-        supabase.from("messages").select("id, content, channel_id, channels(name)").is("deleted_at", null).ilike("content", pattern).limit(4),
-        supabase.from("invoices").select("id, title, client:clients(name)").ilike("title", pattern).limit(4),
-        supabase.from("sales_prospects").select("id, name, contact_phone").ilike("name", pattern).limit(6),
-        supabase.from("sales_deals").select("id, title, company").ilike("title", pattern).limit(4),
-      ]);
-
-    const items: SearchResult[] = [];
-    for (const row of tasksRes.data ?? []) {
-      const raw = row as { id: string; title: string; client?: { name: string } | { name: string }[] | null };
-      const client = Array.isArray(raw.client) ? raw.client[0] : raw.client;
-      items.push({ type: "task", id: raw.id, title: raw.title, subtitle: client?.name ?? "งาน", href: `/tasks?open=${raw.id}` });
-    }
-    for (const row of clientsRes.data ?? []) {
-      items.push({ type: "client", id: row.id, title: row.name, subtitle: row.company ?? "ลูกค้า", href: `/clients/${row.id}` });
-    }
-    for (const row of messagesRes.data ?? []) {
-      const raw = row as { id: string; content: string | null; channels?: { name: string } | { name: string }[] | null };
-      const channel = Array.isArray(raw.channels) ? raw.channels[0] : raw.channels;
-      items.push({ type: "message", id: raw.id, title: (raw.content ?? "").slice(0, 80), subtitle: `#${channel?.name ?? "chat"}`, href: "/chat" });
-    }
-    for (const row of invoicesRes.data ?? []) {
-      const raw = row as { id: string; title: string; client?: { name: string } | { name: string }[] | null };
-      const client = Array.isArray(raw.client) ? raw.client[0] : raw.client;
-      items.push({ type: "invoice", id: raw.id, title: raw.title, subtitle: client?.name ?? "เอกสาร", href: "/invoices" });
-    }
-    for (const row of prospectsRes.data ?? []) {
-      items.push({ type: "prospect", id: row.id, title: row.name, subtitle: row.contact_phone ?? "เป้าหมาย", href: `/sales?view=prospects&open=${row.id}` });
-    }
-    for (const row of dealsRes.data ?? []) {
-      items.push({ type: "deal", id: row.id, title: row.title, subtitle: row.company ?? "ดีล", href: `/sales?view=pipeline&open=${row.id}` });
-    }
+    const items = await searchWorkspace(createClient(), q, {
+      includeFinance: canViewFinance,
+    });
     setResults(items);
     setLoading(false);
   }
@@ -119,7 +81,7 @@ export function CommandPalette({
     }
     const timer = setTimeout(() => void search(query.trim()), 250);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, canViewFinance]);
 
   if (!open) return null;
 
@@ -182,7 +144,7 @@ export function CommandPalette({
                 key={`${result.type}-${result.id}`}
                 href={result.href}
                 onClick={onClose}
-                className="flex items-center gap-3 rounded-xl p-3 hover:bg-card-hover"
+                className="flex min-h-11 items-center gap-3 rounded-xl p-3 hover:bg-card-hover"
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10">
                   <Icon size={16} className="text-accent" />

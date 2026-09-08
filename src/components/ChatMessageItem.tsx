@@ -154,7 +154,7 @@ export function ChatMessageItem({
         </div>
 
         {replyPreview && (
-          <div className="flex items-start gap-1.5 mb-1.5 pl-2 border-l-2 border-accent/40 text-xs text-muted">
+          <div className="mb-1.5 flex items-start gap-1.5 rounded-xl bg-surface-soft px-3 py-2 text-xs text-muted">
             <CornerDownRight size={12} className="shrink-0 mt-0.5" />
             <div className="min-w-0">
               <span className="text-accent font-medium">

@@ -8,8 +8,10 @@ import { useRole } from "@/components/RoleProvider";
 import { Button, Card, CardHeader, EmptyState, ErrorState, PageLoader, StatusStamp } from "@/components/ui";
 import { PageHeader, PageShell } from "@/components/mobile-ui";
 import { TASK_STATUS_LABELS } from "@/lib/constants";
-import type { Task, SalesDeal, SalesProspect } from "@/lib/types";
+import type { Task, SalesDeal, SalesProspect, Channel, Profile } from "@/lib/types";
 import type { AppNotification, Invoice } from "@/lib/extras-types";
+import { chatChannelHref } from "@/lib/channels";
+import { channelTitle, fetchUnreadCounts } from "@/lib/chat-workspace";
 
 type DayItem = {
   id: string;
@@ -38,12 +40,14 @@ export default function TodayPage() {
       return;
     }
 
-    const [tasksRes, dealsRes, prospectsRes, invoicesRes, notifRes] = await Promise.all([
+    const [tasksRes, dealsRes, prospectsRes, invoicesRes, notifRes, channelsRes, profilesRes] = await Promise.all([
       supabase.from("tasks").select("id, title, due_date, status, assigned_to").neq("status", "done").order("due_date"),
       supabase.from("sales_deals").select("id, title, next_follow_up, stage, owner_id").not("next_follow_up", "is", null),
       supabase.from("sales_prospects").select("id, name, next_follow_up, status, owner_id").not("next_follow_up", "is", null),
       supabase.from("invoices").select("id, title, due_date, status, total_amount").in("status", ["sent", "partial", "overdue"]),
       supabase.from("notifications").select("*").eq("user_id", user.id).eq("read", false).order("created_at", { ascending: false }).limit(8),
+      supabase.from("channels").select("*"),
+      supabase.from("profiles").select("id, display_name"),
     ]);
 
     const next: DayItem[] = [];
@@ -111,6 +115,29 @@ export default function TodayPage() {
         tone: "slate",
       });
     }
+
+    const channelList = (channelsRes.data ?? []) as Channel[];
+    const team = (profilesRes.data ?? []) as Profile[];
+    const unread = await fetchUnreadCounts(
+      supabase,
+      user.id,
+      channelList.map((ch) => ch.id)
+    );
+    for (const ch of channelList) {
+      const count = unread[ch.id] ?? 0;
+      if (!count) continue;
+      next.push({
+        id: `chat-${ch.id}`,
+        title: channelTitle(ch, team, user.id),
+        detail: `${count} ข้อความยังไม่อ่าน`,
+        href: chatChannelHref(ch.id),
+        action: "อ่านแชท",
+        tone: "blue",
+      });
+    }
+
+    const urgency = { red: 0, amber: 1, violet: 2, blue: 3, slate: 4 } as const;
+    next.sort((a, b) => urgency[a.tone] - urgency[b.tone]);
 
     setItems(next);
     setLoading(false);

@@ -43,17 +43,28 @@ export function NotificationBell() {
     } = await supabase.auth.getUser();
     if (!user) return false;
 
-    const { data, count: unread, error } = await supabase
-      .from("notifications")
-      .select("*", { count: "exact" })
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(12);
+    const [{ data, error }, unreadRes] = await Promise.all([
+      supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(12),
+      supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("read", false),
+    ]);
 
     if (error) return false;
 
     setItems(data ?? []);
-    setCount(unread ?? 0);
+    setCount(
+      unreadRes.error
+        ? (data ?? []).filter((row) => !row.read).length
+        : unreadRes.count ?? 0
+    );
     return true;
   }, []);
 
@@ -193,7 +204,7 @@ export function NotificationBell() {
       >
         <Bell size={20} />
         {count > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-(--status-red-fg) px-1 text-[10px] font-bold text-white">
             {count > 99 ? "99+" : count}
           </span>
         )}

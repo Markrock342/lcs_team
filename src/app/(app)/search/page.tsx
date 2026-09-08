@@ -1,6 +1,6 @@
 "use client";
 
-import { GlobalSearchModal } from "@/components/GlobalSearchModal";
+import { CommandPalette } from "@/components/CommandPalette";
 import { PageHeader, PageShell } from "@/components/mobile-ui";
 import { Button } from "@/components/ui";
 import { Search } from "lucide-react";
@@ -13,9 +13,9 @@ export default function SearchPage() {
     <PageShell width="medium">
       <PageHeader
         title="ค้นหา"
-        description="ค้นหางาน ลูกค้า แชท และใบแจ้งหนี้จากที่เดียว"
+        description="ค้นหางาน ลูกค้า แชท เป้าหมายขาย และเอกสารจากที่เดียว"
       />
-      <GlobalSearchModal open={open} onClose={() => setOpen(false)} />
+      <CommandPalette open={open} onClose={() => setOpen(false)} />
       {!open && (
         <section className="ticket-card flex flex-col items-start gap-5 p-6 sm:p-8">
           <div className="flex min-h-14 min-w-14 items-center justify-center rounded-2xl bg-surface-soft text-muted">
@@ -24,13 +24,10 @@ export default function SearchPage() {
           <div className="space-y-1">
             <h2 className="text-xl font-semibold">พร้อมค้นหาเมื่อคุณต้องการ</h2>
             <p className="max-w-lg text-sm leading-relaxed text-muted">
-              เปิดหน้าต่างค้นหาอีกครั้ง หรือกด ⌘K ได้จากทุกหน้า
+              เปิดหน้าต่างค้นหาอีกครั้ง หรือกด ⌘K ได้จากทุกหน้า คลิกผลลัพธ์แชทจะพาไปข้อความนั้นเลย
             </p>
           </div>
-          <Button
-            type="button"
-            onClick={() => setOpen(true)}
-          >
+          <Button type="button" onClick={() => setOpen(true)}>
             <Search size={18} />
             เปิดค้นหา
           </Button>

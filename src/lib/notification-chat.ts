@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { chatChannelHref } from "@/lib/channels";
+import { chatMessageHref } from "@/lib/channels";
 import { deliverNotifications } from "@/lib/notification-server";
 
 type MessageRow = {
@@ -67,7 +67,7 @@ export async function processChatMessageNotifications(
     message.content?.trim().slice(0, 80) ||
     message.file_name ||
     "ส่งไฟล์";
-  const link = chatChannelHref(message.channel_id);
+  const link = chatMessageHref(message.channel_id, message.id);
   const chName = channelName(message.channels);
   const isDm = kind === "dm";
   const mentionedIds = message.mentioned_ids ?? [];

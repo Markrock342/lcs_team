@@ -13,6 +13,7 @@ import { Logo } from "./Logo";
 import { NotificationBell } from "./NotificationBell";
 import { getPageTitle } from "./mobile-ui";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
+import { useChatUnreadTotal } from "@/hooks/useChatUnread";
 import { MAIN_NAV, EXTRA_NAV, MOBILE_NAV, isNavActive, filterNavByAccess } from "@/lib/nav";
 import { RoleProvider } from "./RoleProvider";
 import { canViewFinance } from "@/lib/permissions";
@@ -21,14 +22,17 @@ import type { Profile } from "@/lib/types";
 function NavLinks({
   items,
   pathname,
+  chatUnread = 0,
 }: {
   items: typeof MAIN_NAV;
   pathname: string;
+  chatUnread?: number;
 }) {
   return (
     <>
       {items.map(({ href, label, icon: Icon }) => {
         const active = isNavActive(pathname, href);
+        const showUnread = href === "/chat" && chatUnread > 0 && !active;
         return (
           <Link
             key={href}
@@ -41,7 +45,12 @@ function NavLinks({
             aria-current={active ? "page" : undefined}
           >
             <Icon size={20} />
-            {label}
+            <span className="flex-1 truncate">{label}</span>
+            {showUnread && (
+              <span className="min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-white">
+                {chatUnread > 99 ? "99+" : chatUnread}
+              </span>
+            )}
           </Link>
         );
       })}
@@ -67,6 +76,7 @@ export function AppShell({
   const mainNav = filterNavByAccess(MAIN_NAV, { canViewFinance: financeAccess });
   const extraNav = filterNavByAccess(EXTRA_NAV, { canViewFinance: financeAccess });
   const mobileNav = filterNavByAccess(MOBILE_NAV, { canViewFinance: financeAccess });
+  const chatUnread = useChatUnreadTotal();
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -135,10 +145,10 @@ export function AppShell({
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1">
-          <NavLinks items={mainNav} pathname={pathname} />
+          <NavLinks items={mainNav} pathname={pathname} chatUnread={chatUnread} />
           <div className="pt-3 mt-3 border-t border-border">
             <p className="px-3 py-1 text-[10px] text-muted font-semibold">เพิ่มเติม</p>
-            <NavLinks items={extraNav} pathname={pathname} />
+            <NavLinks items={extraNav} pathname={pathname} chatUnread={chatUnread} />
           </div>
         </nav>
         {profile && (
@@ -257,20 +267,29 @@ export function AppShell({
         </div>
       </main>
 
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-sidebar/95 backdrop-blur-md border-t border-border pb-safe">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-sidebar border-t border-border pb-safe">
         <div className="flex items-stretch justify-around min-h-16 px-1">
           {mobileNav.map(({ href, label, icon: Icon }) => {
             const active = isNavActive(pathname, href);
+            const showUnread = href === "/chat" && chatUnread > 0 && !active;
             return (
               <Link
                 key={href}
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-2 min-h-11 touch-manipulation ${
+                aria-label={showUnread ? `${label} ${chatUnread} ข้อความยังไม่อ่าน` : label}
+                className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 py-2 min-h-11 touch-manipulation ${
                   active ? "text-accent" : "text-muted"
                 }`}
               >
-                <Icon size={22} strokeWidth={active ? 2.5 : 2} />
+                <span className="relative">
+                  <Icon size={22} strokeWidth={active ? 2.5 : 2} />
+                  {showUnread && (
+                    <span className="absolute -right-2.5 -top-1 min-w-4 rounded-full bg-accent px-1 text-center text-[9px] font-semibold leading-4 text-white">
+                      {chatUnread > 99 ? "99+" : chatUnread}
+                    </span>
+                  )}
+                </span>
                 <span className="text-[10px] font-medium">{label}</span>
               </Link>
             );

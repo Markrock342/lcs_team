@@ -68,7 +68,7 @@ export async function runSlashCommand(
       kind: "ok",
       content: `สร้างงาน «${data.title}»`,
       linkedTaskId: data.id,
-      href: `/tasks`,
+      href: `/tasks?open=${data.id}`,
     };
   }
 

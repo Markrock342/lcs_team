@@ -426,10 +426,13 @@ export default function TasksPage() {
       setExpanded(new Set(withSubs));
     }
 
-    const openId = new URLSearchParams(window.location.search).get("open");
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get("open");
     if (openId) {
       const found = loaded.find((task) => task.id === openId);
       if (found) openEdit(found);
+    } else if (params.get("create") === "1") {
+      openCreateParent();
     }
 
     setLoading(false);
