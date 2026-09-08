@@ -22,29 +22,61 @@ export type MappedProspect = {
   extra: Record<string, string>;
 };
 
+export const DEFAULT_PROSPECT_CATEGORY = "แบดมินตัน";
+export const PROSPECT_CATEGORIES = ["แบดมินตัน", "อื่นๆ"] as const;
+
 export const FIELD_ALIASES: Record<Exclude<ProspectField, "skip">, string[]> = {
-  name: ["name", "ชื่อ", "ชื่อสนาม", "สนาม", "venue", "court", "ลูกค้า", "title"],
+  name: ["ชื่อสนาม", "ชื่อสถานที่", "ชื่อลูกค้า", "สนาม", "venue", "courtname", "name", "title", "ลูกค้า"],
   company: ["company", "บริษัท", "องค์กร", "brand"],
-  contact_name: ["contact", "contact_name", "ผู้ติดต่อ", "ชื่อผู้ติดต่อ", "เจ้าของ", "manager"],
-  contact_phone: ["phone", "tel", "mobile", "เบอร์", "โทร", "โทรศัพท์", "เบอร์โทร"],
-  contact_email: ["email", "mail", "อีเมล", "อีเมล์", "e-mail"],
+  contact_name: ["contactname", "ผู้ติดต่อ", "ชื่อผู้ติดต่อ", "เจ้าของ", "manager"],
+  contact_phone: ["phone", "tel", "mobile", "telephone", "เบอร์", "โทรศัพท์", "เบอร์โทร", "โทร"],
+  contact_email: ["email", "mail", "e-mail", "อีเมล", "อีเมล์"],
   address: ["address", "ที่อยู่", "location", "ที่ตั้ง"],
-  province: ["province", "จังหวัด", "city", "เมือง"],
-  notes: ["notes", "note", "หมายเหตุ", "รายละเอียด", "comment"],
+  province: ["province", "จังหวัด"],
+  notes: ["notes", "note", "หมายเหตุ", "รายละเอียด", "comment", "pitch", "pitchที่แนะนำ", "pitchที่แนะนำ"],
 };
 
+const SKIP_ALIASES = ["no", "no.", "ลำดับ", "#", "checked", "เช็ค"];
+
+const HEADER_HINTS = [
+  "ชื่อสนาม",
+  "จังหวัด",
+  "โทรศัพท์",
+  "อีเมล",
+  "email",
+  "เบอร์",
+  "venue",
+  "province",
+  "phone",
+];
+
 export function normalizeHeader(value: string) {
-  return value.trim().toLowerCase().replace(/[\s_\-./]+/g, "");
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_\-./|—–]+/g, "");
+}
+
+function isThai(value: string) {
+  return /[ก-๙]/.test(value);
+}
+
+function headerMatches(header: string, alias: string) {
+  const key = normalizeHeader(header);
+  const needle = normalizeHeader(alias);
+  if (!key || !needle) return false;
+  if (key === needle) return true;
+  if (isThai(alias) && needle.length >= 2 && key.includes(needle)) return true;
+  return false;
 }
 
 export function guessField(header: string): ProspectField {
   const key = normalizeHeader(header);
+  if (!key || SKIP_ALIASES.some((alias) => normalizeHeader(alias) === key)) return "skip";
   for (const [field, aliases] of Object.entries(FIELD_ALIASES) as Array<
     [Exclude<ProspectField, "skip">, string[]]
   >) {
-    if (aliases.some((alias) => normalizeHeader(alias) === key || key.includes(normalizeHeader(alias)))) {
-      return field;
-    }
+    if (aliases.some((alias) => headerMatches(header, alias))) return field;
   }
   return "skip";
 }
@@ -58,11 +90,37 @@ export function prospectKey(input: {
   contact_phone?: string | null;
   contact_email?: string | null;
 }) {
-  const phone = digitsOnly(input.contact_phone);
+  const phone = (input.contact_phone ?? "").replace(/\D/g, "");
   const email = (input.contact_email ?? "").trim().toLowerCase();
   if (phone.length >= 8) return `p:${phone}`;
   if (email) return `e:${email}`;
   return `n:${input.name.trim().toLowerCase()}`;
+}
+
+export function isBrokenProspectName(name: string) {
+  return /^\d+$/.test(name.trim()) || /^no\.?\s*\d+$/i.test(name.trim());
+}
+
+export function prospectCategory(extra: Record<string, unknown> | null | undefined) {
+  const value = extra?.category;
+  return typeof value === "string" && value.trim() ? value.trim() : "อื่นๆ";
+}
+
+export function extraText(extra: Record<string, unknown> | null | undefined, keys: string[]) {
+  if (!extra) return "";
+  for (const key of keys) {
+    const value = extra[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+export function guessCategory(fileName: string, headers: string[]) {
+  const haystack = `${fileName} ${headers.join(" ")}`.toLowerCase();
+  if (haystack.includes("badminton") || haystack.includes("แบด") || headers.some((h) => h.includes("ชื่อสนาม"))) {
+    return DEFAULT_PROSPECT_CATEGORY;
+  }
+  return "อื่นๆ";
 }
 
 export function parseDelimited(text: string): string[][] {
@@ -108,30 +166,77 @@ export function parseDelimited(text: string): string[][] {
   return rows;
 }
 
-export async function parseSpreadsheet(file: File): Promise<{ headers: string[]; rows: string[][] }> {
+function asMatrix(rows: unknown[][]) {
+  return rows
+    .map((row) => (Array.isArray(row) ? row.map((cell) => String(cell ?? "").trim()) : []))
+    .filter((row) => row.some((cell) => cell));
+}
+
+function headerScore(cells: string[]) {
+  const keys = cells.map(normalizeHeader);
+  return HEADER_HINTS.reduce((score, hint) => {
+    const needle = normalizeHeader(hint);
+    return keys.some((key) => key === needle || (needle.length >= 3 && key.includes(needle)))
+      ? score + 1
+      : score;
+  }, 0);
+}
+
+function findHeaderIndex(matrix: string[][]) {
+  let bestIndex = 0;
+  let bestScore = -1;
+  matrix.slice(0, 10).forEach((row, index) => {
+    const score = headerScore(row);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  });
+  return bestScore >= 2 ? bestIndex : 0;
+}
+
+function pickSheetName(names: string[]) {
+  const skip = /coverage|excluded|notes|readme|วิธีใช้/i;
+  return (
+    names.find((name) => /lead/i.test(name) && !skip.test(name)) ??
+    names.find((name) => !skip.test(name)) ??
+    names[0]
+  );
+}
+
+function tableFromMatrix(matrix: string[][]) {
+  const headerIndex = findHeaderIndex(matrix);
+  const headers = matrix[headerIndex] ?? [];
+  const rows = matrix.slice(headerIndex + 1).map((row) =>
+    headers.map((_, index) => String(row[index] ?? "").trim())
+  );
+  return { headers, rows, headerIndex };
+}
+
+export async function parseSpreadsheet(
+  file: File
+): Promise<{ headers: string[]; rows: string[][]; sheetName: string; headerRow: number }> {
   const name = file.name.toLowerCase();
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
     const XLSX = await import("xlsx");
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array" });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const matrix = XLSX.utils.sheet_to_json<string[]>(sheet, {
-      header: 1,
-      raw: false,
-      defval: "",
-    });
-    const [headers = [], ...rows] = matrix.filter((row) =>
-      row.some((cell) => String(cell ?? "").trim())
+    const sheetName = pickSheetName(workbook.SheetNames);
+    const sheet = workbook.Sheets[sheetName];
+    const matrix = asMatrix(
+      XLSX.utils.sheet_to_json<string[]>(sheet, {
+        header: 1,
+        raw: false,
+        defval: "",
+      })
     );
-    return {
-      headers: headers.map((cell) => String(cell ?? "").trim()),
-      rows: rows.map((row) => headers.map((_, index) => String(row[index] ?? "").trim())),
-    };
+    const table = tableFromMatrix(matrix);
+    return { ...table, sheetName, headerRow: table.headerIndex + 1 };
   }
 
   const text = await file.text();
-  const [headers = [], ...rows] = parseDelimited(text);
-  return { headers, rows };
+  const table = tableFromMatrix(parseDelimited(text));
+  return { ...table, sheetName: file.name, headerRow: table.headerIndex + 1 };
 }
 
 export function applyMapping(
@@ -154,7 +259,7 @@ export function applyMapping(
       values[field] = values[field] ? `${values[field]} ${value}` : value;
     });
     const name = (values.name ?? values.company ?? "").trim();
-    if (!name) continue;
+    if (!name || isBrokenProspectName(name)) continue;
     const prospect: MappedProspect = {
       name,
       company: values.company?.trim() || null,
@@ -178,8 +283,9 @@ export function defaultMapping(headers: string[]): Record<number, ProspectField>
   headers.forEach((header, index) => {
     mapping[index] = guessField(header);
   });
-  if (!Object.values(mapping).includes("name") && headers.length > 0) {
-    mapping[0] = "name";
+  if (!Object.values(mapping).includes("name")) {
+    const named = headers.findIndex((header) => /ชื่อ|สนาม|venue|court/i.test(header));
+    if (named >= 0) mapping[named] = "name";
   }
   return mapping;
 }

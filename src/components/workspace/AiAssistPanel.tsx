@@ -58,7 +58,7 @@ export function AiAssistPanel({
         ผู้ช่วยร่างข้อความ
       </div>
       <p className="text-sm text-muted">
-        AI ร่างให้เท่านั้น ต้องตรวจก่อนคัดลอกหรือบันทึก ไม่มีการส่งแทน
+        AI ร่างให้เท่านั้น ต้องตรวจก่อน แล้วค่อยส่งจากเมลทีมเอง ระบบไม่ยิงแทน
       </p>
       <div className="flex flex-wrap gap-2">
         {ACTIONS.map((action) => (

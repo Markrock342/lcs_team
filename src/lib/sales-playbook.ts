@@ -15,8 +15,13 @@ export const PLAYBOOK = {
 
 export function prospectContext(prospect: Pick<
   SalesProspect,
-  "name" | "company" | "contact_name" | "contact_phone" | "contact_email" | "province" | "address" | "notes" | "status"
+  "name" | "company" | "contact_name" | "contact_phone" | "contact_email" | "province" | "address" | "notes" | "status" | "extra"
 >) {
+  const extra = prospect.extra ?? {};
+  const extraLines = Object.entries(extra)
+    .filter(([, value]) => typeof value === "string" && value.trim())
+    .slice(0, 8)
+    .map(([key, value]) => `${key}: ${value}`);
   return [
     `สนาม: ${prospect.name}`,
     prospect.company ? `บริษัท: ${prospect.company}` : "",
@@ -27,6 +32,7 @@ export function prospectContext(prospect: Pick<
     prospect.address ? `ที่อยู่: ${prospect.address}` : "",
     prospect.notes ? `บันทึก: ${prospect.notes}` : "",
     `สถานะ: ${prospect.status}`,
+    ...extraLines,
   ]
     .filter(Boolean)
     .join("\n");

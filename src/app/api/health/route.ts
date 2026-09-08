@@ -81,6 +81,18 @@ export async function GET() {
     fix: "ใส่ GEMINI_API_KEY ใน environment ของเซิร์ฟเวอร์ อย่าใส่ใน NEXT_PUBLIC_",
   });
 
+  const gmail = Boolean(
+    (process.env.SALES_GMAIL_USER?.trim() || process.env.SALES_SMTP_USER?.trim()) &&
+      (process.env.SALES_GMAIL_APP_PASSWORD?.trim() || process.env.SALES_SMTP_PASS?.trim())
+  );
+  checks.push({
+    id: "sales-gmail",
+    label: "เมลทีมขาย",
+    ok: gmail,
+    detail: gmail ? "พร้อมส่งจากเมลทีมหลังกดยืนยัน" : "ยังไม่มี SALES_GMAIL_USER / SALES_GMAIL_APP_PASSWORD",
+    fix: "สร้างรหัสผ่านแอปของ Gmail แล้วใส่ใน Vercel — อย่าใส่รหัสเข้าจีเมลปกติ และอย่าใส่ในโค้ด",
+  });
+
   checks.push({
     id: "cron",
     label: "Cron secret",

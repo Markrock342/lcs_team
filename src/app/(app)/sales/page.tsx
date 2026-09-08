@@ -50,6 +50,12 @@ import { SavedViewsBar } from "@/components/workspace/SavedViewsBar";
 import { useActionFeedback } from "@/components/workspace/ActionFeedback";
 import { readLastFilters, writeLastFilters } from "@/lib/saved-views";
 import type { MappedProspect } from "@/lib/prospect-import";
+import {
+  DEFAULT_PROSPECT_CATEGORY,
+  extraText,
+  isBrokenProspectName,
+  prospectCategory,
+} from "@/lib/prospect-import";
 import type {
   Client,
   Profile,
@@ -122,6 +128,9 @@ function SalesPageInner() {
     return saved && saved !== "all" ? (saved as ProspectStatus) : "all";
   });
   const [openProspect, setOpenProspect] = useState<SalesProspect | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState(DEFAULT_PROSPECT_CATEGORY);
+  const [regionFilter, setRegionFilter] = useState<string | null>(null);
+  const [provinceFilter, setProvinceFilter] = useState<string | null>(null);
 
   useEffect(() => {
     const nextView = searchParams.get("view");
@@ -288,11 +297,26 @@ function SalesPageInner() {
     });
   }
 
-  async function importProspects(rows: MappedProspect[], ownerId: string | null) {
+  async function importProspects(
+    rows: MappedProspect[],
+    ownerId: string | null,
+    options: { category: string; replaceBroken: boolean }
+  ) {
     setSaving(true);
     const supabase = createClient();
+    if (options.replaceBroken) {
+      const brokenIds = prospects.filter((item) => isBrokenProspectName(item.name)).map((item) => item.id);
+      if (brokenIds.length) {
+        await supabase.from("sales_prospects").delete().in("id", brokenIds);
+      }
+    }
     const batch = new Date().toISOString();
-    const seen = new Set(prospects.map((item) => item.external_key).filter(Boolean) as string[]);
+    const seen = new Set(
+      prospects
+        .filter((item) => !options.replaceBroken || !isBrokenProspectName(item.name))
+        .map((item) => item.external_key)
+        .filter(Boolean) as string[]
+    );
     const unique: MappedProspect[] = [];
     for (const row of rows) {
       if (seen.has(row.external_key)) continue;
@@ -305,19 +329,30 @@ function SalesPageInner() {
     }
     const { error } = await supabase.from("sales_prospects").insert(
       unique.map((row) => ({
-        ...row,
-        extra: Object.keys(row.extra).length ? row.extra : null,
+        name: row.name,
+        company: row.company,
+        contact_name: row.contact_name,
+        contact_phone: row.contact_phone,
+        contact_email: row.contact_email,
+        address: row.address,
+        province: row.province,
+        notes: row.notes,
+        extra: { ...row.extra, category: options.category },
         owner_id: ownerId,
         status: ownerId ? "assigned" : "new",
         source: "excel",
         import_batch_id: batch,
         created_by: profile?.id ?? null,
+        external_key: row.external_key,
       }))
     );
     setSaving(false);
     if (error) return error.message;
     const skipped = rows.length - unique.length;
     toast(skipped ? `นำเข้า ${unique.length} รายชื่อ (ข้ามซ้ำ ${skipped})` : `นำเข้า ${unique.length} รายชื่อ`);
+    setCategoryFilter(options.category);
+    setRegionFilter(null);
+    setProvinceFilter(null);
     await load();
     router.replace("/sales?view=prospects");
     return null;
@@ -347,6 +382,36 @@ function SalesPageInner() {
   const visibleProspects = prospects.filter(
     (item) => statusFilter === "all" || item.status === statusFilter
   );
+  const brokenCount = prospects.filter((item) => isBrokenProspectName(item.name)).length;
+  const categoryCounts = new Map<string, number>();
+  for (const item of visibleProspects) {
+    const category = prospectCategory(item.extra);
+    categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
+  }
+  const activeCategory = categoryCounts.has(categoryFilter)
+    ? categoryFilter
+    : [...categoryCounts.keys()][0] ?? categoryFilter;
+  const categorized = visibleProspects.filter(
+    (item) => prospectCategory(item.extra) === activeCategory
+  );
+  const regionGroups = new Map<string, SalesProspect[]>();
+  for (const item of categorized) {
+    const region = extraText(item.extra, ["ภูมิภาค", "region"]) || "ไม่ระบุภาค";
+    regionGroups.set(region, [...(regionGroups.get(region) ?? []), item]);
+  }
+  const regionProspects = regionFilter
+    ? categorized.filter(
+        (item) => (extraText(item.extra, ["ภูมิภาค", "region"]) || "ไม่ระบุภาค") === regionFilter
+      )
+    : categorized;
+  const provinceGroups = new Map<string, SalesProspect[]>();
+  for (const item of regionProspects) {
+    const province = item.province?.trim() || "ไม่ระบุจังหวัด";
+    provinceGroups.set(province, [...(provinceGroups.get(province) ?? []), item]);
+  }
+  const courtProspects = provinceFilter
+    ? regionProspects.filter((item) => (item.province?.trim() || "ไม่ระบุจังหวัด") === provinceFilter)
+    : [];
   const pipelineValue = deals.filter((d) => d.stage !== "lost").reduce((sum, d) => sum + (d.value ?? 0), 0);
   const openCount = deals.filter((d) => d.stage !== "won" && d.stage !== "lost").length;
   const wonCount = deals.filter((d) => d.stage === "won").length;
@@ -380,7 +445,7 @@ function SalesPageInner() {
       <Card>
         <CardHeader
           title="ผู้ช่วย Gemini"
-          description="เปิดการ์ดรายชื่อเป้าหมายด้านล่าง แล้วกดร่างอีเมล สคริปต์โทร สรุปการคุย หรืองานถัดไป — ระบบไม่ส่งข้อความแทน"
+          description="เปิดการ์ดรายชื่อเป้าหมายด้านล่าง แล้วกดร่างอีเมล สคริปต์โทร สรุปการคุย หรืองานถัดไป — AI ไม่ยิงเมลแทน ต้องกดส่งเองจากเมลทีม"
           icon={<Sparkles size={18} className="text-accent" />}
         />
       </Card>
@@ -427,12 +492,23 @@ function SalesPageInner() {
               </option>
             ))}
           </Select>
+          {brokenCount > 0 && canEdit && (
+            <div className="rounded-2xl bg-(--status-amber-bg) p-4 text-(--status-amber-fg)">
+              <p className="font-semibold">รายชื่อนำเข้าผิด {brokenCount} รายการ</p>
+              <p className="mt-1 text-sm">
+                ไฟล์มีแถวหัวเรื่องก่อนตาราง เลยอ่านเลขลำดับเป็นชื่อสนาม นำเข้าใหม่อีกครั้งได้เลย
+              </p>
+              <Button className="mt-3" onClick={() => setImportOpen(true)}>
+                นำเข้าใหม่
+              </Button>
+            </div>
+          )}
           {visibleProspects.length === 0 ? (
             <Card>
               <EmptyState
                 icon={<Handshake size={28} />}
                 title="ยังไม่มีรายชื่อเป้าหมาย"
-                description="นำเข้าไฟล์ Excel รายชื่อสนาม แล้วเปิดการ์ดรายชื่อเพื่อใช้ผู้ช่วย Gemini"
+                description="นำเข้าไฟล์ Excel รายชื่อสนาม ระบบจะจัดหมวดและจังหวัดให้อัตโนมัติ"
                 action={
                   canEdit ? (
                     <Button onClick={() => setImportOpen(true)}>
@@ -443,41 +519,130 @@ function SalesPageInner() {
               />
             </Card>
           ) : (
-            <div className="auto-card-grid">
-              {visibleProspects.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setOpenProspect(item)}
-                  className="job-jacket p-4 text-left"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold">{item.name}</p>
-                      <p className="mt-1 text-sm text-muted">
-                        {item.contact_name || item.company || "ยังไม่มีผู้ติดต่อ"}
-                      </p>
-                    </div>
-                    <StatusStamp
-                      label={PROSPECT_STATUS_LABELS[item.status]}
-                      tone={toneFromClass(PROSPECT_STATUS_COLORS[item.status])}
-                    />
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {[...categoryCounts.keys()].sort((a, b) => a.localeCompare(b, "th")).map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => {
+                      setCategoryFilter(category);
+                      setRegionFilter(null);
+                      setProvinceFilter(null);
+                    }}
+                    className={`min-h-11 rounded-xl px-3.5 text-sm font-medium ${
+                      activeCategory === category
+                        ? "bg-accent/20 text-accent"
+                        : "bg-card text-muted hover:bg-card-hover hover:text-foreground"
+                    }`}
+                  >
+                    {category} ({categoryCounts.get(category)})
+                  </button>
+                ))}
+              </div>
+
+              {!regionFilter && regionGroups.size > 1 && (
+                <div className="auto-card-grid">
+                  {[...regionGroups.entries()]
+                    .sort((a, b) => a[0].localeCompare(b[0], "th"))
+                    .map(([region, items]) => (
+                      <button
+                        key={region}
+                        type="button"
+                        onClick={() => {
+                          setRegionFilter(region);
+                          setProvinceFilter(null);
+                        }}
+                        className="job-jacket p-4 text-left"
+                      >
+                        <p className="font-semibold">{region}</p>
+                        <p className="mt-1 text-sm text-muted">{items.length} สนาม</p>
+                      </button>
+                    ))}
+                </div>
+              )}
+
+              {(regionFilter || regionGroups.size <= 1) && !provinceFilter && (
+                <div className="space-y-3">
+                  {regionFilter && (
+                    <Button
+                      variant="secondary"
+                      type="button"
+                      onClick={() => {
+                        setRegionFilter(null);
+                        setProvinceFilter(null);
+                      }}
+                    >
+                      กลับไปเลือกภาค
+                    </Button>
+                  )}
+                  <div className="auto-card-grid">
+                    {[...provinceGroups.entries()]
+                      .sort((a, b) => a[0].localeCompare(b[0], "th"))
+                      .map(([province, items]) => (
+                        <button
+                          key={province}
+                          type="button"
+                          onClick={() => setProvinceFilter(province)}
+                          className="job-jacket p-4 text-left"
+                        >
+                          <p className="font-semibold">{province}</p>
+                          <p className="mt-1 text-sm text-muted">{items.length} สนาม</p>
+                        </button>
+                      ))}
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted">
-                    {item.contact_phone && (
-                      <span className="inline-flex items-center gap-1">
-                        <Phone size={14} /> {item.contact_phone}
-                      </span>
-                    )}
-                    {item.contact_email && (
-                      <span className="inline-flex items-center gap-1">
-                        <Mail size={14} /> {item.contact_email}
-                      </span>
-                    )}
+                </div>
+              )}
+
+              {provinceFilter && (
+                <div className="space-y-3">
+                  <Button variant="secondary" type="button" onClick={() => setProvinceFilter(null)}>
+                    กลับไปเลือกจังหวัด
+                  </Button>
+                  <div className="auto-card-grid">
+                    {courtProspects.map((item) => {
+                      const priority = extraText(item.extra, ["Priority", "priority"]);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setOpenProspect(item)}
+                          className="job-jacket p-4 text-left"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold">{item.name}</p>
+                              <p className="mt-1 text-sm text-muted">
+                                {item.province || item.contact_name || item.company || "ยังไม่มีผู้ติดต่อ"}
+                              </p>
+                            </div>
+                            <StatusStamp
+                              label={priority || PROSPECT_STATUS_LABELS[item.status]}
+                              tone={
+                                priority === "HOT"
+                                  ? "red"
+                                  : toneFromClass(PROSPECT_STATUS_COLORS[item.status])
+                              }
+                            />
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted">
+                            {item.contact_phone && (
+                              <span className="inline-flex items-center gap-1">
+                                <Phone size={14} /> {item.contact_phone}
+                              </span>
+                            )}
+                            {item.contact_email && (
+                              <span className="inline-flex items-center gap-1">
+                                <Mail size={14} /> {item.contact_email}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
-                  <p className="mt-3 text-sm">เปิดการ์ดนี้เพื่อโทร บันทึกการคุย หรือให้ Gemini ร่างข้อความ</p>
-                </button>
-              ))}
+                </div>
+              )}
             </div>
           )}
         </>
@@ -598,6 +763,7 @@ function SalesPageInner() {
         onClose={() => setImportOpen(false)}
         profiles={profiles}
         currentUserId={profile?.id}
+        brokenCount={brokenCount}
         onImport={importProspects}
       />
       <ProspectDrawer

@@ -23,6 +23,8 @@ import type {
   SalesProspect,
 } from "@/lib/types";
 import type { AssistMode } from "@/lib/sales-playbook";
+import { extraText, prospectCategory } from "@/lib/prospect-import";
+import { useRole } from "@/components/RoleProvider";
 import { useActionFeedback } from "@/components/workspace/ActionFeedback";
 
 function toneFromClass(value: string) {
@@ -41,6 +43,7 @@ export function ProspectDrawer({
   onChanged: () => void;
 }) {
   const { toast, setSaving } = useActionFeedback();
+  const { canEdit } = useRole();
   const [notes, setNotes] = useState("");
   const [followUp, setFollowUp] = useState("");
   const [ownerId, setOwnerId] = useState("");
@@ -50,6 +53,7 @@ export function ProspectDrawer({
   const [log, setLog] = useState("");
   const [fromAi, setFromAi] = useState(false);
   const [history, setHistory] = useState<SalesInteraction[]>([]);
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     if (!prospect) return;
@@ -90,15 +94,20 @@ export function ProspectDrawer({
     onChanged();
   }
 
-  async function saveInteraction(content: string, nextType: InteractionType, ai = false) {
+  async function saveInteraction(
+    content: string,
+    nextType: InteractionType,
+    ai = false,
+    nextOutcome = outcome
+  ) {
     setSaving(true);
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    const nextStatus = nextStatusFromOutcome(status, outcome);
+    const nextStatus = nextStatusFromOutcome(status, nextOutcome);
     await supabase.from("sales_interactions").insert({
       prospect_id: current.id,
       type: nextType,
-      outcome,
+      outcome: nextOutcome,
       content,
       ai_generated: ai,
       created_by: user?.id ?? null,
@@ -113,10 +122,10 @@ export function ProspectDrawer({
       .eq("id", current.id);
     await logActivity("update", "sales_prospect", current.id, current.name, {
       type: nextType,
-      outcome,
+      outcome: nextOutcome,
     });
     setSaving(false);
-    toast("บันทึกการติดต่อแล้ว");
+    if (nextOutcome !== "emailed") toast("บันทึกการติดต่อแล้ว");
     setLog("");
     setFromAi(false);
     onChanged();
@@ -141,6 +150,39 @@ export function ProspectDrawer({
     setType(mode === "email" ? "email_draft" : mode === "call" ? "call" : "note");
   }
 
+  async function sendFromTeamMail() {
+    if (!current.contact_email || !log.trim()) return;
+    if (
+      !confirm(
+        `ส่งเมลนี้จาก salelimitcode@gmail.com ถึง ${current.name} ที่ ${current.contact_email} หรือไม่?`
+      )
+    ) {
+      return;
+    }
+    setSending(true);
+    try {
+      const response = await fetch("/api/sales/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: current.contact_email,
+          content: log,
+          prospectName: current.name,
+        }),
+      });
+      const payload = (await response.json()) as { error?: string; subject?: string };
+      if (!response.ok) throw new Error(payload.error || "ส่งเมลไม่สำเร็จ");
+      setType("email_draft");
+      setOutcome("emailed");
+      await saveInteraction(log, "email_draft", fromAi, "emailed");
+      toast("ส่งจาก salelimitcode@gmail.com แล้ว");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "ส่งเมลไม่สำเร็จ");
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
     <Drawer open={Boolean(prospect)} onClose={onClose} title={prospect.name}>
       <div className="space-y-5">
@@ -149,6 +191,10 @@ export function ProspectDrawer({
           tone={toneFromClass(PROSPECT_STATUS_COLORS[status])}
         />
         <dl className="grid grid-cols-1 gap-2 text-sm">
+          <div>
+            <dt className="text-muted">หมวด</dt>
+            <dd>{prospectCategory(prospect.extra)}</dd>
+          </div>
           <div>
             <dt className="text-muted">ผู้ติดต่อ</dt>
             <dd>{prospect.contact_name || "—"}</dd>
@@ -179,8 +225,22 @@ export function ProspectDrawer({
           </div>
           <div>
             <dt className="text-muted">ที่อยู่</dt>
-            <dd>{[prospect.address, prospect.province].filter(Boolean).join(" · ") || "—"}</dd>
+            <dd>
+              {[
+                extraText(prospect.extra, ["ภูมิภาค", "region"]),
+                prospect.address,
+                prospect.province,
+              ]
+                .filter(Boolean)
+                .join(" · ") || "—"}
+            </dd>
           </div>
+          {extraText(prospect.extra, ["ช่องทางหลัก"]) && (
+            <div>
+              <dt className="text-muted">ช่องทางหลัก</dt>
+              <dd>{extraText(prospect.extra, ["ช่องทางหลัก"])}</dd>
+            </div>
+          )}
         </dl>
 
         <Select label="สถานะ" value={status} onChange={(e) => setStatus(e.target.value as ProspectStatus)}>
@@ -232,6 +292,16 @@ export function ProspectDrawer({
             <Button disabled={!log.trim()} onClick={() => void saveInteraction(log, type, fromAi)}>
               ยืนยันและบันทึก
             </Button>
+            {type === "email_draft" && log.trim() && canEdit && (
+              <Button
+                type="button"
+                loading={sending}
+                disabled={!prospect.contact_email}
+                onClick={() => void sendFromTeamMail()}
+              >
+                {prospect.contact_email ? "ส่งจาก salelimitcode@gmail.com" : "ยังไม่มีอีเมลสนาม"}
+              </Button>
+            )}
             {type === "email_draft" && prospect.contact_email && log.trim() && (
               <Button
                 variant="secondary"
