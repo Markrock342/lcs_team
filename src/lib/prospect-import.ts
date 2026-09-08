@@ -98,7 +98,11 @@ export function prospectKey(input: {
 }
 
 export function isBrokenProspectName(name: string) {
-  return /^\d+$/.test(name.trim()) || /^no\.?\s*\d+$/i.test(name.trim());
+  const value = name.trim();
+  if (!value) return true;
+  if (/^no\.?$/i.test(value)) return true;
+  if (/^\d+$/.test(value)) return true;
+  return /^no\.?\s*\d+$/i.test(value);
 }
 
 export function prospectCategory(extra: Record<string, unknown> | null | undefined) {

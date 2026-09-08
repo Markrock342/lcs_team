@@ -358,6 +358,56 @@ function SalesPageInner() {
     return null;
   }
 
+  async function assignProspect(item: SalesProspect, ownerId: string) {
+    if (!canEdit) return;
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("sales_prospects")
+      .update({
+        owner_id: ownerId || null,
+        status: ownerId && item.status === "new" ? "assigned" : item.status,
+      })
+      .eq("id", item.id);
+    if (error) {
+      toast(error.message);
+      return;
+    }
+    toast(ownerId ? "มอบหมายแล้ว" : "ยกเลิกการมอบหมายแล้ว");
+    await load();
+  }
+
+  async function deleteProspect(item: SalesProspect, alreadyConfirmed = false) {
+    if (!canEdit) return;
+    if (!alreadyConfirmed && !confirm(`ลบรายชื่อ “${item.name}” หรือไม่?`)) return;
+    const supabase = createClient();
+    const { error } = await supabase.from("sales_prospects").delete().eq("id", item.id);
+    if (error) {
+      toast(error.message);
+      return;
+    }
+    if (openProspect?.id === item.id) setOpenProspect(null);
+    toast("ลบรายชื่อแล้ว");
+    await load();
+  }
+
+  async function deleteBrokenProspects() {
+    if (!canEdit) return;
+    const broken = prospects.filter((item) => isBrokenProspectName(item.name));
+    if (!broken.length) return;
+    if (!confirm(`ลบรายชื่อนำเข้าผิด ${broken.length} รายการ หรือไม่?`)) return;
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("sales_prospects")
+      .delete()
+      .in("id", broken.map((item) => item.id));
+    if (error) {
+      toast(error.message);
+      return;
+    }
+    toast(`ลบรายการผิด ${broken.length} รายการแล้ว`);
+    await load();
+  }
+
   const today = new Date().toISOString().slice(0, 10);
   const followUps = useMemo(
     () =>
@@ -498,9 +548,14 @@ function SalesPageInner() {
               <p className="mt-1 text-sm">
                 ไฟล์มีแถวหัวเรื่องก่อนตาราง เลยอ่านเลขลำดับเป็นชื่อสนาม นำเข้าใหม่อีกครั้งได้เลย
               </p>
-              <Button className="mt-3" onClick={() => setImportOpen(true)}>
-                นำเข้าใหม่
-              </Button>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button className="mt-0" onClick={() => setImportOpen(true)}>
+                  นำเข้าใหม่
+                </Button>
+                <Button variant="danger" className="mt-0" onClick={() => void deleteBrokenProspects()}>
+                  ลบรายการผิด
+                </Button>
+              </div>
             </div>
           )}
           {visibleProspects.length === 0 ? (
@@ -603,41 +658,77 @@ function SalesPageInner() {
                     {courtProspects.map((item) => {
                       const priority = extraText(item.extra, ["Priority", "priority"]);
                       return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setOpenProspect(item)}
-                          className="job-jacket p-4 text-left"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-semibold">{item.name}</p>
-                              <p className="mt-1 text-sm text-muted">
-                                {item.province || item.contact_name || item.company || "ยังไม่มีผู้ติดต่อ"}
-                              </p>
+                        <article key={item.id} className="job-jacket p-4">
+                          <button
+                            type="button"
+                            onClick={() => setOpenProspect(item)}
+                            className="w-full rounded-xl text-left"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-semibold">{item.name}</p>
+                                <p className="mt-1 text-sm text-muted">
+                                  {item.owner?.display_name
+                                    ? `มอบหมายแล้ว · ${item.owner.display_name}`
+                                    : item.province || item.contact_name || item.company || "ยังไม่มีผู้ติดต่อ"}
+                                </p>
+                              </div>
+                              <StatusStamp
+                                label={priority || PROSPECT_STATUS_LABELS[item.status]}
+                                tone={
+                                  priority === "HOT"
+                                    ? "red"
+                                    : toneFromClass(PROSPECT_STATUS_COLORS[item.status])
+                                }
+                              />
                             </div>
-                            <StatusStamp
-                              label={priority || PROSPECT_STATUS_LABELS[item.status]}
-                              tone={
-                                priority === "HOT"
-                                  ? "red"
-                                  : toneFromClass(PROSPECT_STATUS_COLORS[item.status])
-                              }
-                            />
-                          </div>
-                          <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted">
-                            {item.contact_phone && (
-                              <span className="inline-flex items-center gap-1">
-                                <Phone size={14} /> {item.contact_phone}
-                              </span>
-                            )}
-                            {item.contact_email && (
-                              <span className="inline-flex items-center gap-1">
-                                <Mail size={14} /> {item.contact_email}
-                              </span>
-                            )}
-                          </div>
-                        </button>
+                            <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted">
+                              {item.contact_phone && (
+                                <span className="inline-flex items-center gap-1">
+                                  <Phone size={14} /> {item.contact_phone}
+                                </span>
+                              )}
+                              {item.contact_email && (
+                                <span className="inline-flex items-center gap-1">
+                                  <Mail size={14} /> {item.contact_email}
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                          {canEdit && (
+                            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                              <select
+                                aria-label={`มอบหมาย ${item.name}`}
+                                value={item.owner_id ?? ""}
+                                onChange={(e) => void assignProspect(item, e.target.value)}
+                                className="min-h-11 rounded-xl border border-border bg-card px-3 text-sm"
+                              >
+                                <option value="">มอบหมายให้...</option>
+                                {profiles.map((profile) => (
+                                  <option key={profile.id} value={profile.id}>
+                                    {profile.display_name}
+                                  </option>
+                                ))}
+                              </select>
+                              <Button
+                                variant="secondary"
+                                type="button"
+                                onClick={() => setOpenProspect(item)}
+                              >
+                                แก้ไข
+                              </Button>
+                              <Button
+                                variant="danger"
+                                type="button"
+                                aria-label={`ลบ ${item.name}`}
+                                onClick={() => void deleteProspect(item)}
+                              >
+                                <Trash2 size={16} />
+                                ลบ
+                              </Button>
+                            </div>
+                          )}
+                        </article>
                       );
                     })}
                   </div>
@@ -771,6 +862,7 @@ function SalesPageInner() {
         profiles={profiles}
         onClose={() => setOpenProspect(null)}
         onChanged={() => void load()}
+        onDeleted={(item) => void deleteProspect(item, true)}
       />
       <Modal open={playbookOpen} onClose={() => setPlaybookOpen(false)} title="คู่มือคุยสนามแบด">
         <div className="space-y-3 text-sm">

@@ -36,14 +36,21 @@ export function ProspectDrawer({
   profiles,
   onClose,
   onChanged,
+  onDeleted,
 }: {
   prospect: SalesProspect | null;
   profiles: Profile[];
   onClose: () => void;
   onChanged: () => void;
+  onDeleted?: (prospect: SalesProspect) => void;
 }) {
   const { toast, setSaving } = useActionFeedback();
   const { canEdit } = useRole();
+  const [name, setName] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [province, setProvince] = useState("");
   const [notes, setNotes] = useState("");
   const [followUp, setFollowUp] = useState("");
   const [ownerId, setOwnerId] = useState("");
@@ -59,6 +66,11 @@ export function ProspectDrawer({
     if (!prospect) return;
     // Sync drawer fields when a different prospect is opened.
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    setName(prospect.name ?? "");
+    setContactName(prospect.contact_name ?? "");
+    setPhone(prospect.contact_phone ?? "");
+    setEmail(prospect.contact_email ?? "");
+    setProvince(prospect.province ?? "");
     setNotes(prospect.notes ?? "");
     setFollowUp(prospect.next_follow_up ?? "");
     setOwnerId(prospect.owner_id ?? "");
@@ -83,14 +95,19 @@ export function ProspectDrawer({
     await supabase
       .from("sales_prospects")
       .update({
+        name: name.trim() || current.name,
+        contact_name: contactName.trim() || null,
+        contact_phone: phone.trim() || null,
+        contact_email: email.trim() || null,
+        province: province.trim() || null,
         notes: notes || null,
         next_follow_up: followUp || null,
         owner_id: ownerId || null,
-        status,
+        status: ownerId && status === "new" ? "assigned" : status,
       })
       .eq("id", current.id);
     setSaving(false);
-    toast("บันทึกแล้ว");
+    toast(ownerId ? "บันทึกและมอบหมายแล้ว" : "บันทึกแล้ว");
     onChanged();
   }
 
@@ -151,10 +168,11 @@ export function ProspectDrawer({
   }
 
   async function sendFromTeamMail() {
-    if (!current.contact_email || !log.trim()) return;
+    const to = email.trim() || current.contact_email;
+    if (!to || !log.trim()) return;
     if (
       !confirm(
-        `ส่งเมลนี้จาก salelimitcode@gmail.com ถึง ${current.name} ที่ ${current.contact_email} หรือไม่?`
+        `ส่งเมลนี้จาก salelimitcode@gmail.com ถึง ${name || current.name} ที่ ${to} หรือไม่?`
       )
     ) {
       return;
@@ -165,9 +183,9 @@ export function ProspectDrawer({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to: current.contact_email,
+          to,
           content: log,
-          prospectName: current.name,
+          prospectName: name.trim() || current.name,
         }),
       });
       const payload = (await response.json()) as { error?: string; subject?: string };
@@ -190,67 +208,52 @@ export function ProspectDrawer({
           label={PROSPECT_STATUS_LABELS[status]}
           tone={toneFromClass(PROSPECT_STATUS_COLORS[status])}
         />
-        <dl className="grid grid-cols-1 gap-2 text-sm">
-          <div>
-            <dt className="text-muted">หมวด</dt>
-            <dd>{prospectCategory(prospect.extra)}</dd>
-          </div>
-          <div>
-            <dt className="text-muted">ผู้ติดต่อ</dt>
-            <dd>{prospect.contact_name || "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-muted">โทร</dt>
-            <dd>
-              {prospect.contact_phone ? (
-                <a className="text-accent" href={`tel:${prospect.contact_phone}`}>
-                  {prospect.contact_phone}
-                </a>
-              ) : (
-                "—"
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted">อีเมล</dt>
-            <dd>
-              {prospect.contact_email ? (
-                <a className="text-accent" href={`mailto:${prospect.contact_email}`}>
-                  {prospect.contact_email}
-                </a>
-              ) : (
-                "—"
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted">ที่อยู่</dt>
-            <dd>
-              {[
-                extraText(prospect.extra, ["ภูมิภาค", "region"]),
-                prospect.address,
-                prospect.province,
-              ]
-                .filter(Boolean)
-                .join(" · ") || "—"}
-            </dd>
-          </div>
-          {extraText(prospect.extra, ["ช่องทางหลัก"]) && (
-            <div>
-              <dt className="text-muted">ช่องทางหลัก</dt>
-              <dd>{extraText(prospect.extra, ["ช่องทางหลัก"])}</dd>
-            </div>
-          )}
-        </dl>
+        <p className="text-sm text-muted">
+          {prospectCategory(prospect.extra)}
+          {extraText(prospect.extra, ["ช่องทางหลัก"])
+            ? ` · ${extraText(prospect.extra, ["ช่องทางหลัก"])}`
+            : ""}
+        </p>
 
-        <Select label="สถานะ" value={status} onChange={(e) => setStatus(e.target.value as ProspectStatus)}>
+        <Input
+          label="ชื่อสนาม"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          disabled={!canEdit}
+        />
+        <Input
+          label="ผู้ติดต่อ"
+          value={contactName}
+          onChange={(e) => setContactName(e.target.value)}
+          disabled={!canEdit}
+        />
+        <Input
+          label="เบอร์โทร"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          disabled={!canEdit}
+        />
+        <Input
+          label="อีเมล"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={!canEdit}
+        />
+        <Input
+          label="จังหวัด"
+          value={province}
+          onChange={(e) => setProvince(e.target.value)}
+          disabled={!canEdit}
+        />
+        <Select label="สถานะ" value={status} onChange={(e) => setStatus(e.target.value as ProspectStatus)} disabled={!canEdit}>
           {PROSPECT_STATUSES.map((item) => (
             <option key={item} value={item}>
               {PROSPECT_STATUS_LABELS[item]}
             </option>
           ))}
         </Select>
-        <Select label="ผู้รับผิดชอบ" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+        <Select label="มอบหมายให้" value={ownerId} onChange={(e) => setOwnerId(e.target.value)} disabled={!canEdit}>
           <option value="">ยังไม่กำหนด</option>
           {profiles.map((profile) => (
             <option key={profile.id} value={profile.id}>
@@ -260,9 +263,36 @@ export function ProspectDrawer({
         </Select>
         <Input label="นัดติดตาม" type="date" value={followUp} onChange={(e) => setFollowUp(e.target.value)} />
         <Textarea label="บันทึกในรายชื่อ" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        <Button onClick={() => void saveMeta()}>บันทึกข้อมูล</Button>
+        {canEdit && (
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => void saveMeta()}>บันทึกการแก้ไข</Button>
+            <Button
+              variant="danger"
+              type="button"
+              onClick={() => {
+                if (!confirm(`ลบรายชื่อ “${current.name}” หรือไม่?`)) return;
+                onDeleted?.(current);
+              }}
+            >
+              ลบรายชื่อ
+            </Button>
+          </div>
+        )}
 
-        <AiAssistPanel prospect={{ ...prospect, notes, status }} extra={log} onUse={useDraft} />
+        <AiAssistPanel
+          prospect={{
+            ...prospect,
+            name: name || prospect.name,
+            contact_name: contactName,
+            contact_phone: phone,
+            contact_email: email,
+            province,
+            notes,
+            status,
+          }}
+          extra={log}
+          onUse={useDraft}
+        />
 
         <section className="space-y-3">
           <h3 className="font-semibold">บันทึกการติดต่อ</h3>
@@ -296,20 +326,20 @@ export function ProspectDrawer({
               <Button
                 type="button"
                 loading={sending}
-                disabled={!prospect.contact_email}
+                disabled={!email.trim()}
                 onClick={() => void sendFromTeamMail()}
               >
-                {prospect.contact_email ? "ส่งจาก salelimitcode@gmail.com" : "ยังไม่มีอีเมลสนาม"}
+                {email.trim() ? "ส่งจาก salelimitcode@gmail.com" : "ยังไม่มีอีเมลสนาม"}
               </Button>
             )}
-            {type === "email_draft" && prospect.contact_email && log.trim() && (
+            {type === "email_draft" && email.trim() && log.trim() && (
               <Button
                 variant="secondary"
                 type="button"
                 onClick={() => {
-                  const subject = encodeURIComponent(`ติดต่อจาก Limit Code Studio — ${prospect.name}`);
+                  const subject = encodeURIComponent(`ติดต่อจาก Limit Code Studio — ${name || prospect.name}`);
                   const body = encodeURIComponent(log);
-                  window.open(`mailto:${prospect.contact_email}?subject=${subject}&body=${body}`);
+                  window.open(`mailto:${email.trim()}?subject=${subject}&body=${body}`);
                 }}
               >
                 เปิดแอปอีเมล
