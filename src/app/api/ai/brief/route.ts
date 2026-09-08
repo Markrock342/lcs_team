@@ -54,7 +54,7 @@ export async function POST(request: Request) {
   const geminiOptions = {
     system: BRIEF_SYSTEM,
     temperature: 0.35,
-    maxOutputTokens: 1800,
+    maxOutputTokens: 4096,
   };
 
   const encoder = new TextEncoder();

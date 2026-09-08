@@ -19,8 +19,12 @@ export function prospectContext(prospect: Pick<
 >) {
   const extra = prospect.extra ?? {};
   const extraLines = Object.entries(extra)
-    .filter(([, value]) => typeof value === "string" && value.trim())
-    .slice(0, 8)
+    .filter(([key, value]) => {
+      if (typeof value !== "string" || !value.trim()) return false;
+      if (/url|maps|หลักฐาน|checked|คุณภาพลิงก์|source/i.test(key)) return false;
+      return value.length <= 180;
+    })
+    .slice(0, 6)
     .map(([key, value]) => `${key}: ${value}`);
   return [
     `สนาม: ${prospect.name}`,
@@ -43,7 +47,7 @@ export function assistPrompt(mode: AssistMode, context: string, extra = "") {
     email:
       "ร่างอีเมลภาษาไทยสั้น อบอุ่น เป็นกันเอง ไม่ขายของแข็ง ชวนคุยเรื่องระบบจองคอร์ทแบด ใส่หัวข้อและเนื้อหา พร้อมช่องให้ใส่ชื่อผู้ส่ง",
     call:
-      "เขียนสคริปต์โทร 30-45 วินาที ภาษาไทยธรรมชาติ มีประโยคเปิด คำถามคัดกรอง 3 ข้อ และประโยคปิดนัด",
+      "เขียนสคริปต์โทร 30-45 วินาที ภาษาไทยธรรมชาติ มีประโยคเปิด คำถามคัดกรอง 3 ข้อ และประโยคปิดนัด ให้จบครบทุกหัวข้อ ห้ามตัดกลางประโยค",
     summary:
       "สรุปบทสนทนาเป็น bullet สั้น: สิ่งที่คุย ความสนใจ ข้อค้าง และงานถัดไป",
     next_action:
@@ -57,7 +61,7 @@ ${context}
 ข้อมูลเพิ่ม:
 ${extra || "-"}
 
-ตอบเป็นภาษาไทยเท่านั้น ห้ามสัญญาว่าส่งข้อความแทนมนุษย์`;
+ตอบเป็นภาษาไทยเท่านั้น จบข้อความให้ครบ ห้ามตัดกลางประโยค ห้ามสัญญาว่าส่งข้อความแทนมนุษย์`;
 }
 
 export function nextStatusFromOutcome(

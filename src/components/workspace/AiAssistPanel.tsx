@@ -78,7 +78,7 @@ export function AiAssistPanel({
         <>
           <Textarea
             label="ร่างจาก AI — แก้ได้ก่อนใช้"
-            rows={8}
+            rows={14}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
           />

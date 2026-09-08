@@ -30,7 +30,8 @@ export async function POST(request: Request) {
 
   try {
     const text = await generateGeminiText(
-      assistPrompt(body.mode, body.context, body.extra)
+      assistPrompt(body.mode, body.context, body.extra),
+      { maxOutputTokens: 8192 }
     );
     return NextResponse.json({ text, model: "gemini-3.7-flash" });
   } catch (error) {
