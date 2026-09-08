@@ -78,7 +78,6 @@ export default function LoginPage() {
           return;
         }
 
-        // ต้องยืนยันอีเมลก่อน (Supabase เปิด email confirm)
         if (data.user && !data.session) {
           setSuccess(
             "สมัครสำเร็จ! กรุณาเช็คอีเมลเพื่อยืนยันบัญชี แล้วค่อยเข้าสู่ระบบ"
@@ -103,40 +102,23 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background px-4 py-8 sm:px-8">
-      <div className="mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-5xl items-center gap-12 animate-fade-in lg:grid-cols-[1fr_26rem]">
-        <header className="max-w-xl lg:self-center">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-brand-mesh px-4 py-8">
+      <div className="relative w-full max-w-[26rem] animate-fade-in">
+        <header className="mb-7">
           <Logo size="lg" />
-          <p className="ticket-kicker mt-8">Limit Code Studio · Workspace</p>
-          <div className="ticket-rule mt-3 mb-5 max-w-sm" />
-          <h1 className="max-w-lg text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
-            จัดการทุกขั้นตอนการผลิตงานในที่เดียว
+          <h1 className="mt-5 text-[1.7rem] font-semibold tracking-tight">
+            {mode === "login" ? "เข้าสู่ระบบ" : "สมัครสมาชิก"}
           </h1>
-          <p className="mt-4 max-w-md text-base leading-relaxed text-muted">{TEAM.tagline}</p>
         </header>
 
-        <form
-          onSubmit={handleSubmit}
-          className="ticket-card w-full p-5 sm:p-7"
-        >
-          <div className="mb-6 space-y-1">
-            <h2 className="text-2xl font-semibold tracking-tight">
-              {mode === "login" ? "เข้าสู่ระบบ" : "สร้างบัญชี"}
-            </h2>
-            <p className="text-sm text-muted">
-              {mode === "login" ? "กลับเข้าสู่พื้นที่ทำงานของทีม" : "ใช้อีเมลของทีมเพื่อเริ่มต้น"}
-            </p>
-          </div>
-
-          <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="ticket-card space-y-4 p-6">
           {!supabaseConfigured && (
-            <div className="rounded-xl bg-(--status-amber-bg) p-4 text-sm text-(--status-amber-fg) space-y-1" role="status">
-              <p><strong>ยังไม่ได้ตั้งค่า Supabase สำหรับสภาพแวดล้อมนี้</strong></p>
+            <div className="rounded-xl bg-(--status-amber-bg) p-4 text-sm text-(--status-amber-fg)" role="status">
               <p>
                 เพิ่ม{" "}
                 <code className="text-xs">NEXT_PUBLIC_SUPABASE_URL</code> +{" "}
                 <code className="text-xs">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>{" "}
-                ใน Vercel Environment Variables แล้ว Redeploy
+                ใน Vercel แล้ว Redeploy
               </p>
             </div>
           )}
@@ -189,7 +171,7 @@ export default function LoginPage() {
             {mode === "login" ? "เข้าสู่ระบบ" : "สมัครสมาชิก"}
           </Button>
 
-          <p className="text-center text-sm text-muted pt-1">
+          <p className="pt-1 text-center text-sm text-muted">
             {mode === "login" ? "ยังไม่มีบัญชี?" : "มีบัญชีแล้ว?"}{" "}
             <button
               type="button"
@@ -200,10 +182,9 @@ export default function LoginPage() {
               }}
               className="min-h-11 px-1 font-semibold text-accent hover:underline"
             >
-              {mode === "login" ? "สร้างบัญชี" : "เข้าสู่ระบบ"}
+              {mode === "login" ? "สมัครสมาชิก" : "เข้าสู่ระบบ"}
             </button>
           </p>
-          </div>
         </form>
       </div>
     </main>
