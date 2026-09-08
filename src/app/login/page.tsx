@@ -104,7 +104,7 @@ export default function LoginPage() {
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-brand-mesh px-4 py-8">
       <div className="relative w-full max-w-[26rem] animate-fade-in">
-        <header className="mb-7">
+        <header className="mb-7 flex flex-col items-center text-center">
           <Logo size="lg" />
           <h1 className="mt-5 text-[1.7rem] font-semibold tracking-tight">
             {mode === "login" ? "เข้าสู่ระบบ" : "สมัครสมาชิก"}
