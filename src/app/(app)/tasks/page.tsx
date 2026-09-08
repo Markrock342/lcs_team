@@ -18,15 +18,27 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import {
   Button,
+  Card,
   Modal,
   Input,
   Select,
   Textarea,
   EmptyState,
+  ErrorState,
+  MetricTile,
+  PageLoader,
+  PriorityBadge,
   StatusBadge,
+  StatusStamp,
   Avatar,
 } from "@/components/ui";
-import { PageHeader, FilterTabs, FilterSelect, RowMenu } from "@/components/mobile-ui";
+import {
+  PageHeader,
+  PageShell,
+  FilterTabs,
+  FilterSelect,
+  RowMenu,
+} from "@/components/mobile-ui";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { TimeTracker } from "@/components/TimeTracker";
 import { TaskCountdown } from "@/components/TaskCountdown";
@@ -42,6 +54,9 @@ import {
 import { uploadFile } from "@/lib/upload";
 import { logActivity } from "@/lib/activity";
 import { sendNotification } from "@/lib/notifications";
+import { notifyTaskCompleted } from "@/lib/workspace-automation";
+import { useActionFeedback } from "@/components/workspace/ActionFeedback";
+import { SavedViewsBar } from "@/components/workspace/SavedViewsBar";
 import type { Task, Client, Profile, TaskStatus, TaskPriority } from "@/lib/types";
 
 const emptyTask = {
@@ -84,7 +99,7 @@ function TaskDescription({ text, isSub }: { text: string; isSub?: boolean }) {
   return (
     <div className="mt-1.5">
       <p
-        className={`text-xs text-zinc-300 whitespace-pre-wrap break-words leading-relaxed ${
+        className={`text-base text-foreground/85 whitespace-pre-wrap wrap-break-word leading-relaxed ${
           !expanded && isLong ? (isSub ? "line-clamp-3" : "line-clamp-2") : ""
         }`}
       >
@@ -94,7 +109,7 @@ function TaskDescription({ text, isSub }: { text: string; isSub?: boolean }) {
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="text-[11px] text-accent hover:underline mt-1 touch-manipulation"
+        className="mt-1 min-h-11 text-sm font-medium text-accent hover:underline touch-manipulation"
         >
           {expanded ? "ย่อ" : "ดูทั้งหมด"}
         </button>
@@ -120,7 +135,7 @@ function TaskChip({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors touch-manipulation ${
+      className={`inline-flex min-h-11 items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-colors touch-manipulation ${
         active
           ? "bg-accent/15 border-accent/40 text-accent"
           : "bg-background border-border text-muted hover:text-foreground hover:border-accent/30"
@@ -130,7 +145,7 @@ function TaskChip({
       {label}
       {badge && (
         <span
-          className={`px-1 rounded text-[10px] ${
+          className={`rounded px-1.5 text-xs ${
             active ? "bg-accent/20" : "bg-card-hover"
           }`}
         >
@@ -144,7 +159,6 @@ function TaskChip({
 function TaskRow({
   task,
   isSub,
-  profiles,
   currentUserId,
   checklistCount,
   attachmentCount,
@@ -158,7 +172,6 @@ function TaskRow({
 }: {
   task: Task;
   isSub?: boolean;
-  profiles: Profile[];
   currentUserId?: string;
   checklistCount?: { total: number; done: number };
   attachmentCount?: number;
@@ -180,29 +193,21 @@ function TaskRow({
 
   return (
     <div
-      className={`flex flex-col sm:flex-row sm:items-start gap-3 ${
-        isSub ? "pl-6 border-l-2 border-accent/30 ml-3" : ""
+      className={`flex flex-col gap-4 sm:flex-row sm:items-start ${
+        isSub ? "rounded-xl bg-surface-soft p-4" : ""
       }`}
     >
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
-          {!isSub && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">
-              งานใหญ่
-            </span>
-          )}
-          {isSub && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 font-medium">
-              งานย่อย
-            </span>
-          )}
-          <h3 className="font-semibold truncate">{task.title}</h3>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <StatusStamp label={isSub ? "งานย่อย" : "งานหลัก"} tone={isSub ? "violet" : "slate"} />
           <StatusBadge status={task.status} />
+          <PriorityBadge priority={task.priority} />
         </div>
-        <p className="text-xs text-muted">
+        <h3 className="truncate text-lg font-semibold leading-snug">{task.title}</h3>
+        <p className="mt-1 text-sm text-muted">
           {task.client?.name ?? "ไม่ระบุลูกค้า"}
           {!task.start_date && !task.due_date && (
-            <> · <span className="text-accent">{task.duration_days} วัน</span></>
+            <> · <span>{task.duration_days} วัน</span></>
           )}
         </p>
         <div className="mt-2">
@@ -244,7 +249,7 @@ function TaskRow({
         </div>
 
         {panel && (
-          <div className="mt-2 rounded-xl border border-border bg-background/50 p-3">
+          <div className="mt-3 rounded-xl bg-background/50 p-4">
             {panel === "time" && !isSub && (
               <TimeTracker taskId={task.id} taskTitle={task.title} />
             )}
@@ -272,13 +277,12 @@ function TaskRow({
           <span className="text-xs text-muted">ยังไม่มอบหมาย</span>
         )}
 
-        {readOnly ? (
-          <StatusBadge status={task.status} />
-        ) : (
+        {!readOnly && (
           <select
             value={task.status}
             onChange={(e) => onStatusChange(task.id, e.target.value as TaskStatus)}
-            className="text-xs px-2 py-2 bg-background border border-border rounded-lg min-h-[40px] touch-manipulation"
+            aria-label={`เปลี่ยนสถานะ ${task.title}`}
+            className="min-h-11 rounded-xl border border-border bg-background px-3 py-2 text-base touch-manipulation"
           >
             {Object.entries(TASK_STATUS_LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
@@ -318,11 +322,13 @@ function TaskRow({
 }
 
 export default function TasksPage() {
-  const { canEdit } = useRole();
+  const { canEdit, profile } = useRole();
+  const { toast } = useActionFeedback();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
   const [form, setForm] = useState(emptyTask);
@@ -340,10 +346,13 @@ export default function TasksPage() {
     const params = new URLSearchParams(window.location.search);
     const q = params.get("status");
     if (q && (q === "all" || q === "active" || q in TASK_STATUS_LABELS)) {
+      // URL parameters initialize the client-only filter state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStatusFilter(q);
     }
     const client = params.get("client");
     if (client) setClientFilter(client);
+    if (params.get("create") === "1") openCreateParent();
   }, []);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [modalMode, setModalMode] = useState<"parent" | "sub">("parent");
@@ -358,6 +367,8 @@ export default function TasksPage() {
     createClient()
       .auth.getUser()
       .then(({ data }) => setCurrentUserId(data.user?.id));
+    // Initial remote data is intentionally loaded once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadCounts() {
@@ -385,6 +396,7 @@ export default function TasksPage() {
 
   async function loadData() {
     const supabase = createClient();
+    setError(null);
     const [tasksRes, clientsRes, profilesRes] = await Promise.all([
       supabase
         .from("tasks")
@@ -393,6 +405,14 @@ export default function TasksPage() {
       supabase.from("clients").select("*").order("name"),
       supabase.from("profiles").select("*"),
     ]);
+
+    const loadError = tasksRes.error ?? clientsRes.error ?? profilesRes.error;
+    if (loadError) {
+      setError(loadError.message);
+      setLoading(false);
+      return;
+    }
+
     setTasks(tasksRes.data ?? []);
     setClients(clientsRes.data ?? []);
     setProfiles(profilesRes.data ?? []);
@@ -404,6 +424,12 @@ export default function TasksPage() {
       .map((t) => t.parent_id as string);
     if (withSubs.length) {
       setExpanded(new Set(withSubs));
+    }
+
+    const openId = new URLSearchParams(window.location.search).get("open");
+    if (openId) {
+      const found = loaded.find((task) => task.id === openId);
+      if (found) openEdit(found);
     }
 
     setLoading(false);
@@ -610,14 +636,43 @@ export default function TasksPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("ลบงานนี้? (งานย่อยจะถูกลบด้วย)")) return;
+    const snapshot = tasks.find((task) => task.id === id);
     const supabase = createClient();
     await supabase.from("tasks").delete().eq("id", id);
+    toast("ลบงานแล้ว", async () => {
+      if (!snapshot) return;
+      await supabase.from("tasks").insert({
+        id: snapshot.id,
+        title: snapshot.title,
+        description: snapshot.description,
+        client_id: snapshot.client_id,
+        parent_id: snapshot.parent_id,
+        status: snapshot.status,
+        priority: snapshot.priority,
+        assigned_to: snapshot.assigned_to,
+        start_date: snapshot.start_date,
+        due_date: snapshot.due_date,
+        duration_days: snapshot.duration_days,
+        created_by: snapshot.created_by,
+      });
+      loadData();
+    });
     loadData();
   }
 
   async function quickStatusChange(id: string, status: TaskStatus) {
+    const task = tasks.find((item) => item.id === id);
+    const previous = task?.status;
     const supabase = createClient();
     await supabase.from("tasks").update({ status }).eq("id", id);
+    if (status === "done" && task) {
+      await notifyTaskCompleted(task);
+    }
+    toast(`เปลี่ยนเป็น${TASK_STATUS_LABELS[status]}`, async () => {
+      if (!previous) return;
+      await supabase.from("tasks").update({ status: previous }).eq("id", id);
+      loadData();
+    });
     loadData();
   }
 
@@ -666,17 +721,32 @@ export default function TasksPage() {
   }
 
   const visibleParents = parentTasks.filter(parentVisible);
+  const statusSummary = Object.entries(TASK_STATUS_LABELS).map(([status, label]) => ({
+    status: status as TaskStatus,
+    label,
+    count: tasks.filter((task) => task.status === status).length,
+  }));
 
   if (loading) {
+    return <PageLoader label="กำลังโหลดใบงาน..." />;
+  }
+
+  if (error) {
     return (
-      <div className="flex items-center justify-center py-32">
-        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-      </div>
+      <PageShell width="wide">
+        <ErrorState
+          description={error}
+          onRetry={() => {
+            setLoading(true);
+            void loadData();
+          }}
+        />
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-5 sm:space-y-6 animate-fade-in">
+    <PageShell width="wide">
       <PageHeader
         title="งาน"
         description={
@@ -693,12 +763,50 @@ export default function TasksPage() {
         }
       />
 
+      <SavedViewsBar
+        page="tasks"
+        filters={{
+          status: statusFilter,
+          assignee: assigneeFilter,
+          priority: priorityFilter,
+          client: clientFilter,
+        }}
+        onApply={(filters) => {
+          if (filters.status) setStatusFilter(filters.status);
+          if (filters.priority) setPriorityFilter(filters.priority);
+          if (filters.client) setClientFilter(filters.client);
+          if (filters.assignee === "me" && profile?.id) setAssigneeFilter(profile.id);
+          else if (filters.assignee) setAssigneeFilter(filters.assignee);
+        }}
+      />
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {statusSummary.map(({ status, label, count }) => (
+          <button
+            key={status}
+            type="button"
+            onClick={() => {
+              setStatusFilter(status);
+              setViewMode("list");
+            }}
+            aria-pressed={statusFilter === status}
+            className="rounded-2xl text-left transition-transform active:scale-[0.98]"
+          >
+            <MetricTile
+              label={label}
+              value={count}
+              icon={<StatusBadge status={status} />}
+            />
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex gap-2">
           <button
             type="button"
             onClick={() => setViewMode("list")}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium min-h-[40px] touch-manipulation ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium min-h-10 touch-manipulation ${
               viewMode === "list"
                 ? "bg-accent/20 text-accent border border-accent/40"
                 : "bg-card border border-border text-muted"
@@ -709,7 +817,7 @@ export default function TasksPage() {
           <button
             type="button"
             onClick={() => setViewMode("kanban")}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium min-h-[40px] touch-manipulation ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium min-h-10 touch-manipulation ${
               viewMode === "kanban"
                 ? "bg-accent/20 text-accent border border-accent/40"
                 : "bg-card border border-border text-muted"
@@ -763,14 +871,14 @@ export default function TasksPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="ค้นหางาน, ลูกค้า, ผู้รับผิดชอบ..."
-            className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-card border border-border text-sm"
+            className="w-full min-h-11 rounded-xl border border-border bg-card py-2.5 pl-9 pr-3 text-base"
           />
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
           <select
             value={clientFilter}
             onChange={(e) => setClientFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-card border border-border text-sm"
+            className="min-h-11 rounded-xl border border-border bg-card px-3 py-2 text-base"
           >
             <option value="all">ทุกลูกค้า</option>
             {clients.map((c) => (
@@ -780,7 +888,7 @@ export default function TasksPage() {
           <select
             value={assigneeFilter}
             onChange={(e) => setAssigneeFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-card border border-border text-sm"
+            className="min-h-11 rounded-xl border border-border bg-card px-3 py-2 text-base"
           >
             <option value="all">ทุกคน</option>
             {profiles.map((p) => (
@@ -790,7 +898,7 @@ export default function TasksPage() {
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-card border border-border text-sm col-span-2 lg:col-span-1"
+            className="col-span-2 min-h-11 rounded-xl border border-border bg-card px-3 py-2 text-base lg:col-span-1"
           >
             <option value="all">ทุกความสำคัญ</option>
             {Object.entries(TASK_PRIORITY_LABELS).map(([k, v]) => (
@@ -822,15 +930,14 @@ export default function TasksPage() {
                 : parent.progress;
 
             return (
-              <div
-                key={parent.id}
-                className="bg-card border border-brand rounded-2xl overflow-hidden hover:border-accent/40 transition-all"
-              >
-                <div className="p-4">
+              <Card key={parent.id}>
+                <div className="p-4 sm:p-5">
                   <div className="flex items-start gap-2 mb-3">
                     <button
+                      type="button"
                       onClick={() => toggleExpand(parent.id)}
-                      className="p-1 rounded hover:bg-card-hover text-muted mt-0.5"
+                      aria-label={isOpen ? "ซ่อนงานย่อย" : "แสดงงานย่อย"}
+                      className="mt-0.5 flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover"
                     >
                       {subs.length > 0 ? (
                         isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />
@@ -841,7 +948,6 @@ export default function TasksPage() {
                     <div className="flex-1">
                       <TaskRow
                         task={parent}
-                        profiles={profiles}
                         currentUserId={currentUserId}
                         checklistCount={checklistCounts[parent.id]}
                         attachmentCount={attachmentCounts[parent.id]}
@@ -857,7 +963,7 @@ export default function TasksPage() {
                   </div>
 
                   {subs.length > 0 && (
-                    <div className="ml-8 flex items-center gap-2 text-xs text-muted">
+                    <div className="ml-12 flex flex-wrap items-center gap-2 text-sm text-muted">
                       <span>{subs.length} งานย่อย</span>
                       <span>·</span>
                       <span>ความคืบหน้ารวม {subProgress}%</span>
@@ -875,7 +981,7 @@ export default function TasksPage() {
                   )}
                 </div>
 
-                <div className="border-t border-border bg-background/40 px-4 py-3 ml-6 sm:ml-8">
+                <div className="border-t border-border px-4 py-4 sm:px-5">
                   {subs.length === 0 ? (
                     canEdit ? (
                       <button
@@ -887,7 +993,7 @@ export default function TasksPage() {
                         เพิ่มงานย่อย — มอบหมายเพื่อน
                       </button>
                     ) : (
-                      <p className="text-xs text-muted text-center py-2">ยังไม่มีงานย่อย</p>
+                      <p className="py-2 text-center text-sm text-muted">ยังไม่มีงานย่อย</p>
                     )
                   ) : isOpen ? (
                     <div className="space-y-3">
@@ -896,7 +1002,6 @@ export default function TasksPage() {
                           key={sub.id}
                           task={sub}
                           isSub
-                          profiles={profiles}
                           currentUserId={currentUserId}
                           checklistCount={checklistCounts[sub.id]}
                           attachmentCount={attachmentCounts[sub.id]}
@@ -912,7 +1017,7 @@ export default function TasksPage() {
                         <button
                           type="button"
                           onClick={() => openCreateSub(parent)}
-                          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs text-accent hover:bg-accent/5 transition-colors touch-manipulation"
+                          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl py-2 text-sm font-medium text-accent hover:bg-accent/5 transition-colors touch-manipulation"
                         >
                           <Plus size={14} />
                           เพิ่มงานย่อย
@@ -923,13 +1028,13 @@ export default function TasksPage() {
                     <button
                       type="button"
                       onClick={() => toggleExpand(parent.id)}
-                      className="text-xs text-muted hover:text-accent"
+                      className="min-h-11 text-sm text-muted hover:text-accent"
                     >
                       แสดง {subs.length} งานย่อย
                     </button>
                   )}
                 </div>
-              </div>
+              </Card>
             );
           })}
         </div>
@@ -974,7 +1079,7 @@ export default function TasksPage() {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               onPaste={handleDescriptionPaste}
               rows={modalMode === "sub" ? 8 : 4}
-              className="min-h-[10rem] sm:min-h-[12rem] resize-y"
+              className="min-h-40 sm:min-h-48 resize-y"
             />
             <p className="text-[11px] text-muted flex items-center gap-1">
               <Paperclip size={11} /> วางรูปจากคลิปบอร์ด (Ctrl/⌘+V) เพื่อแนบเข้างานได้เลย
@@ -1128,6 +1233,6 @@ export default function TasksPage() {
           </Button>
         </form>
       </Modal>
-    </div>
+    </PageShell>
   );
 }

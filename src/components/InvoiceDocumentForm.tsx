@@ -54,10 +54,10 @@ export function InvoiceDocumentForm({
   return (
     <form onSubmit={onSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
       <Select
-        label="ลูกค้า *"
+        label={form.document_type === "agreement" ? "ลูกค้า (ถ้ามี)" : "ลูกค้า *"}
         value={form.client_id}
         onChange={(e) => onChange({ ...form, client_id: e.target.value })}
-        required
+        required={form.document_type !== "agreement"}
       >
         <option value="">เลือกลูกค้า</option>
         {clients.map((c) => (
@@ -116,6 +116,7 @@ export function InvoiceDocumentForm({
         />
       )}
 
+      {form.document_type !== "agreement" && (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">รายการ</p>
@@ -185,8 +186,9 @@ export function InvoiceDocumentForm({
           ยอดรวม <span className="text-accent font-semibold">฿{total.toLocaleString()}</span>
         </p>
       </div>
+      )}
 
-      {form.document_type !== "proposal" && (
+      {form.document_type !== "proposal" && form.document_type !== "quotation" && form.document_type !== "agreement" && (
         <>
           <Input
             label="VAT (บาท)"

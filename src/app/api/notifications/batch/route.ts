@@ -24,7 +24,7 @@ export async function POST(request: Request) {
         link?: string;
         sourceType?: string;
         sourceId?: string;
-        kind?: "chat" | "mention" | "task" | "system";
+        kind?: "chat" | "mention" | "task" | "system" | "sales" | "invoice";
       }[]
     | undefined;
 

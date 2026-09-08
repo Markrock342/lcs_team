@@ -103,43 +103,52 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden bg-brand-mesh">
-      <div className="relative w-full max-w-[26rem] animate-fade-in">
-        <div className="mb-7">
+    <main className="min-h-screen bg-background px-4 py-8 sm:px-8">
+      <div className="mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-5xl items-center gap-12 animate-fade-in lg:grid-cols-[1fr_26rem]">
+        <header className="max-w-xl lg:self-center">
           <Logo size="lg" />
-          <p className="ticket-kicker mt-5">Limit Code Studio</p>
-          <h1 className="text-[1.7rem] font-semibold tracking-tight mt-2">
-            {mode === "login" ? "เข้าสู่ระบบ" : "สมัครสมาชิก"}
+          <p className="ticket-kicker mt-8">Limit Code Studio · Workspace</p>
+          <div className="ticket-rule mt-3 mb-5 max-w-sm" />
+          <h1 className="max-w-lg text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
+            จัดการทุกขั้นตอนการผลิตงานในที่เดียว
           </h1>
-          <p className="text-muted text-sm mt-1.5">{TEAM.tagline}</p>
-        </div>
+          <p className="mt-4 max-w-md text-base leading-relaxed text-muted">{TEAM.tagline}</p>
+        </header>
 
         <form
           onSubmit={handleSubmit}
-          className="ticket-card p-6 space-y-4"
+          className="ticket-card w-full p-5 sm:p-7"
         >
+          <div className="mb-6 space-y-1">
+            <h2 className="text-2xl font-semibold tracking-tight">
+              {mode === "login" ? "เข้าสู่ระบบ" : "สร้างบัญชี"}
+            </h2>
+            <p className="text-sm text-muted">
+              {mode === "login" ? "กลับเข้าสู่พื้นที่ทำงานของทีม" : "ใช้อีเมลของทีมเพื่อเริ่มต้น"}
+            </p>
+          </div>
+
+          <div className="space-y-4">
           {!supabaseConfigured && (
-            <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm space-y-1">
+            <div className="rounded-xl bg-(--status-amber-bg) p-4 text-sm text-(--status-amber-fg) space-y-1" role="status">
+              <p><strong>ยังไม่ได้ตั้งค่า Supabase สำหรับสภาพแวดล้อมนี้</strong></p>
               <p>
-                <strong>.env.local ใช้ได้แค่ localhost</strong> — ไม่ถูก push ขึ้น Vercel
-              </p>
-              <p>
-                ไปที่ Vercel → Project → Settings → Environment Variables แล้วใส่{" "}
+                เพิ่ม{" "}
                 <code className="text-xs">NEXT_PUBLIC_SUPABASE_URL</code> +{" "}
                 <code className="text-xs">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>{" "}
-                (copy จาก .env.local) → กด <strong>Redeploy</strong>
+                ใน Vercel Environment Variables แล้ว Redeploy
               </p>
             </div>
           )}
 
           {error && (
-            <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            <div className="rounded-xl bg-(--status-red-bg) p-4 text-sm text-(--status-red-fg)" role="alert" aria-live="polite">
               {error}
             </div>
           )}
 
           {success && (
-            <div className="px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm">
+            <div className="rounded-xl bg-(--status-green-bg) p-4 text-sm text-(--status-green-fg)" role="status" aria-live="polite">
               {success}
             </div>
           )}
@@ -147,6 +156,7 @@ export default function LoginPage() {
           <Input
             label="อีเมล"
             type="email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@email.com"
@@ -157,6 +167,7 @@ export default function LoginPage() {
             <Input
               label="รหัสผ่าน"
               type={showPassword ? "text" : "password"}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -166,9 +177,11 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-[34px] text-muted hover:text-foreground"
+              className="absolute right-1 top-6.75 flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover hover:text-foreground"
+              aria-label={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+              aria-pressed={showPassword}
             >
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
 
@@ -176,7 +189,7 @@ export default function LoginPage() {
             {mode === "login" ? "เข้าสู่ระบบ" : "สมัครสมาชิก"}
           </Button>
 
-          <p className="text-center text-sm text-muted">
+          <p className="text-center text-sm text-muted pt-1">
             {mode === "login" ? "ยังไม่มีบัญชี?" : "มีบัญชีแล้ว?"}{" "}
             <button
               type="button"
@@ -185,13 +198,14 @@ export default function LoginPage() {
                 setError("");
                 setSuccess("");
               }}
-              className="text-accent hover:underline"
+              className="min-h-11 px-1 font-semibold text-accent hover:underline"
             >
-              {mode === "login" ? "สมัครเลย" : "เข้าสู่ระบบ"}
+              {mode === "login" ? "สร้างบัญชี" : "เข้าสู่ระบบ"}
             </button>
           </p>
+          </div>
         </form>
       </div>
-    </div>
+    </main>
   );
 }

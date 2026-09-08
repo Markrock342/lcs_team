@@ -1,8 +1,12 @@
--- เอกสารใบแจ้งหนี้ / ใบเสร็จ / Workflow Proposal
+-- เอกสารใบแจ้งหนี้ / ใบเสร็จ / ใบเสนอราคา / สัญญา
 -- รันใน Supabase SQL Editor (รันซ้ำได้)
 
-ALTER TABLE invoices ADD COLUMN IF NOT EXISTS document_type TEXT DEFAULT 'invoice'
-  CHECK (document_type IN ('invoice', 'receipt', 'proposal'));
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS document_type TEXT DEFAULT 'invoice';
+
+ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_document_type_check;
+ALTER TABLE invoices
+  ADD CONSTRAINT invoices_document_type_check
+  CHECK (document_type IN ('invoice', 'receipt', 'proposal', 'quotation', 'agreement'));
 
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS doc_number TEXT;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS issue_date DATE DEFAULT CURRENT_DATE;

@@ -34,7 +34,7 @@ export function QuickIncomeForm({ onDone }: Props) {
       .neq("status", "paid")
       .order("created_at", { ascending: false });
     const list = (data ?? []).filter(
-      (i) => (i.document_type ?? "invoice") !== "proposal"
+      (i) => (i.document_type ?? "invoice") !== "proposal" && (i.document_type ?? "invoice") !== "quotation" && (i.document_type ?? "invoice") !== "agreement"
     );
     setInvoices(list);
     setLoading(false);

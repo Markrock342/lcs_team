@@ -2,6 +2,25 @@ export type TeamRole = "admin" | "pm" | "backend" | "design" | "sale" | "guest";
 
 export type SalesStage = "lead" | "talking" | "quoted" | "won" | "lost";
 
+export type ProspectStatus =
+  | "new"
+  | "assigned"
+  | "contacted"
+  | "interested"
+  | "not_interested"
+  | "converted";
+
+export type InteractionType = "call" | "email_draft" | "note" | "follow_up";
+
+export type InteractionOutcome =
+  | "reached"
+  | "no_answer"
+  | "voicemail"
+  | "emailed"
+  | "interested"
+  | "not_interested"
+  | "callback";
+
 export type TaskStatus =
   | "pending"
   | "waiting"
@@ -59,6 +78,45 @@ export interface SalesDeal {
   updated_at: string;
   client?: Client | null;
   owner?: Profile | null;
+}
+
+export interface SalesProspect {
+  id: string;
+  name: string;
+  company: string | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  address: string | null;
+  province: string | null;
+  source: string;
+  status: ProspectStatus;
+  owner_id: string | null;
+  next_follow_up: string | null;
+  notes: string | null;
+  deal_id: string | null;
+  client_id: string | null;
+  import_batch_id: string | null;
+  external_key: string | null;
+  extra: Record<string, unknown> | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  owner?: Profile | null;
+  client?: Client | null;
+}
+
+export interface SalesInteraction {
+  id: string;
+  prospect_id: string | null;
+  deal_id: string | null;
+  type: InteractionType;
+  outcome: InteractionOutcome | null;
+  content: string | null;
+  ai_generated: boolean;
+  created_by: string | null;
+  created_at: string;
+  creator?: Profile | null;
 }
 
 export interface Client {

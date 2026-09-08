@@ -1,20 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
   ArrowLeft,
+  Building2,
   CheckSquare,
   ExternalLink,
   FileText,
   History,
+  Mail,
+  Phone,
   Users,
+  UserRound,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { PageHeader } from "@/components/mobile-ui";
-import { StatusBadge, Avatar } from "@/components/ui";
-import { CLIENT_STATUS_LABELS, PROJECT_TYPE_LABELS } from "@/lib/constants";
+import { PageHeader, PageShell } from "@/components/mobile-ui";
+import {
+  Card,
+  CardHeader,
+  ClientStatusBadge,
+  EmptyState,
+  ErrorState,
+  ListRow,
+  PageLoader,
+  StatusBadge,
+} from "@/components/ui";
+import { PROJECT_TYPE_LABELS } from "@/lib/constants";
 import { buildClientTimeline } from "@/lib/client-timeline";
 import type { ClientTimelineItem } from "@/lib/extras-types";
 import type { Client, Task } from "@/lib/types";
@@ -36,15 +49,13 @@ export default function ClientDetailPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [timeline, setTimeline] = useState<ClientTimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
-  useEffect(() => {
-    if (clientId) load();
-  }, [clientId]);
-
-  async function load() {
+  const load = useCallback(async () => {
     const supabase = createClient();
-    const [clientRes, tasksRes, actRes, invRes, filesRes, portalRes] =
-      await Promise.all([
+    try {
+      const [clientRes, tasksRes, actRes, invRes, filesRes, portalRes] =
+        await Promise.all([
         supabase.from("clients").select("*").eq("id", clientId).single(),
         supabase
           .from("tasks")
@@ -76,68 +87,113 @@ export default function ClientDetailPage() {
           .limit(20),
       ]);
 
-    if (!clientRes.data) {
+      if (clientRes.error && clientRes.error.code !== "PGRST116") {
+        setLoadError(clientRes.error.message);
+        setLoading(false);
+        return;
+      }
+
+      if (!clientRes.data) {
+        setClient(null);
+        setLoading(false);
+        return;
+      }
+
+      if (tasksRes.error) {
+        setLoadError(tasksRes.error.message);
+        setLoading(false);
+        return;
+      }
+
+      setClient(clientRes.data);
+      setTasks((tasksRes.data ?? []) as Task[]);
+
+      const taskIds = (tasksRes.data ?? []).map((task) => task.id);
+      const taskActivities =
+        taskIds.length > 0
+          ? await supabase
+              .from("activity_logs")
+              .select("*, user:profiles(*)")
+              .eq("entity_type", "task")
+              .in("entity_id", taskIds)
+              .order("created_at", { ascending: false })
+              .limit(30)
+          : { data: [], error: null };
+
+      const allActivities = [
+        ...(actRes.data ?? []),
+        ...(taskActivities.data ?? []),
+      ];
+
+      setTimeline(
+        buildClientTimeline({
+          activities: allActivities,
+          tasks: (tasksRes.data ?? []) as Task[],
+          invoices: invRes.data ?? [],
+          files: filesRes.data ?? [],
+          portalComments: portalRes.error ? [] : portalRes.data ?? [],
+        })
+      );
       setLoading(false);
-      return;
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "เกิดข้อผิดพลาดขณะโหลดข้อมูล");
+      setLoading(false);
     }
+  }, [clientId]);
 
-    setClient(clientRes.data);
-    setTasks((tasksRes.data ?? []) as Task[]);
-
-    const taskActivities = await supabase
-      .from("activity_logs")
-      .select("*, user:profiles(*)")
-      .eq("entity_type", "task")
-      .in(
-        "entity_id",
-        (tasksRes.data ?? []).map((t) => t.id)
-      )
-      .order("created_at", { ascending: false })
-      .limit(30);
-
-    const allActivities = [
-      ...(actRes.data ?? []),
-      ...(taskActivities.data ?? []),
-    ];
-
-    setTimeline(
-      buildClientTimeline({
-        activities: allActivities,
-        tasks: (tasksRes.data ?? []) as Task[],
-        invoices: invRes.data ?? [],
-        files: filesRes.data ?? [],
-        portalComments: portalRes.error ? [] : portalRes.data ?? [],
-      })
-    );
-    setLoading(false);
-  }
+  useEffect(() => {
+    if (clientId) void Promise.resolve().then(load);
+  }, [clientId, load]);
 
   if (loading) {
+    return <PageLoader label="กำลังโหลดข้อมูลลูกค้า..." />;
+  }
+
+  if (loadError) {
     return (
-      <div className="flex justify-center py-32">
-        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-      </div>
+      <PageShell width="medium">
+        <Link
+          href="/clients"
+          className="inline-flex min-h-11 items-center gap-2 text-sm text-muted hover:text-accent"
+        >
+          <ArrowLeft size={16} /> ลูกค้าทั้งหมด
+        </Link>
+        <ErrorState
+          description={loadError}
+          onRetry={() => {
+            setLoading(true);
+            setLoadError("");
+            void load();
+          }}
+        />
+      </PageShell>
     );
   }
 
   if (!client) {
     return (
-      <div className="text-center py-20">
-        <p className="text-muted">ไม่พบลูกค้า</p>
-        <Link href="/clients" className="text-accent text-sm mt-2 inline-block">
-          กลับรายการลูกค้า
-        </Link>
-      </div>
+      <PageShell width="medium">
+        <EmptyState
+          icon={<Users size={28} />}
+          title="ไม่พบลูกค้า"
+          description="ลูกค้ารายนี้อาจถูกลบหรือคุณอาจไม่มีสิทธิ์เข้าถึง"
+          action={
+            <Link href="/clients" className="text-sm font-semibold text-accent hover:underline">
+              กลับรายการลูกค้า
+            </Link>
+          }
+        />
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-5 animate-fade-in max-w-lg mx-auto lg:max-w-3xl">
+    <PageShell width="medium">
       <Link
         href="/clients"
-        className="inline-flex items-center gap-1 text-sm text-muted hover:text-accent"
+        className="inline-flex min-h-11 items-center gap-2 text-sm text-muted hover:text-accent"
       >
-        <ArrowLeft size={14} /> ลูกค้าทั้งหมด
+        <ArrowLeft size={16} /> ลูกค้าทั้งหมด
       </Link>
 
       <PageHeader
@@ -147,97 +203,159 @@ export default function ClientDetailPage() {
             .filter(Boolean)
             .join(" · ") || undefined
         }
+        action={<ClientStatusBadge status={client.status} />}
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div className="rounded-xl bg-card border border-border p-3 text-center">
-          <p className="text-lg font-bold text-accent">{tasks.length}</p>
-          <p className="text-[11px] text-muted">งาน</p>
-        </div>
-        <div className="rounded-xl bg-card border border-border p-3 text-center">
-          <p className="text-lg font-bold text-emerald-300">
+      <div className="grid grid-cols-2 gap-3">
+        <Card className="p-4">
+          <p className="text-sm text-muted">งานทั้งหมด</p>
+          <p className="mt-2 text-2xl font-semibold tabular-nums text-accent">{tasks.length}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-sm text-muted">เสร็จแล้ว</p>
+          <p className="mt-2 text-2xl font-semibold tabular-nums text-emerald-300">
             {tasks.filter((t) => t.status === "done").length}
           </p>
-          <p className="text-[11px] text-muted">เสร็จแล้ว</p>
-        </div>
-        <div className="rounded-xl bg-card border border-border p-3 text-center col-span-2">
-          <p className="text-sm font-medium">{CLIENT_STATUS_LABELS[client.status]}</p>
-          <p className="text-[11px] text-muted">สถานะลูกค้า</p>
-        </div>
+        </Card>
       </div>
 
-      {client.description && (
-        <div className="bg-card border border-border rounded-2xl p-4">
-          <p className="text-sm text-muted">{client.description}</p>
-        </div>
-      )}
-
-      <section className="bg-card border border-border rounded-2xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <h2 className="font-semibold text-sm">งานของลูกค้า</h2>
-          <Link href={`/tasks?client=${client.id}`} className="text-xs text-accent">
-            ดูทั้งหมด
-          </Link>
-        </div>
+      <Card>
+        <CardHeader
+          title="ข้อมูลลูกค้า"
+          description={PROJECT_TYPE_LABELS[client.project_type]}
+          icon={<Users size={18} className="text-accent" />}
+        />
+        {client.description && (
+          <div className="border-b border-border px-4 py-3">
+            <p className="text-sm leading-relaxed text-muted">{client.description}</p>
+          </div>
+        )}
         <div className="divide-y divide-border">
-          {tasks.slice(0, 6).map((task) => (
-            <Link
-              key={task.id}
-              href="/tasks"
-              className="flex items-center justify-between px-4 py-3 hover:bg-card-hover"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{task.title}</p>
-                <p className="text-xs text-muted">
-                  {task.assignee?.display_name ?? "ยังไม่มอบหมาย"} · {task.progress}%
-                </p>
-              </div>
-              <StatusBadge status={task.status} />
-            </Link>
-          ))}
-          {tasks.length === 0 && (
-            <p className="text-sm text-muted text-center py-6">ยังไม่มีงาน</p>
+          {client.company && (
+            <ListRow
+              leading={<Building2 size={18} className="text-muted" />}
+              title={client.company}
+              description="บริษัท"
+            />
+          )}
+          {client.contact_name && (
+            <ListRow
+              leading={<UserRound size={18} className="text-muted" />}
+              title={client.contact_name}
+              description="ผู้ติดต่อ"
+            />
+          )}
+          {client.contact_phone && (
+            <ListRow
+              leading={<Phone size={18} className="text-muted" />}
+              title={
+                <a href={`tel:${client.contact_phone}`} className="hover:text-accent">
+                  {client.contact_phone}
+                </a>
+              }
+              description="โทรศัพท์"
+            />
+          )}
+          {client.contact_email && (
+            <ListRow
+              leading={<Mail size={18} className="text-muted" />}
+              title={
+                <a href={`mailto:${client.contact_email}`} className="break-all hover:text-accent">
+                  {client.contact_email}
+                </a>
+              }
+              description="อีเมล"
+            />
           )}
         </div>
-      </section>
+      </Card>
 
-      <section className="bg-card border border-border rounded-2xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-border">
-          <h2 className="font-semibold text-sm flex items-center gap-2">
-            <History size={16} className="text-accent" />
-            Timeline
-          </h2>
-        </div>
-        <div className="divide-y divide-border max-h-[420px] overflow-y-auto">
-          {timeline.map((item) => {
-            const Icon = TIMELINE_ICONS[item.type];
-            return (
-              <div key={item.id} className="flex items-start gap-3 px-4 py-3">
-                <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center shrink-0 mt-0.5">
-                  <Icon size={14} className="text-accent" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{item.title}</p>
-                  {item.subtitle && (
-                    <p className="text-xs text-muted truncate">{item.subtitle}</p>
-                  )}
-                  <p className="text-[10px] text-muted mt-0.5">
-                    {format(new Date(item.date), "d MMM yyyy HH:mm", { locale: th })}
-                  </p>
-                </div>
-                {item.link && (
-                  <Link href={item.link} className="text-accent shrink-0">
-                    <ExternalLink size={14} />
-                  </Link>
-                )}
-              </div>
-            );
-          })}
-          {timeline.length === 0 && (
-            <p className="text-sm text-muted text-center py-6">ยังไม่มีประวัติ</p>
-          )}
-        </div>
-      </section>
-    </div>
+      <Card>
+        <CardHeader
+          title="งานของลูกค้า"
+          icon={<CheckSquare size={18} className="text-accent" />}
+          action={
+            <Link href={`/tasks?client=${client.id}`} className="text-sm font-semibold text-accent hover:underline">
+              ดูทั้งหมด
+            </Link>
+          }
+        />
+        {tasks.length > 0 ? (
+          <div className="divide-y divide-border">
+            {tasks.slice(0, 6).map((task) => (
+              <Link key={task.id} href="/tasks" className="block hover:bg-card-hover">
+                <ListRow
+                  title={<span className="block truncate">{task.title}</span>}
+                  description={`${task.assignee?.display_name ?? "ยังไม่มอบหมาย"} · ${task.progress}%`}
+                  trailing={<StatusBadge status={task.status} />}
+                />
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon={<CheckSquare size={24} />}
+            title="ยังไม่มีงาน"
+            description="งานที่ผูกกับลูกค้ารายนี้จะแสดงที่นี่"
+            action={
+              <Link href={`/tasks?client=${client.id}`} className="text-sm font-semibold text-accent hover:underline">
+                ไปที่หน้างาน
+              </Link>
+            }
+          />
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Timeline"
+          description="ประวัติงาน เอกสาร และ Portal"
+          icon={<History size={18} className="text-accent" />}
+        />
+        {timeline.length > 0 ? (
+          <div className="max-h-105 divide-y divide-border overflow-y-auto">
+            {timeline.map((item) => {
+              const Icon = TIMELINE_ICONS[item.type];
+              return (
+                <ListRow
+                  key={item.id}
+                  leading={
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-surface-soft">
+                      <Icon size={16} className="text-accent" />
+                    </div>
+                  }
+                  title={<span className="block truncate">{item.title}</span>}
+                  description={
+                    <>
+                      {item.subtitle && <span className="block truncate">{item.subtitle}</span>}
+                      <span className="mt-0.5 block text-xs">
+                        {format(new Date(item.date), "d MMM yyyy HH:mm", { locale: th })}
+                      </span>
+                    </>
+                  }
+                  trailing={
+                    item.link ? (
+                      <Link
+                        href={item.link}
+                        aria-label={`เปิด ${item.title}`}
+                        className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-accent hover:bg-card-hover"
+                      >
+                        <ExternalLink size={16} />
+                      </Link>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyState
+            icon={<History size={24} />}
+            title="ยังไม่มีประวัติ"
+            description="กิจกรรมของลูกค้ารายนี้จะแสดงตามลำดับเวลา"
+          />
+        )}
+      </Card>
+    </PageShell>
   );
 }

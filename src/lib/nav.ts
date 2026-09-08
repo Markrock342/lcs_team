@@ -16,6 +16,7 @@ import {
   Clock,
   Search,
   Handshake,
+  Sun,
 } from "lucide-react";
 
 export type NavItem = {
@@ -29,10 +30,11 @@ export type NavItem = {
 
 /** เมนูหลัก — sidebar desktop + ใช้บ่อย */
 export const MAIN_NAV: NavItem[] = [
+  { href: "/today", label: "วันนี้", icon: Sun, desc: "คิวงาน นัดขาย และข้อความ", color: "text-amber-400" },
   { href: "/dashboard", label: "ภาพรวม", icon: LayoutDashboard },
   { href: "/tasks", label: "งาน", icon: CheckSquare, desc: "งานใหญ่ · งานย่อย · Kanban" },
   { href: "/clients", label: "ลูกค้า", icon: Users, desc: "ข้อมูลลูกค้า · Portal" },
-  { href: "/sales", label: "ขาย", icon: Handshake, desc: "ลีด · ดีล · ปิดการขาย", color: "text-emerald-400" },
+  { href: "/sales", label: "แผนกขาย", icon: Handshake, desc: "รายชื่อเป้าหมาย · ติดตาม · ท่อขาย · ผู้ช่วย Gemini", color: "text-emerald-400" },
   { href: "/finance", label: "การเงิน", icon: CircleDollarSign, desc: "รับเงิน · จ่ายทีม · สรุป", color: "text-sky-400" },
   { href: "/chat", label: "แชททีม", icon: MessageCircle, desc: "แชทกลุ่มทีม" },
 ];
@@ -44,17 +46,17 @@ export const EXTRA_NAV: NavItem[] = [
   { href: "/search", label: "ค้นหา", icon: Search, desc: "ค้นหาทั้งแอป", color: "text-sky-400" },
   { href: "/invoices", label: "ใบแจ้งหนี้", icon: Receipt, desc: "สร้างเอกสาร / ใบเสร็จ", color: "text-emerald-400" },
   { href: "/payouts", label: "บัญชีทีม", icon: Wallet, desc: "เลขบัญชีเพื่อนในทีม", color: "text-rose-400" },
-  { href: "/templates", label: "เทมเพลตงาน", icon: LayoutTemplate, desc: "สร้างโปรเจกต์จาก template", color: "text-violet-400" },
-  { href: "/notifications", label: "แจ้งเตือน", icon: Bell, desc: "In-app + Push", color: "text-pink-400" },
+  { href: "/templates", label: "เทมเพลต", icon: LayoutTemplate, desc: "งาน ใบเสนอราคา สัญญา", color: "text-violet-400" },
+  { href: "/notifications", label: "กล่องงาน", icon: Bell, desc: "Inbox ที่จัดการได้", color: "text-pink-400" },
   { href: "/activity", label: "ประวัติกิจกรรม", icon: History, desc: "Log การเปลี่ยนแปลง", color: "text-amber-400" },
-  { href: "/settings", label: "ตั้งค่า", icon: Settings, desc: "โปรไฟล์ · Theme · Push", color: "text-zinc-400" },
+  { href: "/settings", label: "ตั้งค่า", icon: Settings, desc: "โปรไฟล์ · Theme · สุขภาพระบบ", color: "text-zinc-400" },
 ];
 
 /** Bottom tab มือถือ — 5 ช่อง */
 export const MOBILE_NAV: NavItem[] = [
-  { href: "/dashboard", label: "ภาพรวม", icon: LayoutDashboard },
+  { href: "/today", label: "วันนี้", icon: Sun },
   { href: "/tasks", label: "งาน", icon: CheckSquare },
-  { href: "/finance", label: "การเงิน", icon: CircleDollarSign },
+  { href: "/sales", label: "แผนกขาย", icon: Handshake },
   { href: "/chat", label: "แชท", icon: MessageCircle },
   { href: "/more", label: "อื่นๆ", icon: MoreHorizontal },
 ];
@@ -62,7 +64,7 @@ export const MOBILE_NAV: NavItem[] = [
 /** กลุ่มเมนูในหน้า More */
 export const MORE_SECTIONS: { title: string; items: NavItem[] }[] = [
   {
-    title: "ขาย",
+    title: "แผนกขาย",
     items: MAIN_NAV.filter((n) => ["/clients", "/sales"].includes(n.href)),
   },
   {
@@ -73,9 +75,10 @@ export const MORE_SECTIONS: { title: string; items: NavItem[] }[] = [
   },
   {
     title: "การเงิน",
-    items: EXTRA_NAV.filter((n) =>
-      ["/invoices", "/payouts"].includes(n.href)
-    ),
+    items: [
+      ...MAIN_NAV.filter((n) => n.href === "/finance"),
+      ...EXTRA_NAV.filter((n) => ["/invoices", "/payouts"].includes(n.href)),
+    ],
   },
   {
     title: "ระบบ",

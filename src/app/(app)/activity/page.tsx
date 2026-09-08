@@ -2,68 +2,130 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { PageHeader } from "@/components/mobile-ui";
+import { PageHeader, PageShell } from "@/components/mobile-ui";
 import { ACTIVITY_ACTION_LABELS, type ActivityLog } from "@/lib/extras-types";
-import { Avatar } from "@/components/ui";
+import {
+  Avatar,
+  Card,
+  CardHeader,
+  EmptyState,
+  ErrorState,
+  ListRow,
+  PageLoader,
+  StatusStamp,
+} from "@/components/ui";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
+import { Activity, History } from "lucide-react";
+
+const ENTITY_LABELS: Record<string, string> = {
+  task: "งาน",
+  client: "ลูกค้า",
+  invoice: "เอกสาร",
+  task_template: "เทมเพลต",
+  profile: "สมาชิก",
+  transaction: "รายการเงิน",
+};
 
 export default function ActivityPage() {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function load() {
+    setError(null);
     const supabase = createClient();
-    const { data } = await supabase
+    const { data, error: loadError } = await supabase
       .from("activity_logs")
       .select("*, user:profiles(*)")
       .order("created_at", { ascending: false })
       .limit(100);
+    if (loadError) {
+      setError("โหลดประวัติกิจกรรมไม่สำเร็จ โปรดลองอีกครั้ง");
+      setLoading(false);
+      return;
+    }
     setLogs(data ?? []);
     setLoading(false);
   }
 
   if (loading) {
+    return <PageLoader label="กำลังโหลดประวัติกิจกรรม..." />;
+  }
+
+  if (error) {
     return (
-      <div className="flex justify-center py-32">
-        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-      </div>
+      <PageShell width="medium">
+        <ErrorState
+          description={error}
+          onRetry={() => {
+            setLoading(true);
+            void load();
+          }}
+        />
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      <PageHeader title="ประวัติกิจกรรม" description="Log การเปลี่ยนแปลงทั้งหมดในทีม" />
+    <PageShell width="medium">
+      <PageHeader
+        title="ประวัติกิจกรรม"
+        description="รายการเปลี่ยนแปลงล่าสุดของทีม"
+      />
 
-      <div className="space-y-2">
+      <Card>
+        <CardHeader
+          title="กิจกรรมล่าสุด"
+          description={`แสดงสูงสุด 100 รายการ · พบ ${logs.length} รายการ`}
+          icon={<History size={18} className="text-accent" />}
+        />
+        {logs.length > 0 ? (
+          <div className="divide-y divide-border">
         {logs.map((log) => (
-          <div key={log.id} className="flex gap-3 p-3 bg-card border border-border rounded-xl">
-            {log.user && (
-              <Avatar name={log.user.display_name} src={log.user.avatar_url} size="sm" />
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm">
-                <span className="font-medium">{log.user?.display_name ?? "ระบบ"}</span>{" "}
-                <span className="text-accent">{ACTIVITY_ACTION_LABELS[log.action] ?? log.action}</span>{" "}
-                <span className="text-muted">{log.entity_type}</span>{" "}
-                <span className="font-medium">{log.entity_title}</span>
-              </p>
-              <p className="text-[10px] text-muted mt-0.5">
+          <ListRow
+            key={log.id}
+            leading={
+              log.user ? (
+                <Avatar name={log.user.display_name} src={log.user.avatar_url} size="sm" />
+              ) : (
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-soft text-muted">
+                  <Activity size={15} />
+                </span>
+              )
+            }
+            title={
+              <span className="block text-sm">
+                {log.user?.display_name ?? "ระบบ"}{" "}
+                <span className="font-normal text-muted">
+                  {ENTITY_LABELS[log.entity_type] ?? log.entity_type}
+                </span>{" "}
+                {log.entity_title}
+              </span>
+            }
+            description={
+              <time dateTime={log.created_at}>
                 {format(new Date(log.created_at), "d MMM yyyy HH:mm", { locale: th })}
-              </p>
-            </div>
-          </div>
+              </time>
+            }
+            trailing={
+              <StatusStamp label={ACTIVITY_ACTION_LABELS[log.action] ?? log.action} />
+            }
+          />
         ))}
-        {logs.length === 0 && (
-          <p className="text-center text-muted py-12">
-            ยังไม่มีประวัติ — รัน supabase/add-all-features.sql ก่อน
-          </p>
+          </div>
+        ) : (
+          <EmptyState
+            icon={<History size={28} />}
+            title="ยังไม่มีกิจกรรม"
+            description="เมื่อทีมเริ่มแก้ไขงานหรือข้อมูล กิจกรรมจะแสดงที่นี่"
+          />
         )}
-      </div>
-    </div>
+      </Card>
+    </PageShell>
   );
 }

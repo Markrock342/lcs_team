@@ -22,12 +22,12 @@ export type TaskCountdownInfo = {
 };
 
 export const COUNTDOWN_TONE_CLASS: Record<CountdownTone, string> = {
-  muted: "bg-zinc-500/15 text-zinc-300 border-zinc-500/25",
-  waiting: "bg-sky-500/15 text-sky-300 border-sky-500/25",
-  active: "bg-emerald-500/15 text-emerald-300 border-emerald-500/25",
-  urgent: "bg-amber-500/20 text-amber-200 border-amber-500/35",
-  overdue: "bg-red-500/15 text-red-300 border-red-500/30",
-  done: "bg-zinc-600/20 text-zinc-400 border-zinc-600/30",
+  muted: "status-slate",
+  waiting: "status-blue",
+  active: "status-green",
+  urgent: "status-amber",
+  overdue: "status-red",
+  done: "status-slate",
 };
 
 export function formatTaskDate(iso: string | null | undefined): string {

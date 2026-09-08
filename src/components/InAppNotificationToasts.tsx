@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AtSign, Bell, CheckSquare, MessageCircle, X } from "lucide-react";
+import { AtSign, Bell, CheckSquare, Handshake, MessageCircle, Receipt, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { getChatChannelIdFromLink } from "@/lib/channels";
 import {
@@ -27,6 +27,8 @@ const KIND_ICON = {
   mention: AtSign,
   task: CheckSquare,
   system: Bell,
+  sales: Handshake,
+  invoice: Receipt,
 } as const;
 
 const KIND_STYLE = {
@@ -34,6 +36,8 @@ const KIND_STYLE = {
   mention: "bg-violet-500/15 text-violet-400",
   task: "bg-amber-500/15 text-amber-400",
   system: "bg-zinc-500/15 text-zinc-300",
+  sales: "bg-emerald-500/15 text-emerald-300",
+  invoice: "bg-sky-500/15 text-sky-300",
 } as const;
 
 export function InAppNotificationToasts({ userId }: { userId: string }) {

@@ -1,4 +1,4 @@
-import type { TeamRole, TaskStatus, ClientStatus, ProjectType, Profile, Client } from "./types";
+import type { TeamRole, ProjectType, Profile, Client } from "./types";
 
 export type InvoiceStatus = "draft" | "sent" | "partial" | "paid" | "overdue";
 export type ThemeMode = "dark" | "light";
@@ -23,6 +23,21 @@ export interface AppNotification {
   link: string | null;
   read: boolean;
   created_at: string;
+  source_type?: string | null;
+  source_id?: string | null;
+  action_kind?: string | null;
+  action_payload?: Record<string, unknown> | null;
+  done_at?: string | null;
+}
+
+export interface SavedView {
+  id: string;
+  user_id: string;
+  page: "tasks" | "clients" | "sales" | "finance";
+  name: string;
+  filters: Record<string, string>;
+  is_default: boolean | null;
+  created_at: string;
 }
 
 export interface Invoice {
@@ -33,7 +48,7 @@ export interface Invoice {
   status: InvoiceStatus;
   due_date: string | null;
   notes: string | null;
-  document_type?: "invoice" | "receipt" | "proposal";
+  document_type?: "invoice" | "receipt" | "proposal" | "quotation" | "agreement";
   doc_number?: string | null;
   issue_date?: string | null;
   payment_method?: string | null;
@@ -221,11 +236,11 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
 };
 
 export const INVOICE_STATUS_COLORS: Record<InvoiceStatus, string> = {
-  draft: "bg-zinc-500/20 text-zinc-300",
-  sent: "bg-[#00a3ff]/20 text-[#00a3ff]",
-  partial: "bg-amber-500/20 text-amber-300",
-  paid: "bg-emerald-500/20 text-emerald-300",
-  overdue: "bg-red-500/20 text-red-400",
+  draft: "status-slate",
+  sent: "status-blue",
+  partial: "status-amber",
+  paid: "status-green",
+  overdue: "status-red",
 };
 
 export const ACTIVITY_ACTION_LABELS: Record<string, string> = {

@@ -1,21 +1,107 @@
+"use client";
+
 import Image from "next/image";
-import type { TaskStatus, TeamRole, Profile } from "@/lib/types";
+import { useEffect, useId, useRef, useState, type HTMLAttributes } from "react";
+import type {
+  ClientStatus,
+  SalesStage,
+  TaskPriority,
+  TaskStatus,
+  TeamRole,
+  Profile,
+} from "@/lib/types";
 import { getProfileDisplayRoles } from "@/lib/profile-display";
 import {
+  CLIENT_STATUS_COLORS,
+  CLIENT_STATUS_LABELS,
+  SALES_STAGE_COLORS,
+  SALES_STAGE_LABELS,
+  TASK_PRIORITY_COLORS,
+  TASK_PRIORITY_LABELS,
   TASK_STATUS_LABELS,
   TASK_STATUS_COLORS,
   ROLE_LABELS,
   ROLE_COLORS,
 } from "@/lib/constants";
 
-export function StatusBadge({ status }: { status: TaskStatus }) {
+function classes(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(" ");
+}
+
+export function Card({
+  interactive = false,
+  className,
+  ...props
+}: HTMLAttributes<HTMLElement> & { interactive?: boolean }) {
   return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${TASK_STATUS_COLORS[status]}`}
-    >
-      {TASK_STATUS_LABELS[status]}
+    <section
+      {...props}
+      className={classes(interactive ? "job-jacket" : "ticket-card", className)}
+    />
+  );
+}
+
+export function CardHeader({
+  title,
+  description,
+  icon,
+  action,
+}: {
+  title: string;
+  description?: string;
+  icon?: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  return (
+    <header className="flex items-start justify-between gap-4 px-4 py-3.5 border-b border-border">
+      <div className="min-w-0">
+        <h2 className="flex items-center gap-2 text-base font-semibold">
+          {icon}
+          <span className="truncate">{title}</span>
+        </h2>
+        {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
+      </div>
+      {action && <div className="shrink-0">{action}</div>}
+    </header>
+  );
+}
+
+export type StatusTone = "slate" | "blue" | "amber" | "violet" | "green" | "red";
+
+export function StatusStamp({
+  label,
+  tone = "slate",
+  className,
+}: {
+  label: string;
+  tone?: StatusTone;
+  className?: string;
+}) {
+  return (
+    <span className={classes("status-stamp", `status-${tone}`, className)}>
+      {label}
     </span>
   );
+}
+
+function toneFromClass(value: string): StatusTone {
+  return value.replace("status-", "") as StatusTone;
+}
+
+export function StatusBadge({ status }: { status: TaskStatus }) {
+  return <StatusStamp label={TASK_STATUS_LABELS[status]} tone={toneFromClass(TASK_STATUS_COLORS[status])} />;
+}
+
+export function ClientStatusBadge({ status }: { status: ClientStatus }) {
+  return <StatusStamp label={CLIENT_STATUS_LABELS[status]} tone={toneFromClass(CLIENT_STATUS_COLORS[status])} />;
+}
+
+export function SalesStageBadge({ stage }: { stage: SalesStage }) {
+  return <StatusStamp label={SALES_STAGE_LABELS[stage]} tone={toneFromClass(SALES_STAGE_COLORS[stage])} />;
+}
+
+export function PriorityBadge({ priority }: { priority: TaskPriority }) {
+  return <StatusStamp label={`ความสำคัญ ${TASK_PRIORITY_LABELS[priority]}`} tone={toneFromClass(TASK_PRIORITY_COLORS[priority])} />;
 }
 
 export function RoleBadge({ role }: { role: TeamRole }) {
@@ -60,6 +146,7 @@ export function Avatar({
   src?: string | null;
   size?: "sm" | "md" | "lg";
 }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const initials = name
     .split(" ")
     .map((n) => n[0])
@@ -75,7 +162,7 @@ export function Avatar({
 
   const px = { sm: 28, md: 36, lg: 48 }[size];
 
-  if (src) {
+  if (src && failedSrc !== src) {
     return (
       <Image
         src={src}
@@ -83,6 +170,7 @@ export function Avatar({
         width={px}
         height={px}
         className={`${sizeClass} rounded-full object-cover shrink-0`}
+        onError={() => setFailedSrc(src)}
       />
     );
   }
@@ -109,18 +197,99 @@ export function EmptyState({
   icon,
   title,
   description,
+  action,
 }: {
   icon: React.ReactNode;
   title: string;
   description: string;
+  action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-card border border-border flex items-center justify-center mb-4 text-muted">
+    <div className="flex flex-col items-center justify-center gap-3 py-14 px-4 text-center">
+      <div className="w-14 h-14 rounded-2xl bg-surface-soft flex items-center justify-center text-muted">
         {icon}
       </div>
-      <h3 className="text-lg font-medium mb-1">{title}</h3>
-      <p className="text-sm text-muted max-w-sm">{description}</p>
+      <div className="space-y-1">
+        <h3 className="text-lg font-semibold">{title}</h3>
+        <p className="text-sm text-muted max-w-sm">{description}</p>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+export function PageLoader({ label = "กำลังโหลด..." }: { label?: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 py-24 text-muted" role="status" aria-live="polite">
+      <span className="w-7 h-7 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      <span className="text-sm">{label}</span>
+    </div>
+  );
+}
+
+export function ErrorState({
+  title = "ไม่สามารถโหลดข้อมูลได้",
+  description,
+  onRetry,
+}: {
+  title?: string;
+  description?: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <div className="rounded-2xl bg-(--status-red-bg) p-4 text-(--status-red-fg)" role="alert">
+      <p className="font-semibold">{title}</p>
+      {description && <p className="mt-1 text-sm">{description}</p>}
+      {onRetry && (
+        <button type="button" onClick={onRetry} className="mt-3 min-h-11 rounded-xl bg-card px-4 text-sm font-semibold text-foreground hover:bg-card-hover active:scale-[0.98]">
+          ลองอีกครั้ง
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function MetricTile({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: React.ReactNode;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl bg-surface-soft p-4">
+      <div className="flex items-center justify-between gap-3 text-muted">
+        <p className="text-sm">{label}</p>
+        {icon}
+      </div>
+      <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
+    </div>
+  );
+}
+
+export function ListRow({
+  title,
+  description,
+  leading,
+  trailing,
+  className,
+}: {
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  leading?: React.ReactNode;
+  trailing?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={classes("flex min-h-16 items-center gap-3 px-4 py-3", className)}>
+      {leading && <div className="shrink-0">{leading}</div>}
+      <div className="min-w-0 flex-1">
+        <div className="font-medium">{title}</div>
+        {description && <div className="mt-0.5 text-sm text-muted">{description}</div>}
+      </div>
+      {trailing && <div className="shrink-0">{trailing}</div>}
     </div>
   );
 }
@@ -136,20 +305,46 @@ export function Modal({
   title: string;
   children: React.ReactNode;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previousFocusRef.current?.focus();
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-background/75"
         onClick={onClose}
       />
-      <div className="relative w-full sm:max-w-lg max-h-[92dvh] overflow-y-auto bg-card border border-border rounded-t-2xl sm:rounded-2xl animate-slide-up pb-safe">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        className="relative w-full sm:max-w-lg max-h-[92dvh] overflow-y-auto bg-card rounded-t-2xl sm:rounded-2xl animate-slide-up pb-safe shadow-(--shadow-float)"
+      >
         <div className="sticky top-0 bg-card border-b border-border px-5 py-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{title}</h2>
           <button
+            type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-card-hover flex items-center justify-center text-muted hover:text-foreground transition-colors"
+            aria-label="ปิด"
+            className="w-11 h-11 rounded-xl hover:bg-card-hover active:scale-[0.98] flex items-center justify-center text-muted hover:text-foreground transition-colors"
           >
             ✕
           </button>
@@ -164,14 +359,17 @@ export function Input({
   label,
   ...props
 }: React.InputHTMLAttributes<HTMLInputElement> & { label?: string }) {
+  const generatedId = useId();
+  const id = props.id ?? generatedId;
   return (
     <div className="space-y-1.5">
       {label && (
-        <label className="block text-sm font-medium text-muted">{label}</label>
+        <label htmlFor={id} className="block text-sm font-medium text-muted">{label}</label>
       )}
       <input
         {...props}
-        className={`w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm placeholder:text-muted/70 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors ${props.className ?? ""}`}
+        id={id}
+        className={`w-full min-h-11 px-3.5 py-2.5 bg-background border border-border rounded-xl text-base placeholder:text-muted/70 focus-visible:border-accent transition-colors ${props.className ?? ""}`}
       />
     </div>
   );
@@ -182,14 +380,17 @@ export function Select({
   children,
   ...props
 }: React.SelectHTMLAttributes<HTMLSelectElement> & { label?: string }) {
+  const generatedId = useId();
+  const id = props.id ?? generatedId;
   return (
     <div className="space-y-1.5">
       {label && (
-        <label className="block text-sm font-medium text-muted">{label}</label>
+        <label htmlFor={id} className="block text-sm font-medium text-muted">{label}</label>
       )}
       <select
         {...props}
-        className={`w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all appearance-none ${props.className ?? ""}`}
+        id={id}
+        className={`w-full min-h-11 px-3.5 py-2.5 bg-background border border-border rounded-xl text-base focus-visible:border-accent transition-colors appearance-none ${props.className ?? ""}`}
       >
         {children}
       </select>
@@ -201,14 +402,17 @@ export function Textarea({
   label,
   ...props
 }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string }) {
+  const generatedId = useId();
+  const id = props.id ?? generatedId;
   return (
     <div className="space-y-1.5">
       {label && (
-        <label className="block text-sm font-medium text-muted">{label}</label>
+        <label htmlFor={id} className="block text-sm font-medium text-muted">{label}</label>
       )}
       <textarea
         {...props}
-        className={`w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all resize-y ${props.className ?? ""}`}
+        id={id}
+        className={`w-full min-h-24 px-3.5 py-2.5 bg-background border border-border rounded-xl text-base placeholder:text-muted focus-visible:border-accent transition-colors resize-y ${props.className ?? ""}`}
       />
     </div>
   );
@@ -236,12 +440,70 @@ export function Button({
     <button
       {...props}
       disabled={loading || props.disabled}
-      className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${props.className ?? ""}`}
+      className={`inline-flex min-h-11 items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${props.className ?? ""}`}
     >
       {loading ? (
         <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
       ) : null}
       {children}
     </button>
+  );
+}
+
+export function Drawer({
+  open,
+  onClose,
+  title,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    dialogRef.current?.focus();
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <button
+        type="button"
+        className="absolute inset-0 bg-background/70"
+        aria-label="ปิดแผงรายละเอียด"
+        onClick={onClose}
+      />
+      <aside
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        className="relative flex h-full w-full max-w-lg flex-col bg-card shadow-(--shadow-float) animate-slide-up"
+      >
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h2 className="text-lg font-semibold">{title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="ปิด"
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5">{children}</div>
+      </aside>
+    </div>
   );
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AtSign, Bell, CheckSquare, MessageCircle } from "lucide-react";
+import { AtSign, Bell, CheckSquare, Handshake, MessageCircle, Receipt } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { getChatChannelIdFromLink } from "@/lib/channels";
 import {
@@ -19,6 +19,8 @@ const KIND_ICON = {
   mention: AtSign,
   task: CheckSquare,
   system: Bell,
+  sales: Handshake,
+  invoice: Receipt,
 } as const;
 
 export function NotificationBell() {

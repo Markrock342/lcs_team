@@ -10,14 +10,25 @@ const ThemeContext = createContext<{
   setTheme: (t: ThemeMode) => void;
 }>({ theme: "dark", toggle: () => {}, setTheme: () => {} });
 
+function syncThemeDocument(theme: ThemeMode) {
+  document.documentElement.setAttribute("data-theme", theme);
+  document
+    .querySelector('meta[name="theme-color"]')
+    ?.setAttribute("content", theme === "dark" ? "#071018" : "#f3f6f8");
+  localStorage.setItem("lcs-theme", theme);
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>("dark");
+  const [theme, setThemeState] = useState<ThemeMode>(() => {
+    if (typeof window === "undefined") return "dark";
+    return (localStorage.getItem("lcs-theme") as ThemeMode | null) ?? "dark";
+  });
 
   useEffect(() => {
-    const saved = localStorage.getItem("lcs-theme") as ThemeMode | null;
-    if (saved) applyTheme(saved);
-    else applyTheme("dark");
+    syncThemeDocument(theme);
+  }, [theme]);
 
+  useEffect(() => {
     async function loadProfile() {
       try {
         const supabase = createClient();
@@ -29,7 +40,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           .eq("id", user.id)
           .single();
         if (error || !data?.theme) return;
-        applyTheme(data.theme as ThemeMode);
+        setThemeState(data.theme as ThemeMode);
       } catch {
         // ignore
       }
@@ -37,14 +48,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     loadProfile();
   }, []);
 
-  function applyTheme(t: ThemeMode) {
-    setThemeState(t);
-    document.documentElement.setAttribute("data-theme", t);
-    localStorage.setItem("lcs-theme", t);
-  }
-
   async function setTheme(t: ThemeMode) {
-    applyTheme(t);
+    setThemeState(t);
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();

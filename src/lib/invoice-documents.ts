@@ -1,6 +1,6 @@
 import { bahtToText } from "./baht-text";
 
-export type DocumentType = "invoice" | "receipt" | "proposal";
+export type DocumentType = "invoice" | "receipt" | "proposal" | "quotation" | "agreement";
 
 export type DocumentLineItem = {
   description: string;
@@ -41,6 +41,53 @@ export type ProposalMeta = {
   totalAmount: number;
 };
 
+export type QuotationPackage = {
+  code: string;
+  name: string;
+  recommended?: boolean;
+  price: number;
+  duration: string;
+  suitableFor: string;
+  includes: string[];
+};
+
+export type QuotationMeta = {
+  kind: "quotation";
+  headline: string;
+  summary: string;
+  demoUrl?: string;
+  packages: QuotationPackage[];
+  customerPays: { item: string; who: string; estimate: string }[];
+  monthly: { item: string; packs: string; price: number }[];
+  chooseGuide: string[];
+  paymentNote: string;
+  notes: string[];
+  validDays: number;
+  contact: string;
+};
+
+export type AgreementSection = {
+  no: number;
+  title: string;
+  body: string;
+  bullets?: string[];
+  callout?: string;
+};
+
+export type AgreementMeta = {
+  kind: "agreement";
+  subtitle: string;
+  purpose: string;
+  usageNote: string;
+  duration: string;
+  channel: string;
+  representative: string;
+  effectiveDate: string;
+  sections: AgreementSection[];
+  summaryRows: { topic: string; principle: string }[];
+  signers: { name: string; role: string }[];
+};
+
 export type DocumentFormData = {
   document_type: DocumentType;
   client_id: string;
@@ -53,7 +100,7 @@ export type DocumentFormData = {
   notes: string;
   vat_amount: string;
   line_items: DocumentLineItem[];
-  document_meta: ProposalMeta | Record<string, unknown>;
+  document_meta: ProposalMeta | QuotationMeta | AgreementMeta | Record<string, unknown>;
 };
 
 export const LCS_COMPANY = {
@@ -63,12 +110,17 @@ export const LCS_COMPANY = {
   accountNumber: "216-0-90996-3",
   accountName: "นาย สนธยา สายวรรณะ",
   signerName: "สนธยา สายวรรณะ",
+  phone: "084-265-2544",
+  line: "@026iaomj",
+  website: "www.limitcode.shop",
 };
 
 export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   invoice: "ใบแจ้งหนี้",
   receipt: "ใบเสร็จรับเงิน",
-  proposal: "Workflow / Proposal",
+  proposal: "ขอบเขตงานและใบเสนอราคา",
+  quotation: "ใบเสนอราคา",
+  agreement: "สัญญา / ข้อตกลงทีม",
 };
 
 export const DOCUMENT_TYPE_TITLES: Record<DocumentType, { th: string; en: string }> = {
@@ -78,7 +130,16 @@ export const DOCUMENT_TYPE_TITLES: Record<DocumentType, { th: string; en: string
     th: "เอกสารสรุปขอบเขตงานและใบเสนอราคา",
     en: "PROJECT PROPOSAL & WORKFLOW",
   },
+  quotation: { th: "ใบเสนอราคา", en: "QUOTATION" },
+  agreement: {
+    th: "ข้อตกลงการทำงานร่วมกันต่อเนื่อง",
+    en: "CONTINUING TEAM COLLABORATION AGREEMENT",
+  },
 };
+
+export function isNonRevenueDocument(type?: string | null) {
+  return type === "proposal" || type === "quotation" || type === "agreement";
+}
 
 export function lineItemAmount(item: DocumentLineItem): number {
   return item.quantity * item.unitPrice;
@@ -102,7 +163,15 @@ export function generateDocNumber(type: DocumentType): string {
     String(d.getMonth() + 1).padStart(2, "0") +
     String(d.getDate()).padStart(2, "0");
   const prefix =
-    type === "receipt" ? "LCS-RC" : type === "proposal" ? "LCS-PR" : "LCS-IV";
+    type === "receipt"
+      ? "LCS-RC"
+      : type === "proposal"
+        ? "LCS-PR"
+        : type === "quotation"
+          ? "LCS-QT"
+          : type === "agreement"
+            ? "LCS-TA"
+            : "LCS-IV";
   const seq = String(Math.floor(Math.random() * 900) + 100);
   return `${prefix}-${ymd}-${seq}`;
 }
@@ -134,7 +203,9 @@ export function emptyForm(type: DocumentType = "invoice"): DocumentFormData {
         ? "เอกสารนี้เป็นใบรับเงิน/ใบเสร็จรับเงิน ไม่ใช่ใบกำกับภาษี"
         : type === "invoice"
           ? "กรุณาชำระเงินภายในกำหนดตามเอกสาร"
-          : "",
+          : type === "agreement"
+            ? "ใช้เป็นกรอบการร่วมงานระยะยาว ส่วนรายละเอียดแต่ละโครงการบันทึกเพิ่มในช่องทางกลางของทีม"
+            : "ราคาเป็นข้อเสนอเพื่อประกอบการพิจารณา ยืนยันแพ็กเกจแล้วออกใบยืนยันงานก่อนเริ่ม",
     vat_amount: "0",
     line_items: [emptyLineItem()],
     document_meta: {},

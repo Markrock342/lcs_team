@@ -1,17 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Plus, DollarSign, Eye, Printer, FileText, Pencil, Receipt, FileDown, Trash2, MoreHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Button, Modal } from "@/components/ui";
-import { PageHeader, FilterTabs } from "@/components/mobile-ui";
+import {
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  ErrorState,
+  ListRow,
+  MetricTile,
+  Modal,
+  PageLoader,
+  StatusStamp,
+  type StatusTone,
+} from "@/components/ui";
+import { PageShell, PageHeader, FilterTabs } from "@/components/mobile-ui";
 import { useRole } from "@/components/RoleProvider";
 import { LCSDocumentPreview, printDocument } from "@/components/LCSDocumentPreview";
 import { InvoiceDocumentForm } from "@/components/InvoiceDocumentForm";
 import {
   INVOICE_STATUS_LABELS,
-  INVOICE_STATUS_COLORS,
   type Invoice,
   type InvoiceStatus,
 } from "@/lib/extras-types";
@@ -25,6 +35,7 @@ import {
   type DocumentFormData,
   type DocumentType,
 } from "@/lib/invoice-documents";
+import { DOCUMENT_KITS } from "@/lib/document-kits";
 import { logActivity, exportToCSV } from "@/lib/activity";
 import { documentPdfFilename, exportDocumentPdf } from "@/lib/export-pdf";
 import { syncInvoicePaymentToLedger } from "@/lib/accounting";
@@ -56,13 +67,21 @@ function findReceiptForInvoice(list: (Invoice & { client?: Client })[], invoiceI
   );
 }
 
+function invoiceStatusTone(status: InvoiceStatus): StatusTone {
+  if (status === "paid") return "green";
+  if (status === "partial") return "amber";
+  if (status === "overdue") return "red";
+  if (status === "sent") return "blue";
+  return "slate";
+}
+
 function buildPayload(form: DocumentFormData) {
   const subtotal = sumLineItems(form.line_items);
   const vat = parseFloat(form.vat_amount || "0") || 0;
   const total = subtotal + vat;
   return {
     payload: {
-      client_id: form.client_id,
+      client_id: form.client_id || null,
       title: form.title,
       total_amount: total,
       status: form.status as InvoiceStatus,
@@ -104,12 +123,14 @@ export default function InvoicesPage() {
   const [exportingPdf, setExportingPdf] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [dbError, setDbError] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     load();
   }, []);
 
   async function load() {
+    setLoadError("");
     const supabase = createClient();
     const [inv, cls] = await Promise.all([
       supabase
@@ -118,17 +139,31 @@ export default function InvoicesPage() {
         .order("created_at", { ascending: false }),
       supabase.from("clients").select("*"),
     ]);
+    if (inv.error || cls.error) {
+      setLoadError(inv.error?.message ?? cls.error?.message ?? "โหลดข้อมูลไม่สำเร็จ");
+    }
     setInvoices(inv.data ?? []);
     setClients(cls.data ?? []);
     setLoading(false);
   }
 
   const filtered = invoices.filter((i) =>
-    typeFilter === "all" ? true : (i.document_type ?? "invoice") === typeFilter
+    typeFilter === "all"
+      ? true
+      : typeFilter === "proposal"
+        ? (i.document_type === "proposal" || i.document_type === "quotation")
+        : (i.document_type ?? "invoice") === typeFilter
+  );
+  const totalDocumentValue = filtered.reduce((sum, invoice) => sum + invoice.total_amount, 0);
+  const totalPaid = filtered.reduce(
+    (sum, invoice) => sum + (invoice.payments?.reduce((paid, payment) => paid + payment.amount, 0) ?? 0),
+    0
   );
 
   function openTemplate(id: string) {
-    const t = DOCUMENT_TEMPLATES.find((x) => x.id === id);
+    const t =
+      DOCUMENT_TEMPLATES.find((x) => x.id === id) ??
+      DOCUMENT_KITS.find((x) => x.id === id);
     if (!t) return;
     setEditingId(null);
     setForm(t.build());
@@ -446,21 +481,17 @@ export default function InvoicesPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex justify-center py-32">
-        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <PageLoader label="กำลังโหลดเอกสาร..." />;
   }
 
   return (
-    <div className="space-y-5 animate-fade-in">
+    <PageShell width="wide">
       <PageHeader
-        title="ใบแจ้งหนี้"
+        title="เอกสารการเงิน"
         description={
           canEdit
-            ? "สร้างเอกสาร — รับเงินได้ที่หน้าการเงิน"
-            : "โหมดดูอย่างเดียว (Guest)"
+            ? "ใบแจ้งหนี้ ใบเสร็จ และเอกสารเสนอราคา"
+            : "ดูเอกสารได้อย่างเดียว"
         }
         action={
           canEdit ? (
@@ -471,30 +502,42 @@ export default function InvoicesPage() {
         }
       />
 
-      <FilterTabs
-        active={typeFilter}
-        onChange={setTypeFilter}
-        tabs={[
-          { key: "all", label: "ทั้งหมด", count: invoices.length },
-          {
-            key: "invoice",
-            label: "ใบแจ้งหนี้",
-            count: invoices.filter((i) => (i.document_type ?? "invoice") === "invoice").length,
-          },
-          {
-            key: "receipt",
-            label: "ใบเสร็จ",
-            count: invoices.filter((i) => i.document_type === "receipt").length,
-          },
-          {
-            key: "proposal",
-            label: "Workflow",
-            count: invoices.filter((i) => i.document_type === "proposal").length,
-          },
-        ]}
-      />
+      {loadError && <ErrorState description={loadError} onRetry={load} />}
 
-      <div className="space-y-3">
+      <Card>
+        <CardHeader title="ภาพรวมเอกสาร" description="ยอดตามประเภทที่เลือก" />
+        <div className="grid grid-cols-2 gap-3 p-4 lg:grid-cols-4">
+          <MetricTile label="เอกสาร" value={`${filtered.length} รายการ`} icon={<FileText size={18} />} />
+          <MetricTile label="มูลค่ารวม" value={`฿${totalDocumentValue.toLocaleString()}`} />
+          <MetricTile label="รับชำระแล้ว" value={`฿${totalPaid.toLocaleString()}`} />
+          <MetricTile label="คงค้าง" value={`฿${Math.max(totalDocumentValue - totalPaid, 0).toLocaleString()}`} />
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="รายการเอกสาร"
+          description={`${filtered.length} รายการ`}
+          action={
+            <button type="button" onClick={exportInvoices} className="inline-flex min-h-10 items-center gap-2 px-2 text-sm font-medium text-accent hover:underline">
+              <FileDown size={16} /> CSV
+            </button>
+          }
+        />
+        <div className="border-b border-border p-4">
+          <FilterTabs
+            active={typeFilter}
+            onChange={setTypeFilter}
+            tabs={[
+              { key: "all", label: "ทั้งหมด", count: invoices.length },
+              { key: "invoice", label: "ใบแจ้งหนี้", count: invoices.filter((i) => (i.document_type ?? "invoice") === "invoice").length },
+              { key: "receipt", label: "ใบเสร็จ", count: invoices.filter((i) => i.document_type === "receipt").length },
+              { key: "proposal", label: "เสนอราคา", count: invoices.filter((i) => i.document_type === "proposal" || i.document_type === "quotation").length },
+              { key: "agreement", label: "สัญญา", count: invoices.filter((i) => i.document_type === "agreement").length },
+            ]}
+          />
+        </div>
+        <div className="divide-y divide-border">
         {filtered.map((inv) => {
           const paid = inv.payments?.reduce((s, p) => s + p.amount, 0) ?? 0;
           const docType = (inv.document_type ?? "invoice") as DocumentType;
@@ -502,36 +545,27 @@ export default function InvoicesPage() {
             docType === "invoice" ? findReceiptForInvoice(invoices, inv.id) : undefined;
 
           return (
-            <div key={inv.id} className="bg-card border border-border rounded-2xl p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/15 text-accent">
-                      {DOCUMENT_TYPE_LABELS[docType]}
-                    </span>
-                    {inv.doc_number && (
-                      <span className="text-xs text-muted">{inv.doc_number}</span>
-                    )}
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${INVOICE_STATUS_COLORS[inv.status]}`}
-                    >
-                      {INVOICE_STATUS_LABELS[inv.status]}
-                    </span>
-                  </div>
-                  <h3 className="font-semibold mt-1 truncate">{inv.title}</h3>
-                  <p className="text-sm text-muted">
-                    {inv.client?.name} · ฿{inv.total_amount.toLocaleString()}
-                  </p>
-                  {paid > 0 && (
-                    <p className="text-xs text-emerald-400">ชำระแล้ว ฿{paid.toLocaleString()}</p>
-                  )}
-                  {linkedReceipt && (
-                    <p className="text-xs text-muted mt-0.5">
-                      ใบเสร็จ: {linkedReceipt.doc_number}
-                    </p>
-                  )}
+            <ListRow
+              key={inv.id}
+              leading={<span className="flex size-9 items-center justify-center rounded-xl bg-surface-soft text-muted"><FileText size={18} /></span>}
+              title={
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="truncate">{inv.title}</span>
+                  <StatusStamp label={DOCUMENT_TYPE_LABELS[docType]} tone="blue" />
+                  <StatusStamp label={INVOICE_STATUS_LABELS[inv.status]} tone={invoiceStatusTone(inv.status)} />
                 </div>
+              }
+              description={
+                <span className="block truncate">
+                  {[inv.doc_number, inv.client?.name, linkedReceipt?.doc_number ? `ใบเสร็จ ${linkedReceipt.doc_number}` : null].filter(Boolean).join(" · ")}
+                  {paid > 0 ? ` · ชำระแล้ว ฿${paid.toLocaleString()}` : ""}
+                </span>
+              }
+              trailing={
                 <div className="flex items-center gap-2 shrink-0">
+                  <span className="hidden min-w-28 text-right font-semibold tabular-nums sm:block">
+                    ฿{inv.total_amount.toLocaleString()}
+                  </span>
                   {canEdit &&
                     inv.status !== "paid" &&
                     (docType === "invoice" || docType === "receipt") && (
@@ -546,7 +580,7 @@ export default function InvoicesPage() {
                         className="px-3"
                       >
                         <DollarSign size={16} />
-                        <span className="ml-1.5">รับเงิน</span>
+                        <span className="hidden ml-1.5 lg:inline">รับเงิน</span>
                       </Button>
                     )}
                   <Button variant="secondary" onClick={() => openPreview(inv)} className="px-3">
@@ -571,7 +605,7 @@ export default function InvoicesPage() {
                           className="fixed inset-0 z-40"
                           onClick={() => setMenuOpenId(null)}
                         />
-                        <div className="absolute right-0 top-full mt-1 z-50 min-w-[160px] bg-card border border-border rounded-xl shadow-xl py-1 text-sm">
+                        <div className="absolute right-0 top-full mt-1 z-50 min-w-40 bg-card border border-border rounded-xl shadow-xl py-1 text-sm">
                           <button
                             type="button"
                             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-card-hover text-left"
@@ -612,7 +646,7 @@ export default function InvoicesPage() {
                             )}
                           <button
                             type="button"
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-500/10 text-red-400 text-left"
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-(--status-red-bg) text-(--status-red-fg) text-left"
                             onClick={() => {
                               setMenuOpenId(null);
                               deleteInvoice(inv);
@@ -626,24 +660,33 @@ export default function InvoicesPage() {
                   </div>
                   )}
                 </div>
-              </div>
-            </div>
+              }
+            />
           );
         })}
         {filtered.length === 0 && (
-          <p className="text-center text-muted py-12">ยังไม่มีเอกสาร — กด「สร้างเอกสาร」</p>
+          <EmptyState
+            icon={<FileText size={24} />}
+            title="ยังไม่มีเอกสาร"
+            description={canEdit ? "สร้างเอกสารใหม่เพื่อเริ่มงาน" : "ยังไม่มีเอกสารในประเภทนี้"}
+            action={canEdit ? <Button onClick={() => setTemplateOpen(true)}><Plus size={16} /> สร้างเอกสาร</Button> : undefined}
+          />
         )}
-      </div>
+        </div>
+      </Card>
 
       {/* เลือก template */}
-      <Modal open={templateOpen} onClose={() => setTemplateOpen(false)} title="เลือก Template">
+      <Modal open={templateOpen} onClose={() => setTemplateOpen(false)} title="เลือกเทมเพลต">
         <div className="space-y-2">
-          {DOCUMENT_TEMPLATES.map((t) => (
+          {[
+            ...DOCUMENT_TEMPLATES,
+            ...DOCUMENT_KITS.map((kit) => ({ id: kit.id, label: kit.name })),
+          ].map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => openTemplate(t.id)}
-              className="w-full flex items-center gap-3 p-4 rounded-xl border border-border hover:border-accent/40 hover:bg-card-hover text-left transition-colors"
+              className="w-full flex items-center gap-3 p-4 rounded-xl border border-border hover:bg-card-hover text-left transition-colors"
             >
               <FileText className="text-accent shrink-0" size={22} />
               <span className="font-medium text-sm">{t.label}</span>
@@ -669,9 +712,7 @@ export default function InvoicesPage() {
         }
       >
         {dbError && (
-          <div className="mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-            {dbError}
-          </div>
+          <ErrorState title="บันทึกเอกสารไม่สำเร็จ" description={dbError} />
         )}
         {form && (
           <InvoiceDocumentForm
@@ -705,7 +746,7 @@ export default function InvoicesPage() {
           </div>
           <div
             id="document-print-area"
-            className="rounded-xl overflow-hidden border border-zinc-300 max-h-[65vh] overflow-y-auto"
+            className="rounded-xl overflow-hidden border border-border max-h-[65vh] overflow-y-auto"
           >
             {previewData && (
               <div id="document-pdf-root">
@@ -729,9 +770,7 @@ export default function InvoicesPage() {
       <Modal open={!!payModal} onClose={() => setPayModal(null)} title="บันทึกการชำระเงิน">
         <form onSubmit={addPayment} className="space-y-4">
           {dbError && (
-            <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-              {dbError}
-            </div>
+            <ErrorState title="บันทึกการชำระไม่สำเร็จ" description={dbError} />
           )}
           <p className="text-sm text-muted">
             {payModal?.title} — ฿{payModal?.total_amount.toLocaleString()}
@@ -768,9 +807,7 @@ export default function InvoicesPage() {
         {convertModal && (
           <div className="space-y-4">
             {dbError && (
-              <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-                {dbError}
-              </div>
+              <ErrorState title="สร้างใบเสร็จไม่สำเร็จ" description={dbError} />
             )}
             <p className="text-sm text-muted">
               {convertModal.title} · ฿{convertModal.total_amount.toLocaleString()}
@@ -799,6 +836,6 @@ export default function InvoicesPage() {
           </div>
         )}
       </Modal>
-    </div>
+    </PageShell>
   );
 }

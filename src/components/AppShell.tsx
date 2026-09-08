@@ -5,7 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Search } from "lucide-react";
 import { Suspense, useState, useRef, useEffect } from "react";
 import { InAppNotificationToasts } from "./InAppNotificationToasts";
-import { GlobalSearchModal } from "./GlobalSearchModal";
+import { CommandPalette } from "./CommandPalette";
+import { ActionFeedbackProvider } from "./workspace/ActionFeedback";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar, ProfileRoleBadges } from "./ui";
 import { Logo } from "./Logo";
@@ -34,9 +35,10 @@ function NavLinks({
             href={href}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
               active
-                ? "bg-accent/10 text-foreground border-l-2 border-accent pl-[10px]"
-                : "text-muted hover:text-foreground hover:bg-card-hover border-l-2 border-transparent pl-[10px]"
+                ? "bg-accent/15 text-foreground"
+                : "text-muted hover:text-foreground hover:bg-card-hover"
             }`}
+            aria-current={active ? "page" : undefined}
           >
             <Icon size={20} />
             {label}
@@ -98,7 +100,14 @@ export function AppShell({
 
   return (
     <RoleProvider profile={profile}>
-    <div className="flex min-h-screen min-h-[100dvh]">
+    <ActionFeedbackProvider>
+    <div className="flex min-h-dvh">
+      <a
+        href="#main-content"
+        className="fixed left-3 top-3 z-50 -translate-y-20 rounded-xl bg-accent px-4 py-2 font-semibold text-white transition-transform focus-visible:translate-y-0"
+      >
+        ข้ามไปเนื้อหา
+      </a>
       {profile && (
         <Suspense fallback={null}>
           <InAppNotificationToasts userId={profile.id} />
@@ -187,6 +196,8 @@ export function AppShell({
       </header>
 
       <main
+        id="main-content"
+        tabIndex={-1}
         className={`flex-1 lg:ml-64 w-full min-w-0 ${
           isChat
             ? "flex flex-col h-dvh max-h-dvh overflow-hidden"
@@ -234,7 +245,8 @@ export function AppShell({
               <Link
                 key={href}
                 href={href}
-                className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-2 min-h-[44px] touch-manipulation ${
+                aria-current={active ? "page" : undefined}
+                className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-2 min-h-11 touch-manipulation ${
                   active ? "text-accent" : "text-muted"
                 }`}
               >
@@ -246,8 +258,9 @@ export function AppShell({
         </div>
       </nav>
 
-      <GlobalSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
+    </ActionFeedbackProvider>
     </RoleProvider>
   );
 }

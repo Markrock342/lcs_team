@@ -16,8 +16,19 @@ import {
   Trash2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { PageHeader, FilterTabs, RowMenu } from "@/components/mobile-ui";
-import { Modal } from "@/components/ui";
+import { PageShell, PageHeader, FilterTabs, RowMenu } from "@/components/mobile-ui";
+import { SavedViewsBar } from "@/components/workspace/SavedViewsBar";
+import {
+  Card,
+  CardHeader,
+  EmptyState,
+  ErrorState,
+  ListRow,
+  MetricTile,
+  Modal,
+  PageLoader,
+  StatusStamp,
+} from "@/components/ui";
 import { SlipPreviewModal } from "@/components/SlipPreviewModal";
 import { AccessDenied } from "@/components/AccessDenied";
 import { useRole } from "@/components/RoleProvider";
@@ -190,6 +201,8 @@ export default function FinancePageInner() {
   }, []);
 
   useEffect(() => {
+    // URL actions intentionally open a modal after client-side navigation.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (searchParams.get("pay") === "1") setPayoutOpen(true);
     if (searchParams.get("income") === "1") setIncomeOpen(true);
     if (searchParams.get("fund") === "1") setFundOpen(true);
@@ -574,189 +587,114 @@ export default function FinancePageInner() {
   }
 
   if (loading) {
-    return (
-      <div className="flex justify-center py-32">
-        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <PageLoader label="กำลังโหลดบัญชี..." />;
   }
 
   return (
-    <div className="space-y-5 animate-fade-in max-w-lg mx-auto lg:max-w-4xl">
+    <PageShell width="wide">
       <PageHeader
         title="บัญชีทีม"
-        description="Cashbook กลางสำหรับรับเงิน จ่ายเงิน กองกลาง และรายงาน VAT พื้นฐาน"
+        description="สรุปเงินเข้า เงินออก กองกลาง และ VAT"
       />
 
-      {dbError && (
-        <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-          {dbError}
-        </div>
-      )}
-
-      <div className="bg-card border border-border rounded-2xl p-4 text-center">
-        <p className="text-xs text-muted">คงเหลือ{period === "month" ? "เดือนนี้" : ""}</p>
-        <p
-          className={`text-3xl font-bold mt-1 ${
-            summary.net >= 0 ? "text-accent" : "text-rose-300"
-          }`}
-        >
-          {money(summary.net)}
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 text-left">
-          <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3">
-            <p className="text-[11px] text-muted">เงินเข้า</p>
-            <p className="text-sm font-bold text-emerald-300">{money(summary.income)}</p>
-          </div>
-          <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-3">
-            <p className="text-[11px] text-muted">เงินออก</p>
-            <p className="text-sm font-bold text-rose-300">{money(summary.expense)}</p>
-          </div>
-          <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
-            <p className="text-[11px] text-muted">กองกลางเข้า</p>
-            <p className="text-sm font-bold text-amber-300">{money(summary.fund)}</p>
-          </div>
-          <div className="rounded-xl bg-sky-500/10 border border-sky-500/20 p-3">
-            <p className="text-[11px] text-muted">VAT</p>
-            <p className="text-sm font-bold text-sky-300">{money(summary.vat)}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          onClick={() => setIncomeOpen(true)}
-          className="flex flex-col items-center gap-2 p-5 rounded-2xl border-2 border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/15 active:scale-[0.98] transition-all touch-manipulation"
-        >
-          <ArrowDownLeft size={28} className="text-emerald-300" />
-          <span className="font-semibold text-sm">รับเงินลูกค้า</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setPayoutOpen(true);
-            setDbError("");
-          }}
-          className="flex flex-col items-center gap-2 p-5 rounded-2xl border-2 border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/15 active:scale-[0.98] transition-all touch-manipulation"
-        >
-          <ArrowUpRight size={28} className="text-rose-300" />
-          <span className="font-semibold text-sm">จ่ายเพื่อน</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setFundOpen(true);
-            setDbError("");
-          }}
-          className="flex flex-col items-center gap-2 p-5 rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15 active:scale-[0.98] transition-all touch-manipulation"
-        >
-          <PiggyBank size={28} className="text-amber-300" />
-          <span className="font-semibold text-sm">เก็บกองกลาง</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => openManualEntry("expense")}
-          className="flex flex-col items-center gap-2 p-5 rounded-2xl border-2 border-accent/40 bg-accent/10 hover:bg-accent/15 active:scale-[0.98] transition-all touch-manipulation"
-        >
-          <Plus size={28} className="text-accent" />
-          <span className="font-semibold text-sm">เพิ่มรายการเอง</span>
-        </button>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <Link
-          href="/invoices"
-          className="flex items-center justify-between p-3 rounded-xl border border-border hover:border-accent/30 text-sm touch-manipulation"
-        >
-          ใบแจ้งหนี้ / ใบเสร็จ
-          <ChevronRight size={16} className="text-muted" />
-        </Link>
-        <button
-          type="button"
-          onClick={exportCsv}
-          className="flex items-center justify-between p-3 rounded-xl border border-border hover:border-accent/30 text-sm touch-manipulation"
-        >
-          Export CSV
-          <Download size={16} className="text-muted" />
-        </button>
-        <button
-          type="button"
-          onClick={exportPdf}
-          className="col-span-2 flex items-center justify-between p-3 rounded-xl border border-border hover:border-accent/30 text-sm touch-manipulation"
-        >
-          Export PDF สรุปเดือน
-          <FileText size={16} className="text-muted" />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-        <select
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          className="px-3 py-2.5 rounded-xl bg-card border border-border text-sm"
-        >
-          <option value="month">เดือนนี้</option>
-          <option value="year">ปีนี้</option>
-          <option value="all">ทั้งหมด</option>
-        </select>
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="px-3 py-2.5 rounded-xl bg-card border border-border text-sm"
-        >
-          <option value="all">ทุกหมวด</option>
-          {sortedCategories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
-        <select
-          value={memberFilter}
-          onChange={(e) => setMemberFilter(e.target.value)}
-          className="px-3 py-2.5 rounded-xl bg-card border border-border text-sm"
-        >
-          <option value="all">ทุกสมาชิก</option>
-          {members.map((member) => (
-            <option key={member.id} value={member.id}>
-              {member.display_name}
-            </option>
-          ))}
-        </select>
-        <select
-          value={clientFilter}
-          onChange={(e) => setClientFilter(e.target.value)}
-          className="px-3 py-2.5 rounded-xl bg-card border border-border text-sm"
-        >
-          <option value="all">ทุกลูกค้า</option>
-          {clients.map((client) => (
-            <option key={client.id} value={client.id}>
-              {client.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <FilterTabs
-        active={view}
-        onChange={setView}
-        tabs={[
-          { key: "all", label: "ทั้งหมด", count: periodTransactions.length },
-          {
-            key: "income",
-            label: "รายรับ",
-            count: periodTransactions.filter((t) => t.type === "income").length,
-          },
-          {
-            key: "expense",
-            label: "รายจ่าย",
-            count: periodTransactions.filter((t) => t.type === "expense").length,
-          },
-        ]}
+      <SavedViewsBar
+        page="finance"
+        filters={{ view, period }}
+        onApply={(filters) => {
+          if (filters.tab === "receivable" || filters.view === "receivable") setView("income");
+          if (filters.view && filters.view !== "receivable") setView(filters.view);
+          if (filters.period) setPeriod(filters.period);
+        }}
       />
 
-      <div className="space-y-2">
+      {dbError && <ErrorState title="เกิดข้อผิดพลาดด้านบัญชี" description={dbError} onRetry={load} />}
+
+      <Card>
+        <CardHeader
+          title={`ยอดรวม · ${periodLabel(period)}`}
+          description="ยอดตามช่วงเวลาที่เลือก"
+          icon={<FileText size={18} />}
+        />
+        <div className="grid grid-cols-2 gap-3 p-4 lg:grid-cols-5">
+          <MetricTile
+            label="คงเหลือ"
+            value={<span className={summary.net >= 0 ? "text-(--status-green-fg)" : "text-(--status-red-fg)"}>{money(summary.net)}</span>}
+          />
+          <MetricTile label="เงินเข้า" value={money(summary.income)} icon={<ArrowDownLeft size={18} />} />
+          <MetricTile label="เงินออก" value={money(summary.expense)} icon={<ArrowUpRight size={18} />} />
+          <MetricTile label="กองกลาง" value={money(summary.fund)} icon={<PiggyBank size={18} />} />
+          <MetricTile label="VAT" value={money(summary.vat)} />
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="บันทึกรายการ" description="เลือกประเภทที่ต้องการบันทึก" />
+        <div className="grid grid-cols-2 divide-x divide-y divide-border lg:grid-cols-4 lg:divide-y-0">
+          <button type="button" onClick={() => setIncomeOpen(true)} className="flex min-h-20 items-center gap-3 px-4 py-3 text-left hover:bg-card-hover">
+            <ArrowDownLeft size={20} className="text-(--status-green-fg)" />
+            <span className="text-sm font-semibold">รับเงินลูกค้า</span>
+          </button>
+          <button type="button" onClick={() => { setPayoutOpen(true); setDbError(""); }} className="flex min-h-20 items-center gap-3 px-4 py-3 text-left hover:bg-card-hover">
+            <ArrowUpRight size={20} className="text-(--status-red-fg)" />
+            <span className="text-sm font-semibold">จ่ายเพื่อน</span>
+          </button>
+          <button type="button" onClick={() => { setFundOpen(true); setDbError(""); }} className="flex min-h-20 items-center gap-3 px-4 py-3 text-left hover:bg-card-hover">
+            <PiggyBank size={20} className="text-(--status-amber-fg)" />
+            <span className="text-sm font-semibold">เก็บกองกลาง</span>
+          </button>
+          <button type="button" onClick={() => openManualEntry("expense")} className="flex min-h-20 items-center gap-3 px-4 py-3 text-left hover:bg-card-hover">
+            <Plus size={20} className="text-accent" />
+            <span className="text-sm font-semibold">เพิ่มรายการ</span>
+          </button>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="ตัวกรองและรายงาน"
+          action={
+            <div className="flex items-center gap-1">
+              <Link href="/invoices" className="inline-flex min-h-10 items-center gap-1 px-2 text-sm font-medium text-accent hover:underline">
+                เอกสาร <ChevronRight size={15} />
+              </Link>
+              <button type="button" onClick={exportCsv} className="min-h-10 p-2 text-muted hover:text-foreground" aria-label="ส่งออก CSV"><Download size={17} /></button>
+              <button type="button" onClick={exportPdf} className="min-h-10 p-2 text-muted hover:text-foreground" aria-label="ส่งออก PDF"><FileText size={17} /></button>
+            </div>
+          }
+        />
+        <div className="space-y-4 p-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <select value={period} onChange={(e) => setPeriod(e.target.value)} className="min-h-11 rounded-xl border border-border bg-background px-3 text-sm">
+              <option value="month">เดือนนี้</option><option value="year">ปีนี้</option><option value="all">ทั้งหมด</option>
+            </select>
+            <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="min-h-11 rounded-xl border border-border bg-background px-3 text-sm">
+              <option value="all">ทุกหมวด</option>
+              {sortedCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+            </select>
+            <select value={memberFilter} onChange={(e) => setMemberFilter(e.target.value)} className="min-h-11 rounded-xl border border-border bg-background px-3 text-sm">
+              <option value="all">ทุกสมาชิก</option>
+              {members.map((member) => <option key={member.id} value={member.id}>{member.display_name}</option>)}
+            </select>
+            <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="min-h-11 rounded-xl border border-border bg-background px-3 text-sm">
+              <option value="all">ทุกลูกค้า</option>
+              {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+            </select>
+          </div>
+          <FilterTabs
+            active={view}
+            onChange={setView}
+            tabs={[
+              { key: "all", label: "ทั้งหมด", count: periodTransactions.length },
+              { key: "income", label: "รายรับ", count: periodTransactions.filter((t) => t.type === "income").length },
+              { key: "expense", label: "รายจ่าย", count: periodTransactions.filter((t) => t.type === "expense").length },
+            ]}
+          />
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="รายการบัญชี" description={`${filteredTransactions.length} รายการ`} />
+        <div className="divide-y divide-border">
         {filteredTransactions.map((transaction) => {
           const entry = accountingTransactionToEntry(transaction);
           const menuItems = [
@@ -786,71 +724,47 @@ export default function FinancePageInner() {
             },
           ];
           return (
-            <div
+            <ListRow
               key={transaction.id}
-              className="flex items-center gap-3 bg-card border border-border rounded-xl p-3"
-            >
-              <div
-                className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                  entry.type === "income"
-                    ? "bg-emerald-500/15 text-emerald-300"
-                    : "bg-rose-500/15 text-rose-300"
-                }`}
-              >
-                {entry.type === "income" ? (
-                  <ArrowDownLeft size={18} />
-                ) : (
-                  <ArrowUpRight size={18} />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  <p className="font-medium text-sm truncate">{entry.title}</p>
-                  <span className="hidden sm:inline-flex text-[10px] px-1.5 py-0.5 rounded bg-background text-muted shrink-0">
-                    {sourceLabel(transaction.source_type)}
-                  </span>
+              leading={
+                <span className={`flex size-9 items-center justify-center rounded-xl ${entry.type === "income" ? "bg-(--status-green-bg) text-(--status-green-fg)" : "bg-(--status-red-bg) text-(--status-red-fg)"}`}>
+                  {entry.type === "income" ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+                </span>
+              }
+              title={
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate">{entry.title}</span>
+                  <StatusStamp label={sourceLabel(transaction.source_type)} tone="slate" className="hidden sm:inline-flex" />
                   {transaction.slip_url && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSlipPreview({
-                          url: transaction.slip_url!,
-                          fileName: transaction.slip_file_name,
-                        })
-                      }
-                      className="sm:hidden p-1 rounded-lg text-accent touch-manipulation"
-                      aria-label="ดูสลิป"
-                    >
+                    <button type="button" onClick={() => setSlipPreview({ url: transaction.slip_url!, fileName: transaction.slip_file_name })} className="p-1 text-accent sm:hidden" aria-label="ดูสลิป">
                       <Paperclip size={14} />
                     </button>
                   )}
                 </div>
-                <p className="text-[11px] text-muted truncate">
+              }
+              description={
+                <span className="block truncate">
                   {formatDate(entry.date)} · {entry.subtitle}
                   {transaction.slip_url ? " · มีสลิป" : ""}
-                  {transaction.updater?.display_name
-                    ? ` · แก้โดย ${transaction.updater.display_name}`
-                    : ""}
-                </p>
-              </div>
-              <p
-                className={`font-bold text-sm shrink-0 ${
-                  entry.type === "income" ? "text-emerald-300" : "text-rose-300"
-                }`}
-              >
-                {entry.type === "income" ? "+" : "-"}
-                {money(entry.amount)}
-              </p>
-              <RowMenu items={menuItems} />
-            </div>
+                  {transaction.updater?.display_name ? ` · แก้โดย ${transaction.updater.display_name}` : ""}
+                </span>
+              }
+              trailing={
+                <div className="flex items-center gap-2">
+                  <span className={`text-right text-sm font-semibold tabular-nums ${entry.type === "income" ? "text-(--status-green-fg)" : "text-(--status-red-fg)"}`}>
+                    {entry.type === "income" ? "+" : "-"}{money(entry.amount)}
+                  </span>
+                  <RowMenu items={menuItems} />
+                </div>
+              }
+            />
           );
         })}
         {filteredTransactions.length === 0 && (
-          <p className="text-center text-muted py-10 text-sm">
-            ยังไม่มีรายการบัญชีในตัวกรองนี้
-          </p>
+          <EmptyState icon={<FileText size={24} />} title="ไม่พบรายการ" description="ยังไม่มีรายการบัญชีตามตัวกรองนี้" />
         )}
-      </div>
+        </div>
+      </Card>
 
       <Modal open={incomeOpen} onClose={() => setIncomeOpen(false)} title="รับเงินลูกค้า">
         <QuickIncomeForm
@@ -867,9 +781,7 @@ export default function FinancePageInner() {
           setDbError("");
         }} title="จ่ายเพื่อนในทีม">
         {dbError && (
-          <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/10 text-red-400 text-sm">
-            {dbError}
-          </div>
+          <ErrorState title="บันทึกรายจ่ายไม่สำเร็จ" description={dbError} />
         )}
         <QuickPayoutForm
           form={payoutForm}
@@ -888,9 +800,7 @@ export default function FinancePageInner() {
           setDbError("");
         }} title="เก็บเงินกองกลาง">
         {dbError && (
-          <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/10 text-red-400 text-sm">
-            {dbError}
-          </div>
+          <ErrorState title="บันทึกกองกลางไม่สำเร็จ" description={dbError} />
         )}
         <QuickFundForm
           form={fundForm}
@@ -910,9 +820,7 @@ export default function FinancePageInner() {
           setDbError("");
         }} title={editingTransaction ? "แก้ไขรายการบัญชี" : "เพิ่มรายการบัญชี"}>
         {dbError && (
-          <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/10 text-red-400 text-sm">
-            {dbError}
-          </div>
+          <ErrorState title="บันทึกรายการไม่สำเร็จ" description={dbError} />
         )}
         <AccountingEntryForm
           form={entryForm}
@@ -937,6 +845,6 @@ export default function FinancePageInner() {
         fileName={slipPreview?.fileName}
         onClose={() => setSlipPreview(null)}
       />
-    </div>
+    </PageShell>
   );
 }

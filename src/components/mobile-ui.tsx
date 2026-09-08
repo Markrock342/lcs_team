@@ -6,6 +6,28 @@ import { usePathname } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 import { ALL_APP_PATHS } from "@/lib/nav";
 
+export function PageShell({
+  children,
+  width = "wide",
+  className = "",
+}: {
+  children: React.ReactNode;
+  width?: "compact" | "medium" | "wide" | "full";
+  className?: string;
+}) {
+  const widths = {
+    compact: "max-w-2xl",
+    medium: "max-w-4xl",
+    wide: "max-w-6xl",
+    full: "max-w-none",
+  };
+  return (
+    <div className={`mx-auto w-full space-y-6 sm:space-y-8 animate-fade-in ${widths[width]} ${className}`}>
+      {children}
+    </div>
+  );
+}
+
 export function getPageTitle(pathname: string): string {
   const exact = ALL_APP_PATHS.find((p) => p.href === pathname);
   if (exact) return exact.label;
@@ -32,7 +54,8 @@ export function FilterTabs({ tabs, active, onChange }: FilterTabsProps) {
           <button
             key={tab.key}
             onClick={() => onChange(tab.key)}
-            className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-colors min-h-[40px] touch-manipulation ${
+            aria-pressed={active === tab.key}
+            className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-colors min-h-10 touch-manipulation ${
               active === tab.key
                 ? "bg-accent/20 text-accent border border-accent/40"
                 : "bg-card border border-border text-muted hover:text-foreground active:bg-card-hover"
@@ -61,7 +84,7 @@ export function FilterSelect({ label, value, onChange, options }: FilterSelectPr
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 min-w-0 px-3 py-2.5 rounded-xl bg-card border border-border text-sm min-h-[44px] touch-manipulation"
+        className="flex-1 min-w-0 px-3 py-2.5 rounded-xl bg-card border border-border text-sm min-h-11 touch-manipulation"
       >
         {options.map((o) => (
           <option key={o.key} value={o.key}>
@@ -81,7 +104,8 @@ interface PageHeaderProps {
 }
 
 const PAGE_KICKERS: { match: string; kicker: string }[] = [
-  { match: "/sales", kicker: "แผนกขาย · Pipeline" },
+  { match: "/today", kicker: "วันนี้ · My Day" },
+  { match: "/sales", kicker: "แผนกขาย · รายชื่อและท่อขาย" },
   { match: "/clients", kicker: "ลูกค้า · Accounts" },
   { match: "/tasks", kicker: "งาน · Board" },
   { match: "/finance", kicker: "การเงิน · Ledger" },
@@ -91,7 +115,7 @@ const PAGE_KICKERS: { match: string; kicker: string }[] = [
   { match: "/search", kicker: "ค้นหา · Index" },
   { match: "/invoices", kicker: "เอกสาร · Docs" },
   { match: "/payouts", kicker: "บัญชีทีม · Pay" },
-  { match: "/templates", kicker: "เทมเพลต · Kit" },
+  { match: "/templates", kicker: "เทมเพลต · งานและเอกสาร" },
   { match: "/notifications", kicker: "แจ้งเตือน · Inbox" },
   { match: "/activity", kicker: "ประวัติ · Log" },
   { match: "/settings", kicker: "ตั้งค่า · System" },
@@ -197,13 +221,14 @@ export function RowMenu({ items }: { items: RowMenuItem[] }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="p-2.5 rounded-xl border border-border hover:bg-card-hover text-muted touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
+        aria-expanded={open}
+        className="p-2.5 rounded-xl border border-border hover:bg-card-hover text-muted touch-manipulation min-h-11 min-w-11 flex items-center justify-center"
         aria-label="เมนู"
       >
         <MoreHorizontal size={18} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 min-w-[168px] bg-card border border-border rounded-xl shadow-xl py-1 text-sm">
+        <div className="absolute right-0 top-full mt-1 z-50 min-w-42 bg-card border border-border rounded-xl shadow-xl py-1 text-sm">
           {items.map((item) => (
             <button
               key={item.label}

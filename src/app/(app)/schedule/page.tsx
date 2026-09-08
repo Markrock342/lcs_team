@@ -3,8 +3,17 @@
 import { useEffect, useState } from "react";
 import { Calendar } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { StatusBadge, Avatar, EmptyState } from "@/components/ui";
-import { PageHeader, FilterTabs } from "@/components/mobile-ui";
+import {
+  Avatar,
+  Card,
+  CardHeader,
+  EmptyState,
+  ErrorState,
+  ListRow,
+  PageLoader,
+  StatusBadge,
+} from "@/components/ui";
+import { PageHeader, PageShell, FilterTabs } from "@/components/mobile-ui";
 import { MonthGanttCalendar } from "@/components/MonthGanttCalendar";
 import { TaskCountdown } from "@/components/TaskCountdown";
 import type { Task, Profile } from "@/lib/types";
@@ -16,12 +25,14 @@ export default function SchedulePage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [view, setView] = useState<"month" | "list" | "team">("month");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadTasks();
+    void loadTasks();
   }, []);
 
   async function loadTasks() {
+    setError(null);
     const supabase = createClient();
     const [tasksRes, profilesRes] = await Promise.all([
       supabase
@@ -32,6 +43,11 @@ export default function SchedulePage() {
         .order("start_date", { ascending: true }),
       supabase.from("profiles").select("*").order("display_name"),
     ]);
+    if (tasksRes.error || profilesRes.error) {
+      setError("โหลดตารางงานไม่สำเร็จ โปรดลองอีกครั้ง");
+      setLoading(false);
+      return;
+    }
     setTasks(tasksRes.data ?? []);
     setProfiles(profilesRes.data ?? []);
     setLoading(false);
@@ -56,45 +72,71 @@ export default function SchedulePage() {
   }));
 
   if (loading) {
+    return <PageLoader label="กำลังโหลดตารางงาน..." />;
+  }
+
+  if (error) {
     return (
-      <div className="flex items-center justify-center py-32">
-        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-      </div>
+      <PageShell width="wide">
+        <ErrorState
+          description={error}
+          onRetry={() => {
+            setLoading(true);
+            void loadTasks();
+          }}
+        />
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-5 sm:space-y-6 animate-fade-in">
+    <PageShell width="wide">
       <PageHeader
         title="ตารางงาน"
-        description="ปฏิทินรายเดือน — แถบงานทับกันแยกสี/แถว"
+        description="ดูวันเริ่ม กำหนดส่ง และภาระงานของแต่ละคน"
       />
 
-      <FilterTabs
-        active={view}
-        onChange={(k) => setView(k as "month" | "list" | "team")}
-        tabs={[
-          { key: "month", label: "ปฏิทิน" },
-          { key: "list", label: "รายการ" },
-          { key: "team", label: "ทีม" },
-        ]}
-      />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <FilterTabs
+          active={view}
+          onChange={(k) => setView(k as "month" | "list" | "team")}
+          tabs={[
+            { key: "month", label: "ปฏิทิน" },
+            { key: "list", label: "รายการ" },
+            { key: "team", label: "ทีม" },
+          ]}
+        />
+        <label className="flex items-center gap-2 text-sm text-muted">
+          <span className="shrink-0">ผู้รับผิดชอบ</span>
+          <select
+            value={assigneeFilter}
+            onChange={(e) => setAssigneeFilter(e.target.value)}
+            className="min-h-11 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground sm:w-auto"
+          >
+            <option value="all">ทุกคน</option>
+            <option value="unassigned">ยังไม่มอบหมาย</option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.display_name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
-      <select
-        value={assigneeFilter}
-        onChange={(e) => setAssigneeFilter(e.target.value)}
-        className="w-full sm:w-auto px-3 py-2 rounded-xl bg-card border border-border text-sm"
-      >
-        <option value="all">ทุกคน</option>
-        <option value="unassigned">ยังไม่มอบหมาย</option>
-        {profiles.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.display_name}
-          </option>
-        ))}
-      </select>
-
-      {view === "month" ? (
+      {filteredTasks.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<Calendar size={28} />}
+            title={tasks.length === 0 ? "ยังไม่มีงานในตาราง" : "ไม่พบงานตามตัวกรอง"}
+            description={
+              tasks.length === 0
+                ? "เพิ่มวันเริ่มหรือกำหนดส่ง แล้วงานจะแสดงในตาราง"
+                : "ลองเลือกผู้รับผิดชอบคนอื่น"
+            }
+          />
+        </Card>
+      ) : view === "month" ? (
         <MonthGanttCalendar
           month={currentMonth}
           tasks={filteredTasks}
@@ -103,49 +145,47 @@ export default function SchedulePage() {
       ) : view === "team" ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {tasksByMember.map(({ member, tasks: memberTasks }) => (
-            <div
-              key={member.id}
-              className="bg-card border border-border rounded-2xl overflow-hidden"
-            >
-              <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                <Avatar name={member.display_name} src={member.avatar_url} size="sm" />
-                <div>
-                  <p className="text-sm font-medium">{member.display_name}</p>
-                  <p className="text-xs text-muted">{memberTasks.length} งานค้าง</p>
-                </div>
-              </div>
-              <div className="divide-y divide-border max-h-64 overflow-y-auto">
+            <Card key={member.id}>
+              <CardHeader
+                title={member.display_name}
+                description={`${memberTasks.length} งานค้าง`}
+                icon={<Avatar name={member.display_name} src={member.avatar_url} size="sm" />}
+              />
+              <div className="max-h-72 divide-y divide-border overflow-y-auto">
                 {memberTasks.map((task) => (
-                  <div key={task.id} className="px-4 py-2.5">
-                    <p className="text-sm font-medium truncate">{task.title}</p>
-                    <p className="text-xs text-muted">{task.client?.name ?? "—"}</p>
-                    <StatusBadge status={task.status} />
-                  </div>
+                  <ListRow
+                    key={task.id}
+                    title={<span className="block truncate">{task.title}</span>}
+                    description={task.client?.name ?? "ไม่ระบุลูกค้า"}
+                    trailing={<StatusBadge status={task.status} />}
+                  />
                 ))}
                 {memberTasks.length === 0 && (
-                  <p className="text-xs text-muted text-center py-4">ว่าง</p>
+                  <p className="px-4 py-6 text-center text-sm text-muted">ไม่มีงานค้าง</p>
                 )}
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       ) : (
         <>
-          <div className="md:hidden space-y-2">
+          <Card className="md:hidden">
+            <div className="divide-y divide-border">
             {filteredTasks.map((task) => (
-              <div
+              <ListRow
                 key={task.id}
-                className="bg-card border border-border rounded-xl p-3"
-              >
-                <p className="font-medium text-sm">
+                title={
+                  <span className="block truncate">
                   {task.parent_id && <span className="text-muted mr-1">↳</span>}
                   {task.title}
-                </p>
-                <p className="text-xs text-muted mt-0.5">
-                  {task.client?.name ?? "—"}
-                  {task.assignee ? ` · ${task.assignee.display_name}` : ""}
-                </p>
-                <div className="flex items-center justify-between mt-2 gap-2">
+                  </span>
+                }
+                description={
+                  <div className="space-y-1.5">
+                    <p>
+                      {task.client?.name ?? "ไม่ระบุลูกค้า"}
+                      {task.assignee ? ` · ${task.assignee.display_name}` : ""}
+                    </p>
                   <TaskCountdown
                     startDate={task.start_date}
                     dueDate={task.due_date}
@@ -153,17 +193,18 @@ export default function SchedulePage() {
                     showDates={false}
                     size="sm"
                   />
-                  <StatusBadge status={task.status} />
-                </div>
-              </div>
+                  </div>
+                }
+                trailing={<StatusBadge status={task.status} />}
+              />
             ))}
-          </div>
-          <div className="hidden md:block bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="overflow-x-auto">
+            </div>
+          </Card>
+          <Card className="hidden overflow-hidden md:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-muted text-xs border-b border-border bg-background">
-                  <th className="text-left px-4 py-3 font-medium min-w-[200px]">
+                  <th className="min-w-50 px-4 py-3 text-left font-medium">
                     งาน
                   </th>
                   <th className="text-left px-4 py-3 font-medium">ลูกค้า</th>
@@ -233,31 +274,27 @@ export default function SchedulePage() {
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
+          </Card>
         </>
       )}
 
       {unscheduled.length > 0 && (
-        <section className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-border">
-            <h2 className="font-semibold flex items-center gap-2">
-              <Calendar size={18} className="text-amber-400" />
-              งานที่ยังไม่ได้วางวัน ({unscheduled.length})
-            </h2>
-          </div>
+        <Card>
+          <CardHeader
+            title="งานที่ยังไม่ได้วางวัน"
+            description={`${unscheduled.length} งานรอกำหนดวัน`}
+            icon={<Calendar size={18} className="text-amber-400" />}
+          />
           <div className="divide-y divide-border">
             {unscheduled.map((task) => (
-              <div
+              <ListRow
                 key={task.id}
-                className="px-5 py-3 flex items-center justify-between hover:bg-card-hover"
-              >
-                <div>
-                  <p className="font-medium text-sm">{task.title}</p>
-                  <p className="text-xs text-muted">
+                title={task.title}
+                description={
+                  <div className="space-y-1.5">
+                    <p>
                     {task.client?.name ?? "ไม่ระบุลูกค้า"}
-                  </p>
-                  <div className="mt-1.5">
+                    </p>
                     <TaskCountdown
                       startDate={task.start_date}
                       dueDate={task.due_date}
@@ -265,21 +302,13 @@ export default function SchedulePage() {
                       size="sm"
                     />
                   </div>
-                </div>
-                <StatusBadge status={task.status} />
-              </div>
+                }
+                trailing={<StatusBadge status={task.status} />}
+              />
             ))}
           </div>
-        </section>
+        </Card>
       )}
-
-      {tasks.length === 0 && (
-        <EmptyState
-          icon={<Calendar size={28} />}
-          title="ยังไม่มีงานในตาราง"
-          description="เพิ่มงานพร้อมวันที่เริ่ม-ครบ เพื่อดูในปฏิทิน"
-        />
-      )}
-    </div>
+    </PageShell>
   );
 }

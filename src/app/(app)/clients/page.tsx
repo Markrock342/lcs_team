@@ -1,17 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Phone, Mail, Building2, Trash2, Pencil, Users, ExternalLink, Link2, Share2, FileUp, Copy, Check, ChevronDown, CheckSquare } from "lucide-react";
+import { Plus, Phone, Mail, Trash2, Pencil, Users, ExternalLink, Link2, Share2, FileUp, Copy, Check, ChevronDown, CheckSquare, UserRound } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
   Button,
+  Card,
+  CardHeader,
+  ClientStatusBadge,
+  ErrorState,
+  ListRow,
   Modal,
   Input,
   Select,
   Textarea,
   EmptyState,
+  PageLoader,
 } from "@/components/ui";
-import { PageHeader, FilterTabs } from "@/components/mobile-ui";
+import { PageHeader, FilterTabs, PageShell } from "@/components/mobile-ui";
+import { SavedViewsBar } from "@/components/workspace/SavedViewsBar";
 import { useRole } from "@/components/RoleProvider";
 import Link from "next/link";
 import {
@@ -24,6 +31,26 @@ import { logActivity } from "@/lib/activity";
 import type { Client, ProjectType, ClientStatus } from "@/lib/types";
 import type { ClientFile } from "@/lib/extras-types";
 import Image from "next/image";
+
+function ClientCover({ src, name }: { src: string; name: string }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const isDocument = /\.(pdf|docx?|xlsx?|pptx?)(?:$|[?#])/i.test(src);
+
+  if (isDocument || failedSrc === src) return null;
+
+  return (
+    <div className="relative aspect-16/7 overflow-hidden bg-surface-soft">
+      <Image
+        src={src}
+        alt={`ภาพปก ${name}`}
+        fill
+        sizes="(min-width: 1024px) 30vw, (min-width: 640px) 50vw, 100vw"
+        className="object-cover"
+        onError={() => setFailedSrc(src)}
+      />
+    </div>
+  );
+}
 
 const emptyClient = {
   name: "",
@@ -62,17 +89,30 @@ export default function ClientsPage() {
   const [portalEnabled, setPortalEnabled] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     loadClients();
+    if (new URLSearchParams(window.location.search).get("create") === "1") {
+      openCreate();
+    }
   }, []);
 
   async function loadClients() {
+    setLoading(true);
+    setLoadError("");
     const supabase = createClient();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("clients")
       .select("*")
       .order("created_at", { ascending: false });
+
+    if (error) {
+      setLoadError(error.message);
+      setLoading(false);
+      return;
+    }
+
     setClients(data ?? []);
     setLoading(false);
   }
@@ -194,6 +234,11 @@ export default function ClientsPage() {
     let image_url = editing?.image_url ?? null;
 
     if (imageFile) {
+      if (!imageFile.type.startsWith("image/")) {
+        setSaving(false);
+        setUploadError("ภาพปกต้องเป็นไฟล์รูปภาพเท่านั้น");
+        return;
+      }
       const uploaded = await uploadFile(imageFile, "clients");
       if (!uploaded.ok) {
         setSaving(false);
@@ -259,20 +304,16 @@ export default function ClientsPage() {
     );
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-32">
-        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <PageLoader label="กำลังโหลดลูกค้า..." />;
   }
 
   return (
-    <div className="space-y-5 sm:space-y-6 animate-fade-in">
+    <PageShell width="wide">
       <PageHeader
         title="ลูกค้า"
         description={
           canEdit
-            ? "กดการ์ดเพื่อแก้ไข · เปิด Portal ได้ในเมนูขยาย"
+            ? "ติดตามสถานะ ผู้ติดต่อ งาน และ Portal ของลูกค้า"
             : "โหมดดูอย่างเดียว (Guest)"
         }
         action={
@@ -282,6 +323,14 @@ export default function ClientsPage() {
             </Button>
           ) : undefined
         }
+      />
+
+      <SavedViewsBar
+        page="clients"
+        filters={{ status: filter }}
+        onApply={(filters) => {
+          if (filters.status) setFilter(filters.status);
+        }}
       />
 
       <input
@@ -304,75 +353,84 @@ export default function ClientsPage() {
         ]}
       />
 
-      {filtered.length === 0 ? (
+      {loadError ? (
+        <ErrorState
+          description={loadError}
+          onRetry={loadClients}
+        />
+      ) : filtered.length === 0 ? (
         <EmptyState
           icon={<Users size={28} />}
-          title="ยังไม่มีลูกค้า"
-          description="เพิ่มลูกค้าใหม่เพื่อเริ่มติดตามงาน"
+          title={clients.length === 0 ? "ยังไม่มีลูกค้า" : "ไม่พบลูกค้าที่ค้นหา"}
+          description={
+            clients.length === 0
+              ? "เพิ่มลูกค้าใหม่เพื่อเริ่มติดตามงาน"
+              : "ลองเปลี่ยนคำค้นหาหรือตัวกรองสถานะ"
+          }
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="auto-card-grid">
           {filtered.map((client) => (
-            <div
+            <Card
               key={client.id}
-              className="bg-card border border-border rounded-2xl overflow-hidden hover:border-accent/30 transition-all group"
+              interactive
+              className="flex min-h-full flex-col"
             >
-              {client.image_url && (
-                <div className="relative h-32 bg-background">
-                  <Image
-                    src={client.image_url}
-                    alt={client.name}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-              )}
-              <div className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="font-semibold">{client.name}</h3>
-                    {client.company && (
-                      <p className="text-xs text-muted flex items-center gap-1 mt-0.5">
-                        <Building2 size={12} /> {client.company}
-                      </p>
-                    )}
-                  </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent shrink-0">
-                    {CLIENT_STATUS_LABELS[client.status]}
-                  </span>
-                </div>
+              {client.image_url && <ClientCover src={client.image_url} name={client.name} />}
+              <CardHeader
+                title={client.name}
+                description={[client.company, PROJECT_TYPE_LABELS[client.project_type]]
+                  .filter(Boolean)
+                  .join(" · ")}
+                action={<ClientStatusBadge status={client.status} />}
+              />
 
-                <p className="text-xs text-accent mb-2">
-                  {PROJECT_TYPE_LABELS[client.project_type]}
-                </p>
-
+              <div className="flex flex-1 flex-col">
                 {client.description && (
-                  <p className="text-xs text-muted line-clamp-2 mb-3">
+                  <p className="px-4 pt-3 text-sm leading-relaxed text-muted line-clamp-3">
                     {client.description}
                   </p>
                 )}
 
-                <div className="space-y-1 text-xs text-muted">
+                <div className="divide-y divide-border">
                   {client.contact_name && (
-                    <p>👤 {client.contact_name}</p>
+                    <ListRow
+                      leading={<UserRound size={16} className="text-muted" />}
+                      title={client.contact_name}
+                      description="ผู้ติดต่อ"
+                      className="min-h-0 py-2.5"
+                    />
                   )}
                   {client.contact_phone && (
-                    <p className="flex items-center gap-1">
-                      <Phone size={11} /> {client.contact_phone}
-                    </p>
+                    <ListRow
+                      leading={<Phone size={16} className="text-muted" />}
+                      title={
+                        <a href={`tel:${client.contact_phone}`} className="hover:text-accent">
+                          {client.contact_phone}
+                        </a>
+                      }
+                      description="โทรศัพท์"
+                      className="min-h-0 py-2.5"
+                    />
                   )}
                   {client.contact_email && (
-                    <p className="flex items-center gap-1">
-                      <Mail size={11} /> {client.contact_email}
-                    </p>
+                    <ListRow
+                      leading={<Mail size={16} className="text-muted" />}
+                      title={
+                        <a href={`mailto:${client.contact_email}`} className="break-all hover:text-accent">
+                          {client.contact_email}
+                        </a>
+                      }
+                      description="อีเมล"
+                      className="min-h-0 py-2.5"
+                    />
                   )}
                 </div>
 
-                {/* Links */}
                 {CLIENT_LINK_FIELDS.some(
                   (f) => client[f.key as keyof Client]
                 ) && (
-                  <div className="flex flex-wrap gap-1.5 mt-3">
+                  <div className="flex flex-wrap gap-2 px-4 py-3 border-t border-border">
                     {CLIENT_LINK_FIELDS.filter(
                       (f) => client[f.key as keyof Client]
                     ).map((f) => (
@@ -381,59 +439,66 @@ export default function ClientsPage() {
                         href={client[f.key as keyof Client] as string}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-accent/10 text-accent text-[10px] hover:bg-accent/20 transition-colors"
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-surface-soft px-2.5 py-1.5 text-xs font-medium text-accent hover:bg-card-hover"
                       >
-                        <Link2 size={10} />
+                        <Link2 size={12} />
                         {f.label}
-                        <ExternalLink size={9} />
+                        <ExternalLink size={11} />
                       </a>
                     ))}
                   </div>
                 )}
 
-                <div className="flex gap-2 mt-4 pt-3 border-t border-border">
+                <div className="mt-auto grid grid-cols-2 gap-2 border-t border-border p-3">
                   <Link
                     href={`/clients/${client.id}`}
-                    className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-violet-500/10 text-violet-300 text-xs font-medium touch-manipulation"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-surface-soft px-3 text-sm font-semibold hover:bg-card-hover"
                   >
-                    <Users size={12} /> รายละเอียด
+                    <Users size={16} /> รายละเอียด
                   </Link>
                   <Link
                     href={`/tasks?client=${client.id}`}
-                    className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-accent/10 text-accent text-xs font-medium touch-manipulation"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-accent/10 px-3 text-sm font-semibold text-accent hover:bg-accent/20"
                   >
-                    <CheckSquare size={12} /> งาน
+                    <CheckSquare size={16} /> งาน
                   </Link>
                   {canEdit &&
                     (client as Client & { portal_enabled?: boolean; portal_token?: string }).portal_enabled &&
                     (client as Client & { portal_token?: string }).portal_token && (
-                    <button
+                    <Button
+                      type="button"
+                      variant="secondary"
                       onClick={() => copyPortalLink(client as Client & { portal_token: string })}
-                      className="p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 touch-manipulation"
+                      className="px-3"
                       title="คัดลอกลิงก์ Client Portal"
                     >
-                      {copiedPortal === client.id ? <Check size={14} /> : <Share2 size={14} />}
-                    </button>
+                      {copiedPortal === client.id ? <Check size={16} /> : <Share2 size={16} />}
+                      {copiedPortal === client.id ? "คัดลอกแล้ว" : "Portal"}
+                    </Button>
                   )}
                   {canEdit && (
                     <>
-                      <button
+                      <Button
+                        type="button"
+                        variant="secondary"
                         onClick={() => openEdit(client)}
-                        className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-background border border-border text-xs hover:bg-card-hover touch-manipulation"
+                        className="px-3"
                       >
-                        <Pencil size={12} /> แก้ไข
-                      </button>
-                      <button
+                        <Pencil size={16} /> แก้ไข
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="danger"
                         onClick={() => handleDelete(client.id)}
-                        className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 touch-manipulation"
+                        className="col-span-2 px-3"
                       >
-                        <Trash2 size={14} />
-                      </button>
+                        <Trash2 size={16} /> ลบลูกค้า
+                      </Button>
                     </>
                   )}
                 </div>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}
@@ -560,7 +625,7 @@ export default function ClientsPage() {
 
               <div>
                 <p className="block text-sm font-medium text-zinc-300 mb-1.5">
-                  รูปใบสัญญา / เอกสาร
+                  ภาพปกลูกค้า
                 </p>
                 <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-accent/40 touch-manipulation">
                   <FileUp size={20} className="text-muted shrink-0" />
@@ -568,15 +633,22 @@ export default function ClientsPage() {
                     {imageFile
                       ? imageFile.name
                       : editing?.image_url
-                        ? "มีรูปแล้ว — แตะเลือกใหม่"
-                        : "แตะเลือกรูปใบสัญญา"}
+                        ? "มีภาพปกแล้ว — แตะเลือกใหม่"
+                        : "แตะเลือกภาพปก"}
                   </span>
                   <input
                     type="file"
-                    accept="image/*,.pdf,image/heic,image/heif"
+                    accept="image/*"
                     capture="environment"
                     onChange={(e) => {
-                      setImageFile(e.target.files?.[0] ?? null);
+                      const file = e.target.files?.[0] ?? null;
+                      if (file && !file.type.startsWith("image/")) {
+                        setImageFile(null);
+                        setUploadError("ภาพปกต้องเป็นไฟล์รูปภาพเท่านั้น");
+                        e.target.value = "";
+                        return;
+                      }
+                      setImageFile(file);
                       setUploadError("");
                     }}
                     className="hidden"
@@ -661,6 +733,6 @@ export default function ClientsPage() {
           </Button>
         </form>
       </Modal>
-    </div>
+    </PageShell>
   );
 }

@@ -3,14 +3,28 @@
 import { useEffect, useState } from "react";
 import { Plus, Play, Trash2, Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { PageHeader } from "@/components/mobile-ui";
-import { Button, Modal, Input, Textarea, Select } from "@/components/ui";
+import { FilterTabs, PageHeader, PageShell } from "@/components/mobile-ui";
+import {
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  ErrorState,
+  Input,
+  ListRow,
+  Modal,
+  PageLoader,
+  Select,
+  StatusStamp,
+  Textarea,
+} from "@/components/ui";
 import { ROLE_LABELS } from "@/lib/constants";
 import { logActivity, notifyTeam } from "@/lib/activity";
 import { isAdmin } from "@/lib/permissions";
 import type { TaskTemplate, TaskTemplateItem } from "@/lib/extras-types";
 import type { Client, TeamRole } from "@/lib/types";
 import { useRouter } from "next/navigation";
+import { DocumentKitList } from "@/components/workspace/DocumentKitList";
 
 const emptyItem = {
   title: "",
@@ -33,12 +47,15 @@ export default function TemplatesPage() {
   const [formName, setFormName] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [formItems, setFormItems] = useState([{ ...emptyItem }]);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"tasks" | "quotation" | "agreement">("tasks");
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function load() {
+    setError(null);
     const supabase = createClient();
     const {
       data: { user },
@@ -50,6 +67,11 @@ export default function TemplatesPage() {
         ? supabase.from("profiles").select("role").eq("id", user.id).single()
         : Promise.resolve({ data: null }),
     ]);
+    if (tpl.error || cls.error) {
+      setError("โหลดเทมเพลตไม่สำเร็จ โปรดลองอีกครั้ง");
+      setLoading(false);
+      return;
+    }
     setTemplates(
       (tpl.data ?? []).map((t) => ({
         ...t,
@@ -134,14 +156,14 @@ export default function TemplatesPage() {
 
     setSaving(false);
     setEditModal(null);
-    load();
+    void load();
   }
 
   async function deleteTemplate(id: string) {
     if (!confirm("ลบเทมเพลตนี้?")) return;
     const supabase = createClient();
     await supabase.from("task_templates").delete().eq("id", id);
-    load();
+    void load();
   }
 
   async function applyTemplate(e: React.FormEvent) {
@@ -185,7 +207,7 @@ export default function TemplatesPage() {
     });
     await notifyTeam(
       user?.id ?? null,
-      "📋 โปรเจกต์ใหม่",
+      "โปรเจกต์ใหม่",
       `สร้างจากเทมเพลต: ${useModal.name}`,
       "/tasks"
     );
@@ -197,19 +219,29 @@ export default function TemplatesPage() {
   const canManage = isAdmin(currentRole);
 
   if (loading)
+    return <PageLoader label="กำลังโหลดเทมเพลต..." />;
+
+  if (error) {
     return (
-      <div className="flex justify-center py-32">
-        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-      </div>
+      <PageShell width="medium">
+        <ErrorState
+          description={error}
+          onRetry={() => {
+            setLoading(true);
+            void load();
+          }}
+        />
+      </PageShell>
     );
+  }
 
   return (
-    <div className="space-y-5 animate-fade-in">
+    <PageShell width="medium">
       <PageHeader
-        title="เทมเพลตงาน"
-        description="สร้างและแก้ไขเทมเพลต · ใช้สร้างโปรเจกต์พร้อมงานย่อย"
+        title="เทมเพลต"
+        description="ชุดงานมาตรฐาน ใบเสนอราคา และสัญญาทีม — กดใช้แล้วกรอกชื่อลูกค้าได้เลย"
         action={
-          canManage ? (
+          canManage && tab === "tasks" ? (
             <Button onClick={openCreate}>
               <Plus size={18} /> สร้างเทมเพลต
             </Button>
@@ -217,40 +249,64 @@ export default function TemplatesPage() {
         }
       />
 
-      <div className="space-y-4">
+      <FilterTabs
+        active={tab}
+        onChange={(key) => setTab(key as typeof tab)}
+        tabs={[
+          { key: "tasks", label: "งาน", count: templates.length },
+          { key: "quotation", label: "ใบเสนอราคา", count: 1 },
+          { key: "agreement", label: "สัญญา", count: 1 },
+        ]}
+      />
+
+      {tab === "quotation" && <DocumentKitList kind="quotation" clients={clients} />}
+      {tab === "agreement" && <DocumentKitList kind="agreement" clients={clients} />}
+
+      {tab === "tasks" && (templates.length > 0 ? (
+        <div className="space-y-6">
         {templates.map((tpl) => (
-          <div key={tpl.id} className="bg-card border border-border rounded-2xl p-4">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-              <div className="flex-1">
-                <h3 className="font-semibold">{tpl.name}</h3>
-                {tpl.description && (
-                  <p className="text-sm text-muted mt-1">{tpl.description}</p>
-                )}
-                <div className="mt-3 space-y-1">
-                  {tpl.items?.map((item, i) => (
-                    <div key={item.id} className="flex items-center gap-2 text-xs text-muted">
-                      <span className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[10px]">
+          <Card key={tpl.id}>
+            <CardHeader
+              title={tpl.name}
+              description={tpl.description ?? `${tpl.items?.length ?? 0} งานย่อย`}
+            />
+            {tpl.items && tpl.items.length > 0 ? (
+              <div className="divide-y divide-border">
+                {tpl.items.map((item, i) => (
+                  <ListRow
+                    key={item.id}
+                    leading={
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-soft text-xs font-semibold tabular-nums">
                         {i + 1}
                       </span>
-                      {item.title}
-                      {item.suggested_role && (
-                        <span className="text-accent">
-                          {ROLE_LABELS[item.suggested_role as TeamRole]}
-                        </span>
-                      )}
-                      <span>· {item.duration_days}d</span>
-                    </div>
-                  ))}
-                </div>
+                    }
+                    title={item.title}
+                    description={item.description ?? undefined}
+                    trailing={
+                      <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center">
+                        {item.suggested_role && (
+                          <StatusStamp
+                            label={`บทบาท ${ROLE_LABELS[item.suggested_role as TeamRole]}`}
+                            tone="violet"
+                          />
+                        )}
+                        <StatusStamp label={`${item.duration_days} วัน`} />
+                      </div>
+                    }
+                  />
+                ))}
               </div>
-              <div className="flex gap-2 shrink-0">
+            ) : (
+              <p className="px-4 py-6 text-center text-sm text-muted">ยังไม่มีงานย่อยในชุดนี้</p>
+            )}
+            <div className="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3">
                 {canManage && (
                   <>
                     <Button variant="ghost" onClick={() => openEditTemplate(tpl)}>
-                      <Pencil size={16} />
+                      <Pencil size={16} /> แก้ไข
                     </Button>
                     <Button variant="ghost" onClick={() => deleteTemplate(tpl.id)}>
-                      <Trash2 size={16} className="text-red-400" />
+                      <Trash2 size={16} className="text-red-400" /> ลบ
                     </Button>
                   </>
                 )}
@@ -262,16 +318,30 @@ export default function TemplatesPage() {
                 >
                   <Play size={16} /> ใช้เทมเพลต
                 </Button>
-              </div>
             </div>
-          </div>
+          </Card>
         ))}
-        {templates.length === 0 && (
-          <p className="text-center text-muted py-12">
-            ยังไม่มีเทมเพลต — กดสร้างเทมเพลตหรือรัน add-all-features.sql
-          </p>
-        )}
-      </div>
+        </div>
+      ) : (
+        <Card>
+          <EmptyState
+            icon={<Plus size={28} />}
+            title="ยังไม่มีเทมเพลตงาน"
+            description={
+              canManage
+                ? "สร้างชุดงานแรกเพื่อใช้เริ่มโปรเจกต์ได้เร็วขึ้น"
+                : "ผู้ดูแลระบบยังไม่ได้สร้างเทมเพลตงาน"
+            }
+            action={
+              canManage ? (
+                <Button onClick={openCreate}>
+                  <Plus size={18} /> สร้างเทมเพลต
+                </Button>
+              ) : undefined
+            }
+          />
+        </Card>
+      ))}
 
       <Modal
         open={!!useModal}
@@ -307,7 +377,7 @@ export default function TemplatesPage() {
           <div className="space-y-2">
             <p className="text-sm font-medium">รายการงานย่อย</p>
             {formItems.map((item, idx) => (
-              <div key={idx} className="p-3 rounded-xl border border-border space-y-2">
+              <div key={idx} className="space-y-2 bg-surface-soft p-3">
                 <Input
                   label="ชื่องาน"
                   value={item.title}
@@ -364,6 +434,6 @@ export default function TemplatesPage() {
           </Button>
         </form>
       </Modal>
-    </div>
+    </PageShell>
   );
 }

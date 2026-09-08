@@ -1,6 +1,9 @@
 import type {
   ClientStatus,
+  InteractionOutcome,
+  InteractionType,
   ProjectType,
+  ProspectStatus,
   SalesStage,
   TaskPriority,
   TaskStatus,
@@ -37,6 +40,13 @@ export const CLIENT_STATUS_LABELS: Record<ClientStatus, string> = {
   paused: "พักงาน",
 };
 
+export const CLIENT_STATUS_COLORS: Record<ClientStatus, string> = {
+  lead: "status-blue",
+  active: "status-amber",
+  completed: "status-green",
+  paused: "status-slate",
+};
+
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   pending: "ยังไม่เริ่ม",
   waiting: "รอดำเนินการ",
@@ -46,11 +56,11 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
 };
 
 export const TASK_STATUS_COLORS: Record<TaskStatus, string> = {
-  pending: "bg-zinc-500/20 text-zinc-300 border-zinc-500/30",
-  waiting: "bg-amber-500/20 text-amber-300 border-amber-500/30",
-  in_progress: "bg-[#00a3ff]/20 text-[#00a3ff] border-[#00a3ff]/30",
-  review: "bg-violet-500/20 text-violet-300 border-violet-500/30",
-  done: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+  pending: "status-slate",
+  waiting: "status-amber",
+  in_progress: "status-blue",
+  review: "status-violet",
+  done: "status-green",
 };
 
 export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
@@ -58,6 +68,13 @@ export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
   medium: "ปานกลาง",
   high: "สูง",
   urgent: "ด่วน",
+};
+
+export const TASK_PRIORITY_COLORS: Record<TaskPriority, string> = {
+  low: "status-slate",
+  medium: "status-blue",
+  high: "status-amber",
+  urgent: "status-red",
 };
 
 export const ROLE_LABELS: Record<TeamRole, string> = {
@@ -87,11 +104,11 @@ export const SALES_STAGE_LABELS: Record<SalesStage, string> = {
 };
 
 export const SALES_STAGE_COLORS: Record<SalesStage, string> = {
-  lead: "bg-sky-500/15 text-sky-200 border-sky-500/30",
-  talking: "bg-amber-500/15 text-amber-200 border-amber-500/30",
-  quoted: "bg-violet-500/15 text-violet-200 border-violet-500/30",
-  won: "bg-emerald-500/15 text-emerald-200 border-emerald-500/30",
-  lost: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30",
+  lead: "status-blue",
+  talking: "status-amber",
+  quoted: "status-violet",
+  won: "status-green",
+  lost: "status-red",
 };
 
 export const SALES_STAGES: SalesStage[] = [
@@ -101,6 +118,50 @@ export const SALES_STAGES: SalesStage[] = [
   "won",
   "lost",
 ];
+
+export const PROSPECT_STATUS_LABELS: Record<ProspectStatus, string> = {
+  new: "ยังไม่คัด",
+  assigned: "มอบหมายแล้ว",
+  contacted: "ติดต่อแล้ว",
+  interested: "สนใจ",
+  not_interested: "ไม่สนใจ",
+  converted: "เป็นดีลแล้ว",
+};
+
+export const PROSPECT_STATUS_COLORS: Record<ProspectStatus, string> = {
+  new: "status-slate",
+  assigned: "status-blue",
+  contacted: "status-amber",
+  interested: "status-violet",
+  not_interested: "status-red",
+  converted: "status-green",
+};
+
+export const PROSPECT_STATUSES: ProspectStatus[] = [
+  "new",
+  "assigned",
+  "contacted",
+  "interested",
+  "not_interested",
+  "converted",
+];
+
+export const INTERACTION_TYPE_LABELS: Record<InteractionType, string> = {
+  call: "โทร",
+  email_draft: "ร่างอีเมล",
+  note: "บันทึก",
+  follow_up: "นัดติดตาม",
+};
+
+export const INTERACTION_OUTCOME_LABELS: Record<InteractionOutcome, string> = {
+  reached: "คุยได้",
+  no_answer: "ไม่รับสาย",
+  voicemail: "ฝากข้อความ",
+  emailed: "ส่งร่างแล้ว",
+  interested: "สนใจ",
+  not_interested: "ไม่สนใจ",
+  callback: "นัดโทรกลับ",
+};
 
 export const CLIENT_LINK_FIELDS = [
   { key: "repo_url", label: "Git Repo", placeholder: "https://github.com/..." },

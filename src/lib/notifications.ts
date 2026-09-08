@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { chatChannelHref } from "./channels";
 
-export type NotificationKind = "chat" | "mention" | "task" | "system";
+export type NotificationKind = "chat" | "mention" | "task" | "system" | "sales" | "invoice";
 
 export type NotificationInput = {
   userId: string;
@@ -22,6 +22,8 @@ export function inferNotificationKind(
   }
   if (link?.startsWith("/chat")) return "chat";
   if (link?.startsWith("/tasks")) return "task";
+  if (link?.startsWith("/sales") || link?.startsWith("/today")) return "sales";
+  if (link?.startsWith("/invoices") || link?.startsWith("/finance")) return "invoice";
   return "system";
 }
 

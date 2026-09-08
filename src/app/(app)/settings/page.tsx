@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Moon, Sun, Bell, Download, Smartphone, Shield, User, Camera, Wallet } from "lucide-react";
-import { PageHeader } from "@/components/mobile-ui";
-import { Button, Select, Avatar, ProfileRoleBadges } from "@/components/ui";
+import Link from "next/link";
+import { Moon, Sun, Bell, Download, Smartphone, Shield, User, Camera, Wallet, Sparkles } from "lucide-react";
+import { PageHeader, PageShell } from "@/components/mobile-ui";
+import { Button, Select, Avatar, ProfileRoleBadges, PageLoader, ErrorState } from "@/components/ui";
+import { SystemHealthPanel } from "@/components/workspace/SystemHealthPanel";
 import { useTheme } from "@/components/ThemeProvider";
 import { subscribeToPush, unsubscribeFromPush, sendTestPush, getPushBlockers } from "@/components/PWARegister";
 import { createClient } from "@/lib/supabase/client";
@@ -18,9 +20,13 @@ import {
 } from "@/lib/permissions";
 import { getProfileDisplayRoles } from "@/lib/profile-display";
 import { DEFAULT_TEAM_BANKS } from "@/lib/team-banks";
-import { sendNotification } from "@/lib/notifications";
 import type { NotificationPrefs } from "@/lib/notifications";
 import type { Profile, TeamRole } from "@/lib/types";
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<unknown>;
+}
 
 export default function SettingsPage() {
   const { theme, toggle } = useTheme();
@@ -33,6 +39,8 @@ export default function SettingsPage() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIos, setIsIos] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState("");
   const [team, setTeam] = useState<Profile[]>([]);
   const [roleSaving, setRoleSaving] = useState<string | null>(null);
   const [displaySaving, setDisplaySaving] = useState<string | null>(null);
@@ -52,23 +60,33 @@ export default function SettingsPage() {
   });
   const [bankSaving, setBankSaving] = useState(false);
   const [bankSaved, setBankSaved] = useState(false);
+  const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
-    checkPush();
-    loadProfile();
-    setPushBlockers(getPushBlockers());
-    setIsStandalone(
-      window.matchMedia("(display-mode: standalone)").matches ||
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (navigator as any).standalone === true
-    );
-    setIsIos(/iphone|ipad|ipod/i.test(navigator.userAgent));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault();
-      (window as any).__pwaPrompt = e;
+    async function initializeClientState() {
+      await Promise.resolve();
+      setPushBlockers(getPushBlockers());
+      setIsStandalone(
+        window.matchMedia("(display-mode: standalone)").matches ||
+          (navigator as Navigator & { standalone?: boolean }).standalone === true
+      );
+      setIsIos(/iphone|ipad|ipod/i.test(navigator.userAgent));
+    }
+
+    function handleBeforeInstallPrompt(event: Event) {
+      const promptEvent = event as BeforeInstallPromptEvent;
+      promptEvent.preventDefault();
+      installPromptRef.current = promptEvent;
       setInstallable(true);
-    });
+    }
+
+    void checkPush();
+    void loadProfile();
+    void initializeClientState();
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    };
   }, []);
 
   async function loadProfile() {
@@ -76,13 +94,22 @@ export default function SettingsPage() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      setProfileError("ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบอีกครั้ง");
+      setProfileLoading(false);
+      return;
+    }
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", user.id)
       .single();
+    if (error) {
+      setProfileError(error.message);
+      setProfileLoading(false);
+      return;
+    }
     setProfile(data);
     if (data) {
       setNotifyPrefs({
@@ -116,6 +143,7 @@ export default function SettingsPage() {
         .order("display_name");
       setTeam(members ?? []);
     }
+    setProfileLoading(false);
   }
 
   async function updateMemberRole(memberId: string, role: TeamRole) {
@@ -325,35 +353,71 @@ export default function SettingsPage() {
   }
 
   async function installApp() {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const prompt = (window as any).__pwaPrompt;
+    const prompt = installPromptRef.current;
     if (prompt) {
-      prompt.prompt();
+      await prompt.prompt();
       await prompt.userChoice;
       setInstallable(false);
     }
   }
 
   return (
-    <div className="space-y-5 animate-fade-in max-w-lg">
-      <PageHeader title="ตั้งค่า" description="PWA, Push, Theme และ Export" />
+    <PageShell width="compact">
+      <PageHeader title="ตั้งค่า" description="จัดการโปรไฟล์ การแจ้งเตือน แอป และสุขภาพระบบ" />
 
-      {profile && (
-        <section className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-3 p-4 border-b border-border">
+      <SystemHealthPanel />
+
+      <section className="ticket-card overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
+          <Sparkles size={20} className="text-accent" />
+          <div>
+            <h2 className="font-semibold">ผู้ช่วย Gemini</h2>
+            <p className="text-sm text-muted">ร่างข้อความขาย ไม่ส่งแทน และไม่เปลี่ยนสถานะเอง</p>
+          </div>
+        </div>
+        <div className="space-y-3 p-5">
+          <p className="text-sm text-muted">
+            ไปที่แผนกขาย แล้วเปิดการ์ดรายชื่อเป้าหมาย จะมีปุ่มร่างอีเมล สคริปต์โทร สรุปการคุย และงานถัดไป
+          </p>
+          <p className="text-sm text-muted">
+            ต้องใส่ <span className="font-medium text-foreground">GEMINI_API_KEY</span> ใน environment ของเซิร์ฟเวอร์ (คีย์ Google AI Studio ที่ขึ้นต้น AIza) อย่าใส่ใน NEXT_PUBLIC_
+          </p>
+          <Link href="/sales?view=prospects">
+            <Button>ไปแผนกขาย</Button>
+          </Link>
+        </div>
+      </section>
+
+      {profileLoading && <PageLoader label="กำลังโหลดการตั้งค่า..." />}
+      {!profileLoading && profileError && (
+        <ErrorState
+          title="โหลดโปรไฟล์ไม่สำเร็จ"
+          description={profileError}
+          onRetry={() => {
+            setProfileError("");
+            setProfileLoading(true);
+            void loadProfile();
+          }}
+        />
+      )}
+
+      {!profileLoading && profile && (
+        <section className="ticket-card overflow-hidden">
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
             <User size={20} className="text-accent" />
             <div>
-              <p className="font-medium text-sm">โปรไฟล์ของฉัน</p>
-              <p className="text-xs text-muted">badge ที่ทีมเห็นใน sidebar / แชท</p>
+              <h2 className="font-semibold">โปรไฟล์ของฉัน</h2>
+              <p className="text-sm text-muted">รูปและป้ายหน้าที่ที่ทีมเห็น</p>
             </div>
           </div>
-          <div className="p-4 space-y-3">
+          <div className="p-5 space-y-4">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => avatarInputRef.current?.click()}
                 disabled={avatarUploading}
-                className="relative shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-accent/40"
+                className="relative shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-accent/40 min-h-12 min-w-12"
+                aria-label="เปลี่ยนรูปโปรไฟล์"
               >
                 <Avatar
                   name={profile.display_name}
@@ -382,7 +446,7 @@ export default function SettingsPage() {
                   type="button"
                   onClick={() => avatarInputRef.current?.click()}
                   disabled={avatarUploading}
-                  className="mt-1 text-xs text-accent hover:underline disabled:opacity-50"
+                  className="mt-1 min-h-11 text-sm font-medium text-accent hover:underline disabled:opacity-50"
                 >
                   {avatarUploading ? "กำลังอัปโหลด..." : "เปลี่ยนรูปโปรไฟล์"}
                 </button>
@@ -391,14 +455,14 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-            <p className="text-xs text-muted">
+            <p className="text-sm text-muted">
               สิทธิ์จริง: <strong>{ROLE_LABELS[profile.role]}</strong>
               {!isAdmin(profile.role) && " — badge ถูกกำหนดโดย admin"}
             </p>
             {!isAdmin(profile.role) &&
               getProfileDisplayRoles(profile).includes("admin") && (
-                <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
-                  มี badge Admin แต่สิทธิ์จริงยังเป็น PM — เลื่อนลงจะไม่เห็น{" "}
+                <p className="rounded-xl bg-(--status-amber-bg) p-4 text-sm text-(--status-amber-fg)" role="status">
+                  มีป้าย Admin แต่สิทธิ์จริงยังเป็น PM จึงยังจัดการทีมไม่ได้{" "}
                   <strong>จัดการทีม & สิทธิ์</strong> จนกว่าจะตั้ง role เป็น admin ใน
                   Supabase (รัน <code className="text-accent">fix-restore-admin.sql</code>)
                 </p>
@@ -407,20 +471,27 @@ export default function SettingsPage() {
         </section>
       )}
 
-      {profile && (
-        <section className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-3 p-4 border-b border-border">
-            <Wallet size={20} className="text-emerald-400" />
+      {roleError && (
+        <div className="rounded-xl bg-(--status-red-bg) p-4 text-sm text-(--status-red-fg)" role="alert">
+          {roleError}
+        </div>
+      )}
+
+      {!profileLoading && profile && (
+        <section className="ticket-card overflow-hidden">
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
+            <Wallet size={20} className="text-accent" />
             <div>
-              <p className="font-medium text-sm">บัญชีรับเงิน</p>
-              <p className="text-xs text-muted">
-                ให้เพื่อนในทีมเห็นตอนโอนจ้าง — หน้า「จ่ายทีม」
+              <h2 className="font-semibold">บัญชีรับเงิน</h2>
+              <p className="text-sm text-muted">
+                แสดงให้ทีมเห็นเมื่อโอนเงินในหน้าจ่ายทีม
               </p>
             </div>
           </div>
-          <form onSubmit={saveBankInfo} className="p-4 space-y-3">
+          <form onSubmit={saveBankInfo} className="p-5 space-y-4">
             <input
-              className="w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm"
+              className="w-full min-h-11 px-3.5 py-2.5 bg-background border border-border rounded-xl text-base"
+              aria-label="ธนาคาร"
               placeholder="ธนาคาร เช่น กรุงไทย"
               value={bankForm.bank_name}
               onChange={(e) =>
@@ -428,7 +499,8 @@ export default function SettingsPage() {
               }
             />
             <input
-              className="w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm font-mono"
+              className="w-full min-h-11 px-3.5 py-2.5 bg-background border border-border rounded-xl text-base font-mono"
+              aria-label="เลขบัญชี"
               placeholder="เลขบัญชี"
               value={bankForm.bank_account_number}
               onChange={(e) =>
@@ -436,7 +508,8 @@ export default function SettingsPage() {
               }
             />
             <input
-              className="w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm"
+              className="w-full min-h-11 px-3.5 py-2.5 bg-background border border-border rounded-xl text-base"
+              aria-label="ชื่อบัญชี"
               placeholder="ชื่อบัญชี"
               value={bankForm.bank_account_name}
               onChange={(e) =>
@@ -447,24 +520,24 @@ export default function SettingsPage() {
               บันทึกบัญชี
             </Button>
             {bankSaved && (
-              <p className="text-xs text-emerald-400 text-center">บันทึกแล้ว ✓</p>
+              <p className="rounded-xl bg-(--status-green-bg) p-3 text-center text-sm font-medium text-(--status-green-fg)" role="status">บันทึกบัญชีแล้ว</p>
             )}
           </form>
         </section>
       )}
 
       {profile && hasPermission(profile.role, "manage_team") && (
-        <section className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-3 p-4 border-b border-border">
-            <Shield size={20} className="text-red-400" />
+        <section className="ticket-card overflow-hidden">
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
+            <Shield size={20} className="text-accent" />
             <div>
-              <p className="font-medium text-sm">จัดการทีม & สิทธิ์</p>
-              <p className="text-xs text-muted">มอบหมาย role และ badge ให้สมาชิก (เฉพาะ admin)</p>
+              <h2 className="font-semibold">จัดการทีมและสิทธิ์</h2>
+              <p className="text-sm text-muted">กำหนดสิทธิ์จริงและป้ายหน้าที่ของสมาชิก</p>
             </div>
           </div>
           <div className="divide-y divide-border">
             {team.map((member) => (
-              <div key={member.id} className="p-4 space-y-2">
+              <div key={member.id} className="p-5 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-medium text-sm truncate">{member.display_name}</p>
@@ -487,7 +560,7 @@ export default function SettingsPage() {
                   ))}
                 </Select>
                 <div>
-                  <p className="text-xs text-muted mb-2">Badge ที่ทีมเห็น</p>
+                  <p className="text-sm text-muted mb-2">ป้ายที่ทีมเห็น</p>
                   <div className="flex flex-wrap gap-2">
                     {ASSIGNABLE_ROLES.map((role) => {
                       const on = getProfileDisplayRoles(member).includes(role);
@@ -497,10 +570,10 @@ export default function SettingsPage() {
                           type="button"
                           disabled={displaySaving === member.id}
                           onClick={() => updateMemberDisplayRole(member.id, role)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          className={`min-h-11 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
                             on
                               ? "bg-accent/20 text-accent ring-1 ring-accent/40"
-                              : "bg-background border border-border text-muted hover:text-foreground"
+                              : "bg-surface-soft border border-border text-muted hover:text-foreground"
                           }`}
                         >
                           {ROLE_LABELS[role]}
@@ -509,41 +582,38 @@ export default function SettingsPage() {
                     })}
                   </div>
                 </div>
-                <p className="text-[11px] text-muted">{ROLE_DESCRIPTIONS[member.role]}</p>
+                <p className="text-sm text-muted">{ROLE_DESCRIPTIONS[member.role]}</p>
                 {member.id === profile?.id && (
-                  <p className="text-[11px] text-amber-400">
-                    เปลี่ยน role ตัวเองไม่ได้ — ใช้ admin ถ้าต้องการสิทธิ์ PM + จัดการทีม
+                  <p className="text-sm text-(--status-amber-fg)">
+                    เปลี่ยนสิทธิ์ตัวเองไม่ได้ ต้องให้แอดมินคนอื่นดำเนินการ
                   </p>
                 )}
               </div>
             ))}
           </div>
-          {roleError && (
-            <p className="px-4 pb-4 text-xs text-red-400">{roleError}</p>
-          )}
         </section>
       )}
 
-      <section className="bg-card border border-border rounded-2xl divide-y divide-border">
-        <div className="flex items-center justify-between p-4">
+      <section className="ticket-card divide-y divide-border overflow-hidden">
+        <div className="flex min-h-20 items-center justify-between gap-4 p-5">
           <div className="flex items-center gap-3">
-            {theme === "dark" ? <Moon size={20} className="text-accent" /> : <Sun size={20} className="text-amber-400" />}
+            {theme === "dark" ? <Moon size={20} className="text-accent" /> : <Sun size={20} className="text-(--status-amber-fg)" />}
             <div>
-              <p className="font-medium text-sm">ธีม</p>
-              <p className="text-xs text-muted">{theme === "dark" ? "Dark Mode" : "Light Mode"}</p>
+              <p className="font-medium">ธีม</p>
+              <p className="text-sm text-muted">{theme === "dark" ? "โหมดมืด" : "โหมดสว่าง"}</p>
             </div>
           </div>
           <Button variant="secondary" onClick={toggle}>สลับ</Button>
         </div>
 
-        <div className="p-4 space-y-3 border-b border-border">
+        <div className="p-5 space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <Bell size={20} className="text-accent" />
               <div>
-                <p className="font-medium text-sm">Push Notifications</p>
-                <p className="text-xs text-muted">
-                  {pushOn ? "เปิดอยู่" : "ปิดอยู่"} — แจ้งเตือนแม้ออกจากแอพ
+                <p className="font-medium">การแจ้งเตือนแบบ Push</p>
+                <p className="text-sm text-muted">
+                  {pushOn ? "เปิดอยู่" : "ปิดอยู่"} · แจ้งได้แม้ปิดแอป
                 </p>
               </div>
             </div>
@@ -553,7 +623,7 @@ export default function SettingsPage() {
                   variant="secondary"
                   loading={pushTesting}
                   onClick={testPush}
-                  className="text-xs px-3 py-1.5"
+                  className="px-3"
                 >
                   ทดสอบ
                 </Button>
@@ -564,24 +634,24 @@ export default function SettingsPage() {
             </div>
           </div>
           {pushBlockers.length > 0 && (
-            <ul className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 space-y-1 list-disc pl-5">
+            <ul className="rounded-xl bg-(--status-amber-bg) p-4 pl-8 text-sm text-(--status-amber-fg) space-y-1 list-disc">
               {pushBlockers.map((b) => (
                 <li key={b}>{b}</li>
               ))}
             </ul>
           )}
           {pushError && (
-            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+            <p className="rounded-xl bg-(--status-red-bg) p-4 text-sm text-(--status-red-fg)" role="alert">
               {pushError}
             </p>
           )}
         </div>
 
-        <div className="p-4 space-y-3">
+        <div className="p-5 space-y-4">
           <div>
-            <p className="font-medium text-sm">การแจ้งเตือนในแอพ</p>
-            <p className="text-xs text-muted mt-0.5">
-              ควบคุมประเภทที่อยากได้ — Push ยังใช้สวิตช์ด้านบน
+            <p className="font-medium">การแจ้งเตือนในแอป</p>
+            <p className="text-sm text-muted mt-0.5">
+              เลือกเฉพาะเรื่องที่ต้องการรับ
             </p>
           </div>
           {(
@@ -589,51 +659,56 @@ export default function SettingsPage() {
               {
                 key: "notify_chat" as const,
                 label: "ข้อความแชท",
-                desc: "แจ้งเมื่อมีข้อความใน channel",
+                desc: "แจ้งเมื่อมีข้อความใหม่ในช่อง",
               },
               {
                 key: "notify_mentions" as const,
-                label: "@mention",
-                desc: "แจ้งเมื่อถูก mention (แนะนำเปิด)",
+                label: "การกล่าวถึง",
+                desc: "แจ้งเมื่อมีคนกล่าวถึงคุณ",
               },
               {
                 key: "notify_tasks" as const,
                 label: "งานที่มอบหมาย",
-                desc: "งานใหม่ + เตือนก่อนครบ 3 วัน / 1 วัน / วันครบ / เลยกำหนด",
+                desc: "งานใหม่และกำหนดส่งที่ใกล้เข้ามา",
               },
             ] as const
           ).map(({ key, label, desc }) => (
             <div key={key} className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-medium">{label}</p>
-                <p className="text-xs text-muted">{desc}</p>
+                <p className="font-medium">{label}</p>
+                <p className="text-sm text-muted">{desc}</p>
               </div>
               <button
                 type="button"
                 disabled={notifySaving}
                 onClick={() => saveNotifyPref(key, !notifyPrefs[key])}
-                className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${
-                  notifyPrefs[key] ? "bg-accent" : "bg-zinc-600"
-                }`}
+                className="relative h-11 w-12 shrink-0"
                 aria-pressed={notifyPrefs[key]}
+                aria-label={`${label}: ${notifyPrefs[key] ? "เปิด" : "ปิด"}`}
               >
                 <span
-                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                    notifyPrefs[key] ? "translate-x-5" : ""
+                  className={`absolute inset-x-0 top-2 h-7 rounded-full transition-colors ${
+                    notifyPrefs[key] ? "bg-accent" : "bg-surface-raised"
                   }`}
-                />
+                >
+                  <span
+                    className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-foreground transition-transform ${
+                      notifyPrefs[key] ? "translate-x-5" : ""
+                    }`}
+                  />
+                </span>
               </button>
             </div>
           ))}
         </div>
 
         {!isStandalone && (
-          <div className="p-4 space-y-3">
+          <div className="p-5 space-y-3">
             <div className="flex items-center gap-3">
               <Smartphone size={20} className="text-accent shrink-0" />
               <div className="min-w-0">
-                <p className="font-medium text-sm">ติดตั้งแอพ (PWA)</p>
-                <p className="text-xs text-muted">เพิ่มไปหน้าจอ Home</p>
+                <p className="font-medium">ติดตั้งแอป</p>
+                <p className="text-sm text-muted">เพิ่มไว้บนหน้าจอโฮม</p>
               </div>
               {installable && (
                 <Button onClick={installApp} className="shrink-0 ml-auto">
@@ -642,12 +717,12 @@ export default function SettingsPage() {
               )}
             </div>
             {!installable && isIos && (
-              <p className="text-xs text-muted pl-8">
+              <p className="text-sm text-muted pl-8">
                 iPhone/iPad: Safari → ปุ่ม <strong>แชร์</strong> → <strong>Add to Home Screen</strong>
               </p>
             )}
             {!installable && !isIos && (
-              <p className="text-xs text-muted pl-8">
+              <p className="text-sm text-muted pl-8">
                 Chrome/Edge: เมนู ⋮ → <strong>Install app</strong> / <strong>ติดตั้งแอป</strong>
               </p>
             )}
@@ -655,37 +730,35 @@ export default function SettingsPage() {
         )}
 
         {isStandalone && (
-          <div className="flex items-center gap-3 p-4">
-            <Smartphone size={20} className="text-emerald-400" />
-            <p className="text-sm text-emerald-400">ติดตั้งเป็นแอพแล้ว ✓</p>
+          <div className="flex items-center gap-3 p-5 text-(--status-green-fg)">
+            <Smartphone size={20} />
+            <p className="font-medium">ติดตั้งเป็นแอปแล้ว</p>
           </div>
         )}
 
-        <div className="flex items-center justify-between p-4">
+        <div className="flex min-h-20 items-center justify-between gap-4 p-5">
           <div className="flex items-center gap-3">
             <Download size={20} className="text-accent" />
             <div>
-              <p className="font-medium text-sm">Export ข้อมูล</p>
-              <p className="text-xs text-muted">CSV ลูกค้า + งาน</p>
+              <p className="font-medium">ส่งออกข้อมูล</p>
+              <p className="text-sm text-muted">ดาวน์โหลดลูกค้าและงานเป็น CSV</p>
             </div>
           </div>
           {(!profile || hasPermission(profile.role, "export_data")) && (
-            <Button variant="secondary" onClick={exportAll}>Export</Button>
+            <Button variant="secondary" onClick={exportAll}>ส่งออก</Button>
           )}
         </div>
       </section>
 
       {!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && (
-        <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 space-y-1">
-          <p>
-            <strong>Push Notifications (ไม่บังคับ)</strong> — แอพใช้ได้ปกติแม้ไม่เปิด
-          </p>
+        <div className="rounded-2xl bg-(--status-amber-bg) p-4 text-sm text-(--status-amber-fg) space-y-1" role="status">
+          <p><strong>ยังไม่ได้ตั้งค่า Push</strong> แอปยังใช้งานได้ตามปกติ</p>
           <p>
             ถ้าอยากได้ push: รัน <code>node scripts/generate-vapid.js</code> แล้วใส่ 3 ค่าใน{" "}
             <code>.env.local</code> (local) และ <strong>Vercel Environment Variables</strong> (production) แล้ว redeploy
           </p>
-        </p>
+        </div>
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -17,7 +17,7 @@ import {
   CornerDownRight,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Avatar, Button, Input, Modal, Textarea, ProfileRoleBadges } from "@/components/ui";
+import { Button, EmptyState, Input, Modal, PageLoader, Textarea, ProfileRoleBadges } from "@/components/ui";
 import { ChatMessageItem } from "@/components/ChatMessageItem";
 import { ChatMentionInput } from "@/components/ChatMentionInput";
 import { uploadFile, isImageFile } from "@/lib/upload";
@@ -57,9 +57,7 @@ export default function ChatPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center py-32">
-          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-        </div>
+        <PageLoader label="กำลังเปิดแชท..." />
       }
     >
       <ChatPageContent />
@@ -223,13 +221,17 @@ function ChatPageContent() {
       setLoading(false);
     }
 
-    init();
+    void init();
+    // Initial channel resolution intentionally uses the first URL snapshot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadMessages, markMessagesAsRead]);
 
   useEffect(() => {
     if (loading || !channels.length || !channelParam) return;
     const ch = resolveChannelFromParam(channelParam, channels);
     if (!ch || ch.id === activeChannel?.id) return;
+    // The URL is the external source of truth for channel navigation.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveChannel(ch);
     setShowMobileChannels(false);
     setReplyTo(null);
@@ -451,7 +453,7 @@ function ChatPageContent() {
     e.preventDefault();
     const slug = slugifyChannelName(newChannelName);
     if (!slug) {
-      setCreateError("ชื่อแชannel ไม่ถูกต้อง");
+      setCreateError("ชื่อช่องไม่ถูกต้อง");
       return;
     }
     if (channels.some((c) => c.name === slug)) {
@@ -533,7 +535,7 @@ function ChatPageContent() {
 
   async function handleDeleteChannel() {
     if (!activeChannel || activeChannel.name === "general") return;
-    if (!confirm(`ลบแชannel #${activeChannel.name}?`)) return;
+    if (!confirm(`ลบช่อง #${activeChannel.name}?`)) return;
 
     const supabase = createClient();
     await supabase.from("channels").delete().eq("id", activeChannel.id);
@@ -719,26 +721,23 @@ function ChatPageContent() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-32">
-        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <PageLoader label="กำลังโหลดข้อความ..." />;
   }
 
   // ยังไม่มี channels table
   if (channels.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 px-4 text-center animate-fade-in">
-        <Hash className="text-accent mb-4" size={40} />
-        <h2 className="text-xl font-bold mb-2">ยังไม่มีแชannel</h2>
-        <p className="text-muted text-sm max-w-sm mb-6">
-          รันไฟล์ <code className="text-accent">supabase/add-channels.sql</code>{" "}
-          ใน Supabase SQL Editor ก่อน แล้ว refresh หน้านี้
-        </p>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus size={18} /> สร้างแชannel แรก
-        </Button>
+      <div className="flex h-full min-h-0 items-center justify-center animate-fade-in">
+        <EmptyState
+          icon={<Hash size={24} />}
+          title="ยังไม่มีช่องสนทนา"
+          description="สร้างช่องแรกเพื่อเริ่มพูดคุยและติดตามงานร่วมกัน"
+          action={
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus size={18} /> สร้างช่องแรก
+            </Button>
+          }
+        />
         <CreateChannelModal
           open={createOpen}
           onClose={() => setCreateOpen(false)}
@@ -757,19 +756,23 @@ function ChatPageContent() {
   let lastDate = "";
 
   return (
-    <div className="flex flex-col lg:flex-row flex-1 min-h-0 h-full max-h-full border border-brand rounded-2xl overflow-hidden bg-card animate-fade-in">
+    <div className="ticket-card flex h-full max-h-full min-h-0 flex-1 flex-col overflow-hidden animate-fade-in lg:flex-row">
       {/* Channel sidebar — Discord style */}
       <aside
         className={`${
           showMobileChannels ? "flex" : "hidden"
-        } lg:flex flex-col w-full lg:w-60 bg-sidebar border-r border-brand shrink-0 min-h-0`}
+        } min-h-0 w-full shrink-0 flex-col bg-surface-soft lg:flex lg:w-64 lg:border-r lg:border-border`}
       >
-        <div className="px-4 py-3 border-b border-brand flex items-center justify-between">
-          <h2 className="font-semibold text-sm tracking-wide">แชannels</h2>
+        <div className="flex min-h-16 items-center justify-between border-b border-border px-4">
+          <div>
+            <p className="ticket-kicker">ทีม · Chat</p>
+            <h2 className="mt-0.5 font-semibold">ช่องสนทนา</h2>
+          </div>
           <button
             onClick={() => setCreateOpen(true)}
-            className="p-1.5 rounded-lg hover:bg-card-hover text-muted hover:text-accent transition-colors"
-            title="สร้างแชannel"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted transition-colors hover:bg-card-hover hover:text-accent"
+            title="สร้างช่อง"
+            aria-label="สร้างช่อง"
           >
             <Plus size={18} />
           </button>
@@ -782,7 +785,7 @@ function ChatPageContent() {
               <button
                 key={ch.id}
                 onClick={() => selectChannel(ch)}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors ${
+                className={`flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors ${
                   active
                     ? "bg-accent/15 text-accent"
                     : "text-muted hover:text-foreground hover:bg-card-hover"
@@ -796,21 +799,21 @@ function ChatPageContent() {
         </nav>
 
         {/* Team presence */}
-        <div className="p-3 border-t border-brand">
-          <p className="text-[10px] uppercase tracking-wider text-muted mb-2 flex items-center gap-1">
+        <div className="border-t border-border p-4">
+          <p className="mb-3 flex items-center gap-1.5 text-xs font-medium text-muted">
             <Users size={12} /> ทีม — {profiles.length}
             <span className="normal-case tracking-normal">
               · {profiles.filter((p) => onlineIds.has(p.id) || isOnline(p.last_seen_at)).length} ออนไลน์
             </span>
           </p>
-          <div className="space-y-2 max-h-36 overflow-y-auto overscroll-contain scroll-touch">
+          <div className="max-h-40 space-y-3 overflow-y-auto overscroll-contain scroll-touch">
             {profiles.map((p) => {
               const online = onlineIds.has(p.id) || isOnline(p.last_seen_at);
               return (
-                <div key={p.id} className="flex items-start gap-2 text-xs min-w-0">
+                <div key={p.id} className="flex min-w-0 items-start gap-2 text-sm">
                   <div
                     className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${
-                      online ? "bg-emerald-400" : "bg-zinc-500"
+                      online ? "bg-(--status-green-fg)" : "bg-muted"
                     }`}
                     title={online ? "ออนไลน์" : "ออฟไลน์"}
                   />
@@ -820,8 +823,8 @@ function ChatPageContent() {
                       <ProfileRoleBadges profile={p} size="xs" />
                     </div>
                     <p
-                      className={`text-[10px] truncate ${
-                        online ? "text-emerald-400" : "text-muted"
+                      className={`truncate text-xs ${
+                        online ? "text-(--status-green-fg)" : "text-muted"
                       }`}
                     >
                       {onlineIds.has(p.id) ? "ออนไลน์" : formatPresenceStatus(p.last_seen_at)}
@@ -843,10 +846,11 @@ function ChatPageContent() {
         {activeChannel ? (
           <>
             {/* Channel header */}
-            <div className="px-4 py-3 border-b border-brand flex items-center gap-3 shrink-0 bg-sidebar/50">
+            <div className="flex min-h-16 shrink-0 items-center gap-3 border-b border-border bg-surface-soft px-3 sm:px-4">
               <button
                 onClick={() => setShowMobileChannels(true)}
-                className="lg:hidden p-1.5 rounded-lg hover:bg-card-hover text-muted"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover lg:hidden"
+                aria-label="กลับไปยังรายการช่อง"
               >
                 <ChevronLeft size={20} />
               </button>
@@ -862,22 +866,24 @@ function ChatPageContent() {
               <div className="relative shrink-0">
                 <button
                   onClick={() => setChannelMenuOpen(!channelMenuOpen)}
-                  className="p-1.5 rounded-lg hover:bg-card-hover text-muted"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover"
+                  aria-label="เมนูช่อง"
+                  aria-expanded={channelMenuOpen}
                 >
                   <MoreVertical size={18} />
                 </button>
                 {channelMenuOpen && (
-                  <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-lg z-10 py-1 min-w-[140px]">
+                  <div className="absolute right-0 top-full z-10 mt-1 min-w-40 rounded-xl border border-border bg-card py-1 shadow-(--shadow-float)">
                     <button
                       onClick={openEditChannel}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-card-hover"
+                      className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-sm hover:bg-card-hover"
                     >
                       <Pencil size={14} /> แก้ไข
                     </button>
                     {activeChannel.name !== "general" && (
                       <button
                         onClick={handleDeleteChannel}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10"
+                        className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-sm text-(--status-red-fg) hover:bg-(--status-red-bg)"
                       >
                         <Trash2 size={14} /> ลบ
                       </button>
@@ -889,24 +895,24 @@ function ChatPageContent() {
 
             {/* Messages — Discord layout */}
             {(chatError || sendError) && (
-              <div className="mx-4 mt-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+              <div className="mx-4 mt-3 rounded-xl bg-(--status-red-bg) px-4 py-3 text-sm text-(--status-red-fg)" role="alert">
                 {sendError || chatError}
               </div>
             )}
             <div
               ref={messagesScrollRef}
-              className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-touch px-4 py-4 space-y-1"
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-touch px-3 py-5 sm:px-5 space-y-1"
             >
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center py-12">
-                  <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mb-4">
-                    <Hash className="text-accent" size={28} />
+                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-soft text-muted">
+                    <Hash size={24} />
                   </div>
                   <h3 className="font-semibold text-lg">
                     ยินดีต้อนรับสู่ {formatChannelDisplay(activeChannel.name)}
                   </h3>
                   <p className="text-sm text-muted mt-1">
-                    {activeChannel.description ?? "เริ่มคุยกันในแชannel นี้ได้เลย"}
+                    {activeChannel.description ?? "เริ่มส่งข้อความในช่องนี้ได้เลย"}
                   </p>
                 </div>
               ) : (
@@ -961,7 +967,7 @@ function ChatPageContent() {
 
             {/* Reply preview */}
             {replyTo && (
-              <div className="mx-4 mb-2 flex items-center gap-2 px-3 py-2 bg-accent/10 border border-accent/30 rounded-xl">
+              <div className="mx-4 mb-2 flex items-center gap-2 rounded-xl bg-surface-soft px-3 py-2">
                 <CornerDownRight size={14} className="text-accent shrink-0" />
                 <div className="flex-1 min-w-0 text-xs">
                   <p className="text-accent font-medium">
@@ -976,7 +982,8 @@ function ChatPageContent() {
                 <button
                   type="button"
                   onClick={() => setReplyTo(null)}
-                  className="text-muted hover:text-foreground p-1"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover hover:text-foreground"
+                  aria-label="ยกเลิกการตอบกลับ"
                 >
                   <X size={16} />
                 </button>
@@ -985,7 +992,7 @@ function ChatPageContent() {
 
             {/* File preview */}
             {file && (
-              <div className="mx-4 mb-2 flex items-center gap-2 px-3 py-2 bg-background border border-border rounded-xl">
+              <div className="mx-4 mb-2 flex items-center gap-2 rounded-xl bg-surface-soft px-3 py-2">
                 {isImageFile(file.type) ? (
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1004,7 +1011,8 @@ function ChatPageContent() {
                 )}
                 <button
                   onClick={() => setFile(null)}
-                  className="text-muted hover:text-foreground"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover hover:text-foreground"
+                  aria-label="นำไฟล์แนบออก"
                 >
                   <X size={16} />
                 </button>
@@ -1015,13 +1023,14 @@ function ChatPageContent() {
             <form
               onSubmit={handleSend}
               onPaste={handlePaste}
-              className="p-4 border-t border-brand shrink-0"
+              className="shrink-0 border-t border-border bg-card p-3 sm:p-4"
             >
               {openTasks.length > 0 && (
                 <select
                   value={linkedTaskId}
                   onChange={(e) => setLinkedTaskId(e.target.value)}
-                  className="w-full mb-2 px-3 py-2 rounded-lg bg-background border border-border text-xs"
+                  className="mb-2 min-h-11 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                  aria-label="แนบลิงก์งาน"
                 >
                   <option value="">แนบลิงก์งาน (ไม่บังคับ)</option>
                   {openTasks.map((t) => (
@@ -1031,7 +1040,7 @@ function ChatPageContent() {
                   ))}
                 </select>
               )}
-              <div className="flex items-end gap-2 bg-background border border-border rounded-xl px-2 py-2 focus-within:ring-2 focus-within:ring-accent/30">
+              <div className="flex items-end gap-1 rounded-xl border border-border bg-background p-1.5 focus-within:border-accent sm:gap-2">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -1042,7 +1051,8 @@ function ChatPageContent() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="p-2 rounded-lg hover:bg-card-hover text-muted hover:text-foreground shrink-0"
+                  className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-card-hover hover:text-foreground"
+                  aria-label="แนบไฟล์"
                 >
                   <Paperclip size={18} />
                 </button>
@@ -1062,11 +1072,12 @@ function ChatPageContent() {
                   type={sending ? "button" : "submit"}
                   onClick={sending ? cancelSend : undefined}
                   disabled={!sending && !content.trim() && !file}
-                  className={`p-2 rounded-lg transition-colors shrink-0 ${
+                  className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${
                     sending
-                      ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                      ? "bg-(--status-red-bg) text-(--status-red-fg)"
                       : "bg-accent hover:bg-accent-dim text-white disabled:opacity-40"
                   }`}
+                  aria-label={sending ? "ยกเลิกการส่ง" : "ส่งข้อความ"}
                 >
                   {sending ? <X size={18} /> : <Send size={18} />}
                 </button>
@@ -1075,7 +1086,7 @@ function ChatPageContent() {
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted text-sm">
-            เลือกแชannel ทางซ้าย
+            เลือกช่องสนทนาจากรายการ
           </div>
         )}
       </div>
@@ -1095,10 +1106,10 @@ function ChatPageContent() {
         onSubmit={handleCreateChannel}
       />
 
-      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="แก้ไขแชannel">
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="แก้ไขช่อง">
         <form onSubmit={handleEditChannel} className="space-y-4">
           <Input
-            label="ชื่อแชannel"
+            label="ชื่อช่อง"
             value={editName}
             onChange={(e) => setEditName(e.target.value)}
             required
@@ -1142,15 +1153,15 @@ function CreateChannelModal({
   const preview = slugifyChannelName(name);
 
   return (
-    <Modal open={open} onClose={onClose} title="สร้างแชannel ใหม่">
+    <Modal open={open} onClose={onClose} title="สร้างช่องใหม่">
       <form onSubmit={onSubmit} className="space-y-4">
         {error && (
-          <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+          <div className="rounded-xl bg-(--status-red-bg) p-3 text-sm text-(--status-red-fg)" role="alert">
             {error}
           </div>
         )}
         <Input
-          label="ชื่อแชannel"
+          label="ชื่อช่อง"
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
           placeholder="เช่น project-abc, dev-talk"
@@ -1168,10 +1179,10 @@ function CreateChannelModal({
           value={desc}
           onChange={(e) => onDescChange(e.target.value)}
           rows={2}
-          placeholder="แชannel นี้ใช้คุยเรื่องอะไร"
+          placeholder="ช่องนี้ใช้คุยเรื่องอะไร"
         />
         <Button type="submit" loading={creating} className="w-full">
-          <Plus size={18} /> สร้างแชannel
+          <Plus size={18} /> สร้างช่อง
         </Button>
       </form>
     </Modal>

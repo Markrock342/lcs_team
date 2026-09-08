@@ -92,6 +92,8 @@ export function computeOutstandingReceivables(
     .filter(
       (inv) =>
         (inv.document_type ?? "invoice") !== "proposal" &&
+        (inv.document_type ?? "invoice") !== "quotation" &&
+        (inv.document_type ?? "invoice") !== "agreement" &&
         inv.status !== "paid"
     )
     .reduce((sum, inv) => {
@@ -138,7 +140,13 @@ export function invoicePaymentToEntry(
   const inv = p.invoice;
   const docType = inv?.document_type ?? "invoice";
   const typeLabel =
-    docType === "receipt" ? "ใบเสร็จ" : docType === "proposal" ? "Proposal" : "ใบแจ้งหนี้";
+    docType === "receipt"
+      ? "ใบเสร็จ"
+      : docType === "proposal" || docType === "quotation"
+        ? "ใบเสนอราคา"
+        : docType === "agreement"
+          ? "สัญญา"
+          : "ใบแจ้งหนี้";
 
   return {
     id: `income-${p.id}`,

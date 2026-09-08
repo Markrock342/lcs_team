@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
-import { PageHeader } from "@/components/mobile-ui";
+import { PageHeader, PageShell } from "@/components/mobile-ui";
 import { MORE_SECTIONS, filterNavByAccess } from "@/lib/nav";
 import { useRole } from "@/components/RoleProvider";
 
@@ -14,41 +14,43 @@ export default function MorePage() {
   })).filter((section) => section.items.length > 0);
 
   return (
-    <div className="space-y-6 animate-fade-in max-w-lg mx-auto">
+    <PageShell width="medium">
       <PageHeader
         title="เมนู"
-        description="ฟีเจอร์อื่นๆ ที่ไม่อยู่ในแถบด้านล่าง"
+        description="เครื่องมือและพื้นที่ทำงานเพิ่มเติม"
       />
 
-      {sections.map((section) => (
-        <section key={section.title}>
-          <p className="text-xs font-medium text-muted uppercase tracking-wider mb-2 px-1">
-            {section.title}
-          </p>
-          <div className="grid gap-2">
+      <div className="grid gap-8 md:grid-cols-2 md:items-start">
+        {sections.map((section) => (
+          <section key={section.title} className="space-y-3">
+            <h2 className="text-sm font-semibold text-muted">
+              {section.title}
+            </h2>
+            <div className="ticket-card divide-y divide-border overflow-hidden">
             {section.items.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex items-center gap-4 p-4 ticket-card hover:border-accent/30 active:bg-card-hover transition-colors touch-manipulation"
+                className="group flex min-h-20 items-center gap-4 px-4 py-3.5 transition-colors hover:bg-card-hover active:bg-surface-raised touch-manipulation"
               >
                 <div
-                  className={`w-10 h-10 rounded-xl bg-background border border-border flex items-center justify-center ${item.color ?? "text-accent"}`}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-soft text-accent"
                 >
                   <item.icon size={20} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium">{item.label}</p>
+                  <p className="font-semibold">{item.label}</p>
                   {item.desc && (
-                    <p className="text-xs text-muted">{item.desc}</p>
+                    <p className="mt-0.5 text-sm leading-relaxed text-muted">{item.desc}</p>
                   )}
                 </div>
-                <ChevronRight size={18} className="text-muted shrink-0" />
+                <ChevronRight size={18} className="text-muted shrink-0 transition-transform group-hover:translate-x-0.5" />
               </Link>
             ))}
-          </div>
-        </section>
-      ))}
-    </div>
+            </div>
+          </section>
+        ))}
+      </div>
+    </PageShell>
   );
 }

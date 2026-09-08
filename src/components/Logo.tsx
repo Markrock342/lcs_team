@@ -23,6 +23,7 @@ export function Logo({
       alt="Limit Code Studio"
       width={px}
       height={px}
+      unoptimized
       className={`object-contain ${className}`}
       priority={size === "lg" || size === "xl"}
     />
