@@ -156,7 +156,7 @@ function SalesPageInner() {
       supabase.from("profiles").select("*").order("display_name"),
       supabase
         .from("sales_prospects")
-        .select("*, owner:profiles(*)")
+        .select("*, owner:profiles!sales_prospects_owner_id_fkey(*)")
         .order("updated_at", { ascending: false }),
     ]);
     setDeals((dealsRes.data as SalesDeal[]) ?? []);
@@ -166,9 +166,10 @@ function SalesPageInner() {
     const errors = [dealsRes.error, prospectsRes.error].filter(Boolean);
     if (errors.length) {
       const message = errors[0]?.message ?? "";
+      const missingTable = /schema cache|does not exist|Could not find the table/i.test(message);
       setLoadError(
-        message.includes("sales_")
-          ? "ยังไม่ได้สร้างตารางขาย — รัน supabase/add-sales-department.sql และ add-sales-productivity.sql"
+        missingTable
+          ? "ยังไม่พบตารางขายในโปรเจกต์นี้ — รัน add-sales-department.sql และ add-sales-productivity.sql ใน SQL Editor ของโปรเจกต์เดียวกับแอป แล้วกด Reload ที่ Settings → API"
           : message
       );
     } else {

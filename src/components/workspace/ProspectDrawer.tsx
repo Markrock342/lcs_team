@@ -64,7 +64,7 @@ export function ProspectDrawer({
     const supabase = createClient();
     void supabase
       .from("sales_interactions")
-      .select("*, creator:profiles(*)")
+      .select("*, creator:profiles!sales_interactions_created_by_fkey(*)")
       .eq("prospect_id", prospect.id)
       .order("created_at", { ascending: false })
       .then(({ data }) => setHistory((data as SalesInteraction[]) ?? []));

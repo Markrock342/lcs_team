@@ -44,6 +44,7 @@
 - Status: `StatusStamp` plus domain wrappers
 - Data: `MetricTile`, `ListRow`, `PageLoader`, `EmptyState`, `ErrorState`
 - Controls: existing Button/Input/Select/Textarea, upgraded with label association and focus-visible states
+- Briefing: `WorkspaceBrief` on the dashboard — recessed composer, status stamp, typewriter caret
 - Modal: focused task sheet on mobile, dialog on desktop, Escape close and focus restoration
 
 ## 7. Card and section style
@@ -66,6 +67,7 @@
 ## 10. Animation and interaction
 - CSS-only; 160ms controls and 240ms entrances using ease-out
 - Animate only transform and opacity
+- Dashboard briefing uses diamond status dots and an accent caret while Gemini types; reduced-motion shows the answer immediately
 - Every control has hover, focus-visible, active, and disabled states
 - Async work shows loading immediately and resolves to inline success/error
 - Reduced-motion disables nonessential animation

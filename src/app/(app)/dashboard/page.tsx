@@ -31,6 +31,7 @@ import {
 } from "@/components/ui";
 import { TaskCountdown } from "@/components/TaskCountdown";
 import { PageHeader, PageShell, QuickActionGrid } from "@/components/mobile-ui";
+import { WorkspaceBrief } from "@/components/workspace/WorkspaceBrief";
 import { SALES_STAGE_LABELS, TEAM } from "@/lib/constants";
 import { CLIENT_STATUS_LABELS } from "@/lib/constants";
 import {
@@ -188,6 +189,8 @@ export default function DashboardPage() {
         title={`สวัสดี ทีม ${TEAM.shortName}`}
         description="ภาพรวมงาน ลูกค้า การขาย และการเงิน พร้อมรายการที่ต้องลงมือทำต่อ"
       />
+
+      <WorkspaceBrief />
 
       <QuickActionGrid
         actions={[

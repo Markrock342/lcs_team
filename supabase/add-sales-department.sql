@@ -54,3 +54,6 @@ CREATE POLICY "Team can delete sales deals" ON sales_deals
 INSERT INTO channels (name, description) VALUES
   ('sale', 'คุยงานขาย ลีด และลูกค้า')
 ON CONFLICT (name) DO NOTHING;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE sales_deals TO authenticated;
+NOTIFY pgrst, 'reload schema';

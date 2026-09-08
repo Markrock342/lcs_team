@@ -115,3 +115,8 @@ CREATE POLICY "Users manage own saved views" ON saved_views
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS action_kind TEXT;
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS action_payload JSONB;
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS done_at TIMESTAMPTZ;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE sales_prospects TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE sales_interactions TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE saved_views TO authenticated;
+NOTIFY pgrst, 'reload schema';
