@@ -43,6 +43,7 @@ const QUICK_CREATE = [
   { href: "/finance?income=1", label: "บันทึกรายรับ", icon: CircleDollarSign },
   { href: "/sales?create=deal", label: "เพิ่มดีลขาย", icon: Handshake },
   { href: "/today", label: "ไปหน้าวันนี้", icon: CheckSquare },
+  { href: "/team", label: "สมาชิกทีม", icon: Users },
 ];
 
 export function CommandPalette({

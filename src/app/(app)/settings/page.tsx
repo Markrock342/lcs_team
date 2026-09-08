@@ -525,13 +525,16 @@ export default function SettingsPage() {
       )}
 
       {profile && hasPermission(profile.role, "manage_team") && (
-        <section className="ticket-card overflow-hidden">
+        <section id="team" className="ticket-card overflow-hidden">
           <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
             <Shield size={20} className="text-accent" />
-            <div>
+            <div className="min-w-0 flex-1">
               <h2 className="font-semibold">จัดการทีมและสิทธิ์</h2>
               <p className="text-sm text-muted">กำหนดสิทธิ์จริงและป้าย BE / FN / UI ของสมาชิก</p>
             </div>
+            <Link href="/team" className="inline-flex min-h-11 items-center text-sm font-semibold text-accent">
+              ดูหน้าสมาชิก
+            </Link>
           </div>
           <div className="divide-y divide-border">
             {team.map((member) => (

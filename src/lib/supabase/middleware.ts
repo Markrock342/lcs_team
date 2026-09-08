@@ -18,6 +18,7 @@ const PROTECTED_PREFIXES = [
   "/activity",
   "/notifications",
   "/settings",
+  "/team",
   "/templates",
   "/more",
 ];

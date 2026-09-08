@@ -17,6 +17,7 @@ import {
   Search,
   Handshake,
   Sun,
+  UserRound,
 } from "lucide-react";
 
 export type NavItem = {
@@ -43,6 +44,7 @@ export const MAIN_NAV: NavItem[] = [
 export const EXTRA_NAV: NavItem[] = [
   { href: "/schedule", label: "ตารางงาน", icon: Calendar, desc: "ปฏิทิน · Gantt · ทีม", color: "text-accent" },
   { href: "/time-reports", label: "รายงานเวลา", icon: Clock, desc: "สรุปชั่วโมงทำงาน", color: "text-cyan-400" },
+  { href: "/team", label: "สมาชิกทีม", icon: UserRound, desc: "แผนก ป้ายหน้าที่ และสถานะออนไลน์", color: "text-violet-400" },
   { href: "/search", label: "ค้นหา", icon: Search, desc: "ค้นหาทั้งแอป", color: "text-sky-400" },
   { href: "/invoices", label: "ใบแจ้งหนี้", icon: Receipt, desc: "สร้างเอกสาร / ใบเสร็จ", color: "text-emerald-400" },
   { href: "/payouts", label: "บัญชีทีม", icon: Wallet, desc: "เลขบัญชีเพื่อนในทีม", color: "text-rose-400" },
@@ -70,7 +72,7 @@ export const MORE_SECTIONS: { title: string; items: NavItem[] }[] = [
   {
     title: "งาน",
     items: EXTRA_NAV.filter((n) =>
-      ["/schedule", "/templates", "/time-reports", "/search"].includes(n.href)
+      ["/schedule", "/templates", "/time-reports", "/team", "/search"].includes(n.href)
     ),
   },
   {

@@ -112,6 +112,7 @@ const PAGE_KICKERS: { match: string; kicker: string }[] = [
   { match: "/chat", kicker: "ทีม · แชท" },
   { match: "/schedule", kicker: "ตาราง · ปฏิทิน" },
   { match: "/time-reports", kicker: "เวลา · ชั่วโมงทำงาน" },
+  { match: "/team", kicker: "ทีม · สมาชิก" },
   { match: "/search", kicker: "ค้นหา · ทั้งระบบ" },
   { match: "/invoices", kicker: "เอกสาร · ใบแจ้งหนี้" },
   { match: "/payouts", kicker: "บัญชีทีม · จ่ายเงิน" },

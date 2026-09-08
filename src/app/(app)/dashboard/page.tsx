@@ -404,7 +404,15 @@ export default function DashboardPage() {
 
       <div className="grid lg:grid-cols-2 gap-4">
         <Card>
-          <CardHeader title="ทีมงาน" icon={<Users size={18} className="text-violet-400" />} />
+          <CardHeader
+            title="ทีมงาน"
+            icon={<Users size={18} className="text-violet-400" />}
+            action={
+              <Link href="/team" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent">
+                ดูทั้งหมด <ArrowRight size={14} />
+              </Link>
+            }
+          />
           <div className="divide-y divide-border">
             {(profiles.length > 0
               ? profiles

@@ -45,6 +45,7 @@
 - Data: `MetricTile`, `ListRow`, `PageLoader`, `EmptyState`, `ErrorState`
 - Controls: existing Button/Input/Select/Textarea, upgraded with label association and focus-visible states
 - Briefing: `WorkspaceBrief` on the dashboard — recessed composer, status stamp, typewriter caret
+- Team roster: `/team` call sheet of members with department badges, presence, and open tasks
 - Sales prospects: category → region → province → court cards; never dump a full import as one grid
 - Modal: focused task sheet on mobile, dialog on desktop, Escape close and focus restoration
 
