@@ -32,6 +32,8 @@ import {
 import { SlipPreviewModal } from "@/components/SlipPreviewModal";
 import { AccessDenied } from "@/components/AccessDenied";
 import { useRole } from "@/components/RoleProvider";
+import { useActionFeedback } from "@/components/workspace/ActionFeedback";
+import { formatBaht } from "@/lib/money";
 import { QuickIncomeForm } from "@/components/QuickIncomeForm";
 import {
   QuickPayoutForm,
@@ -147,7 +149,7 @@ function formatDate(iso: string) {
 }
 
 function money(value: number) {
-  return `฿${value.toLocaleString()}`;
+  return formatBaht(value);
 }
 
 function sourceLabel(sourceType: string | null) {
@@ -159,6 +161,7 @@ function sourceLabel(sourceType: string | null) {
 
 export default function FinancePageInner() {
   const { canViewFinance } = useRole();
+  const { confirm } = useActionFeedback();
   const [transactions, setTransactions] = useState<AccountingTransaction[]>([]);
   const [categories, setCategories] = useState<AccountingCategory[]>([]);
   const [members, setMembers] = useState<Profile[]>([]);
@@ -293,9 +296,12 @@ export default function FinancePageInner() {
   }
 
   async function deleteTransaction(transaction: AccountingTransaction) {
-    const ok = window.confirm(
-      `ลบรายการ "${transaction.description}"?\n\nเป็น soft delete — ยังเก็บประวัติไว้ในระบบ`
-    );
+    const ok = await confirm({
+      title: "ลบรายการ",
+      message: `ลบรายการ “${transaction.description}” หรือไม่?\nยังเก็บประวัติไว้ในระบบ`,
+      confirmLabel: "ลบ",
+      danger: true,
+    });
     if (!ok) return;
     setDbError("");
     const result = await softDeleteAccountingTransaction(transaction.id);

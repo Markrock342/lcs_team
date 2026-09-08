@@ -1,7 +1,9 @@
 import type { ClientTimelineItem } from "./extras-types";
 import type { ActivityLog, ClientFile, Invoice } from "./extras-types";
 import type { Task } from "./types";
-import { ACTIVITY_ACTION_LABELS } from "./extras-types";
+import { ACTIVITY_ACTION_LABELS, INVOICE_STATUS_LABELS } from "./extras-types";
+import { TASK_STATUS_LABELS } from "./constants";
+import { formatBaht } from "./money";
 
 export function buildClientTimeline(input: {
   activities: ActivityLog[];
@@ -28,7 +30,7 @@ export function buildClientTimeline(input: {
       id: `task-${t.id}`,
       type: "task",
       title: t.title,
-      subtitle: t.status,
+      subtitle: TASK_STATUS_LABELS[t.status] ?? t.status,
       date: t.updated_at ?? t.created_at,
       link: "/tasks",
     });
@@ -39,7 +41,7 @@ export function buildClientTimeline(input: {
       id: `inv-${inv.id}`,
       type: "invoice",
       title: inv.title,
-      subtitle: `฿${inv.total_amount.toLocaleString()} · ${inv.status}`,
+      subtitle: `${formatBaht(inv.total_amount)} · ${INVOICE_STATUS_LABELS[inv.status] ?? inv.status}`,
       date: inv.updated_at ?? inv.created_at,
       link: "/invoices",
     });
@@ -60,7 +62,7 @@ export function buildClientTimeline(input: {
       id: `portal-${c.created_at}-${c.author_name}`,
       type: "portal",
       title: `${c.author_name}: ${c.content.slice(0, 60)}`,
-      subtitle: "ความเห็นจาก Portal",
+      subtitle: "ความเห็นจากพอร์ทัล",
       date: c.created_at,
     });
   }

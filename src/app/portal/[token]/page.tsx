@@ -7,6 +7,7 @@ import { INVOICE_STATUS_LABELS } from "@/lib/extras-types";
 import { PROJECT_TYPE_LABELS } from "@/lib/constants";
 import type { PortalComment, PortalTaskFeedback } from "@/lib/extras-types";
 import type { ProjectType } from "@/lib/types";
+import { formatBaht } from "@/lib/money";
 import { ExternalLink, MessageCircle, ThumbsUp, ThumbsDown } from "lucide-react";
 
 interface PortalTask {
@@ -245,7 +246,7 @@ export default function PortalPage({ params }: { params: Promise<{ token: string
                 <div key={i} className="bg-card border border-border rounded-xl p-3 flex justify-between">
                   <div>
                     <p className="font-medium text-sm">{inv.title}</p>
-                    <p className="text-xs text-muted">฿{inv.total_amount.toLocaleString()}</p>
+                    <p className="text-xs text-muted">{formatBaht(inv.total_amount)}</p>
                   </div>
                   <span className="text-xs text-accent">
                     {INVOICE_STATUS_LABELS[inv.status as keyof typeof INVOICE_STATUS_LABELS]}

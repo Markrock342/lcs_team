@@ -235,7 +235,7 @@ function TaskRow({
               active={panel === "checklist"}
               onClick={() => toggle("checklist")}
               icon={<CheckSquare size={13} />}
-              label="Checklist"
+              label="รายการตรวจ"
               badge={clTotal > 0 ? `${clDone}/${clTotal}` : undefined}
             />
           )}
@@ -323,7 +323,7 @@ function TaskRow({
 
 export default function TasksPage() {
   const { canEdit, profile } = useRole();
-  const { toast } = useActionFeedback();
+  const { toast, confirm } = useActionFeedback();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -635,7 +635,13 @@ export default function TasksPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("ลบงานนี้? (งานย่อยจะถูกลบด้วย)")) return;
+    const ok = await confirm({
+      title: "ลบงาน",
+      message: "ลบงานนี้? งานย่อยจะถูกลบด้วย",
+      confirmLabel: "ลบ",
+      danger: true,
+    });
+    if (!ok) return;
     const snapshot = tasks.find((task) => task.id === id);
     const supabase = createClient();
     await supabase.from("tasks").delete().eq("id", id);
@@ -806,7 +812,7 @@ export default function TasksPage() {
           <button
             type="button"
             onClick={() => setViewMode("list")}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium min-h-10 touch-manipulation ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium min-h-11 touch-manipulation ${
               viewMode === "list"
                 ? "bg-accent/20 text-accent border border-accent/40"
                 : "bg-card border border-border text-muted"
@@ -817,13 +823,13 @@ export default function TasksPage() {
           <button
             type="button"
             onClick={() => setViewMode("kanban")}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium min-h-10 touch-manipulation ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium min-h-11 touch-manipulation ${
               viewMode === "kanban"
                 ? "bg-accent/20 text-accent border border-accent/40"
                 : "bg-card border border-border text-muted"
             }`}
           >
-            <LayoutGrid size={16} /> Kanban
+            <LayoutGrid size={16} /> กระดาน
           </button>
         </div>
 
@@ -868,6 +874,7 @@ export default function TasksPage() {
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
           <input
+            aria-label="ค้นหางาน"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="ค้นหางาน, ลูกค้า, ผู้รับผิดชอบ..."

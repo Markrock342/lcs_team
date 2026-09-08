@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button, Input } from "@/components/ui";
 import { syncInvoicePaymentToLedger } from "@/lib/accounting";
 import type { Invoice } from "@/lib/extras-types";
+import { formatBaht } from "@/lib/money";
 import type { Client } from "@/lib/types";
 
 type Props = {
@@ -145,7 +146,7 @@ export function QuickIncomeForm({ onDone }: Props) {
               <p className="text-xs text-muted mt-0.5">
                 {inv.client?.name} · คงเหลือ{" "}
                 <span className="text-emerald-300 font-semibold">
-                  ฿{remaining.toLocaleString()}
+                  {formatBaht(remaining)}
                 </span>
               </p>
             </button>

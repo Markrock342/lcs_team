@@ -45,7 +45,7 @@ export default function ActivityPage() {
       .order("created_at", { ascending: false })
       .limit(100);
     if (loadError) {
-      setError("โหลดประวัติกิจกรรมไม่สำเร็จ โปรดลองอีกครั้ง");
+      setError("โหลดประวัติกิจกรรมไม่สำเร็จ ลองอีกครั้ง");
       setLoading(false);
       return;
     }

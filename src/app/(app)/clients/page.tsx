@@ -20,6 +20,7 @@ import {
 import { PageHeader, FilterTabs, PageShell } from "@/components/mobile-ui";
 import { SavedViewsBar } from "@/components/workspace/SavedViewsBar";
 import { useRole } from "@/components/RoleProvider";
+import { useActionFeedback } from "@/components/workspace/ActionFeedback";
 import Link from "next/link";
 import {
   PROJECT_TYPE_LABELS,
@@ -74,6 +75,7 @@ const emptyClient = {
 
 export default function ClientsPage() {
   const { canEdit } = useRole();
+  const { confirm } = useActionFeedback();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -198,7 +200,14 @@ export default function ClientsPage() {
   }
 
   async function deleteClientFile(id: string) {
-    if (!editing || !confirm("ลบไฟล์นี้?")) return;
+    if (!editing) return;
+    const ok = await confirm({
+      title: "ลบไฟล์",
+      message: "ลบไฟล์นี้หรือไม่?",
+      confirmLabel: "ลบ",
+      danger: true,
+    });
+    if (!ok) return;
     const supabase = createClient();
     await supabase.from("client_files").delete().eq("id", id);
     loadClientFiles(editing.id);
@@ -284,7 +293,13 @@ export default function ClientsPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("ลบลูกค้านี้?")) return;
+    const ok = await confirm({
+      title: "ลบลูกค้า",
+      message: "ลบลูกค้านี้หรือไม่?",
+      confirmLabel: "ลบ",
+      danger: true,
+    });
+    if (!ok) return;
     const supabase = createClient();
     await supabase.from("clients").delete().eq("id", id);
     loadClients();
@@ -313,7 +328,7 @@ export default function ClientsPage() {
         title="ลูกค้า"
         description={
           canEdit
-            ? "ติดตามสถานะ ผู้ติดต่อ งาน และ Portal ของลูกค้า"
+            ? "ติดตามสถานะ ผู้ติดต่อ งาน และพอร์ทัลของลูกค้า"
             : "โหมดดูอย่างเดียว (Guest)"
         }
         action={
@@ -334,6 +349,7 @@ export default function ClientsPage() {
       />
 
       <input
+        aria-label="ค้นหาลูกค้า"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         placeholder="ค้นหาชื่อลูกค้า, บริษัท, ผู้ติดต่อ..."
@@ -470,10 +486,10 @@ export default function ClientsPage() {
                       variant="secondary"
                       onClick={() => copyPortalLink(client as Client & { portal_token: string })}
                       className="px-3"
-                      title="คัดลอกลิงก์ Client Portal"
+                      title="คัดลอกลิงก์พอร์ทัลลูกค้า"
                     >
                       {copiedPortal === client.id ? <Check size={16} /> : <Share2 size={16} />}
-                      {copiedPortal === client.id ? "คัดลอกแล้ว" : "Portal"}
+                      {copiedPortal === client.id ? "คัดลอกแล้ว" : "พอร์ทัล"}
                     </Button>
                   )}
                   {canEdit && (
@@ -601,7 +617,7 @@ export default function ClientsPage() {
           >
             <span className="flex items-center gap-2">
               <Link2 size={16} className="text-accent" />
-              ลิงก์โปรเจกต์ · รูป · Portal
+              ลิงก์โปรเจกต์ · รูป · พอร์ทัล
             </span>
             <ChevronDown size={16} className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
           </button>
@@ -661,7 +677,7 @@ export default function ClientsPage() {
                   <div className="pt-2 border-t border-border">
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-sm font-medium text-zinc-300 flex items-center gap-2">
-                        <Share2 size={16} className="text-accent" /> Client Portal
+                        <Share2 size={16} className="text-accent" /> พอร์ทัลลูกค้า
                       </p>
                       <label className="flex items-center gap-2 text-sm cursor-pointer">
                         <input

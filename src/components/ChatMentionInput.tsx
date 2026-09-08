@@ -156,7 +156,7 @@ export function ChatMentionInput({
         onSelect={syncCursor}
         onPaste={onPaste}
         placeholder={placeholder}
-        className="w-full bg-transparent px-2 py-1.5 text-sm placeholder:text-muted focus:outline-none"
+        className="w-full bg-transparent px-2 py-1.5 text-sm placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       />
     </div>
   );

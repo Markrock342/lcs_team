@@ -104,7 +104,7 @@ export function TaskChecklist({ taskId, onProgressChange }: Props) {
 
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium text-muted">Checklist</p>
+      <p className="text-xs font-medium text-muted">รายการตรวจ</p>
       {dbError && (
         <p className="text-xs text-amber-400">{dbError}</p>
       )}
@@ -138,7 +138,8 @@ export function TaskChecklist({ taskId, onProgressChange }: Props) {
               <button
                 type="button"
                 onClick={() => removeItem(item.id)}
-                className="p-1 rounded opacity-0 group-hover:opacity-100 text-muted hover:text-red-400 touch-manipulation"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded text-muted hover:text-red-400 touch-manipulation"
+                aria-label={`ลบ ${item.title}`}
               >
                 <Trash2 size={14} />
               </button>
@@ -151,13 +152,15 @@ export function TaskChecklist({ taskId, onProgressChange }: Props) {
           <input
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="เพิ่มรายการ checklist..."
-            className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm"
+            placeholder="เพิ่มรายการตรวจ..."
+            aria-label="เพิ่มรายการตรวจ"
+            className="flex-1 min-h-11 px-3 py-2 rounded-lg bg-background border border-border text-sm"
           />
           <button
             type="submit"
             disabled={!newTitle.trim()}
-            className="px-3 py-2 rounded-lg bg-accent/15 text-accent text-sm font-medium disabled:opacity-40"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-accent/15 text-accent text-sm font-medium disabled:opacity-40"
+            aria-label="เพิ่มรายการ"
           >
             <Plus size={16} />
           </button>

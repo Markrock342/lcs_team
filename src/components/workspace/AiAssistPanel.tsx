@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles } from "lucide-react";
+import { PenLine } from "lucide-react";
 import { Button, Textarea } from "@/components/ui";
 import { prospectContext, type AssistMode } from "@/lib/sales-playbook";
 import type { SalesProspect } from "@/lib/types";
@@ -26,10 +26,12 @@ export function AiAssistPanel({
   const [draft, setDraft] = useState("");
   const [mode, setMode] = useState<AssistMode>("email");
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   async function run(nextMode: AssistMode) {
     setLoading(nextMode);
     setError("");
+    setCopied(false);
     setMode(nextMode);
     try {
       const response = await fetch("/api/ai/assist", {
@@ -51,10 +53,20 @@ export function AiAssistPanel({
     }
   }
 
+  async function copyDraft() {
+    try {
+      await navigator.clipboard.writeText(draft);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("คัดลอกไม่สำเร็จ — เลือกข้อความแล้วคัดลอกเอง");
+    }
+  }
+
   return (
     <section className="space-y-3 rounded-2xl bg-surface-soft p-4">
       <div className="flex items-center gap-2 font-semibold">
-        <Sparkles size={16} className="text-accent" />
+        <PenLine size={16} className="text-accent" />
         ผู้ช่วยร่างข้อความ
       </div>
       <p className="text-sm text-muted">
@@ -65,33 +77,50 @@ export function AiAssistPanel({
           <Button
             key={action.mode}
             type="button"
-            variant={mode === action.mode ? "primary" : "secondary"}
+            variant="secondary"
             loading={loading === action.mode}
+            disabled={loading !== null && loading !== action.mode}
+            aria-pressed={mode === action.mode}
+            className={mode === action.mode ? "border-accent/50 bg-accent/15 text-accent" : undefined}
             onClick={() => void run(action.mode)}
           >
             {action.label}
           </Button>
         ))}
       </div>
-      {error && <p className="text-sm text-(--status-red-fg)">{error}</p>}
+      {error && (
+        <p className="text-sm text-(--status-red-fg)" role="alert">
+          {error}
+        </p>
+      )}
       {draft && (
         <>
           <Textarea
             label="ร่างจาก AI — แก้ได้ก่อนใช้"
             rows={14}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setCopied(false);
+            }}
           />
-          <div className="flex gap-2">
+          <p className="text-sm text-muted">ขั้นถัดไป: ใส่ในบันทึกด้านล่าง ตรวจแล้วค่อยส่งเมล</p>
+          <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={() => onUse(draft, mode)}>
-              ใช้ร่างนี้
+              ใส่ในบันทึกการคุย
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => void copyDraft()}>
+              {copied ? "คัดลอกแล้ว" : "คัดลอก"}
             </Button>
             <Button
               type="button"
-              variant="secondary"
-              onClick={() => navigator.clipboard.writeText(draft)}
+              variant="ghost"
+              onClick={() => {
+                setDraft("");
+                setCopied(false);
+              }}
             >
-              คัดลอก
+              ล้างร่าง
             </Button>
           </div>
         </>

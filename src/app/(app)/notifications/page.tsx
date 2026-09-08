@@ -109,7 +109,7 @@ export default function NotificationsPage() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setError("ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบอีกครั้ง");
+      setError("ไม่พบข้อมูลผู้ใช้ เข้าสู่ระบบอีกครั้ง");
       setLoading(false);
       return;
     }
@@ -120,7 +120,7 @@ export default function NotificationsPage() {
       .order("created_at", { ascending: false })
       .limit(50);
     if (loadError) {
-      setError("โหลดการแจ้งเตือนไม่สำเร็จ โปรดลองอีกครั้ง");
+      setError("โหลดการแจ้งเตือนไม่สำเร็จ ลองอีกครั้ง");
       setLoading(false);
       return;
     }

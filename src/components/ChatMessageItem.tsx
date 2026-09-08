@@ -59,7 +59,7 @@ export function ChatMessageItem({
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 mb-0.5">
           <span className="font-semibold text-sm">
-            {msg.sender?.display_name ?? "Unknown"}
+            {msg.sender?.display_name ?? "ไม่มีชื่อ"}
           </span>
           <span className="text-[10px] text-muted">{formatTime(msg.created_at)}</span>
           <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 max-lg:opacity-100 transition-opacity">
@@ -67,8 +67,9 @@ export function ChatMessageItem({
               <button
                 type="button"
                 onClick={() => onReply(msg)}
-                className="p-1.5 rounded hover:bg-card-hover text-muted hover:text-accent touch-manipulation"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-card-hover text-muted hover:text-accent touch-manipulation"
                 title="ตอบกลับ"
+                aria-label="ตอบกลับ"
               >
                 <Reply size={14} />
               </button>
@@ -79,8 +80,9 @@ export function ChatMessageItem({
                 onClick={() =>
                   downloadChatFile(msg.file_url!, msg.file_name ?? "image.png")
                 }
-                className="p-1.5 rounded hover:bg-card-hover text-muted hover:text-accent touch-manipulation"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-card-hover text-muted hover:text-accent touch-manipulation"
                 title="ดาวน์โหลด"
+                aria-label="ดาวน์โหลดไฟล์"
               >
                 <Download size={14} />
               </button>
@@ -89,8 +91,9 @@ export function ChatMessageItem({
               <button
                 type="button"
                 onClick={() => onDelete(msg)}
-                className="p-1.5 rounded hover:bg-red-500/10 text-muted hover:text-red-400 touch-manipulation"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-red-500/10 text-muted hover:text-red-400 touch-manipulation"
                 title="ลบข้อความ"
+                aria-label="ลบข้อความ"
               >
                 <Trash2 size={14} />
               </button>
@@ -103,7 +106,7 @@ export function ChatMessageItem({
             <CornerDownRight size={12} className="shrink-0 mt-0.5" />
             <div className="min-w-0">
               <span className="text-accent font-medium">
-                {replyPreview.sender?.display_name ?? "Unknown"}
+                {replyPreview.sender?.display_name ?? "ไม่มีชื่อ"}
               </span>
               <p className="truncate">
                 {replyPreview.deleted_at
@@ -121,7 +124,7 @@ export function ChatMessageItem({
         ) : (
           <>
             {msg.content && (
-              <p className="text-sm whitespace-pre-wrap break-words text-zinc-200">
+              <p className="text-sm whitespace-pre-wrap break-words text-foreground">
                 {msg.content.split(/(@\w+)/g).map((part, i) =>
                   part.startsWith("@") ? (
                     <span key={i} className="text-accent font-medium">
@@ -147,8 +150,9 @@ export function ChatMessageItem({
                   onClick={() =>
                     downloadChatFile(msg.file_url!, msg.file_name ?? "image.png")
                   }
-                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 text-white opacity-100 sm:opacity-0 sm:group-hover/image:opacity-100 transition-opacity touch-manipulation"
+                  className="absolute top-2 right-2 flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-black/60 text-white opacity-100 sm:opacity-0 sm:group-hover/image:opacity-100 transition-opacity touch-manipulation"
                   title="ดาวน์โหลด"
+                  aria-label="ดาวน์โหลดรูป"
                 >
                   <Download size={14} />
                 </button>

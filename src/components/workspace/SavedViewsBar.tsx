@@ -35,7 +35,7 @@ export function SavedViewsBar({
           key={preset.name}
           type="button"
           onClick={() => onApply(preset.filters)}
-          className="min-h-10 rounded-full bg-surface-soft px-3 text-sm hover:bg-card-hover"
+          className="min-h-11 rounded-xl bg-surface-soft px-3 text-sm hover:bg-card-hover"
         >
           {preset.name}
         </button>
@@ -45,12 +45,23 @@ export function SavedViewsBar({
           key={view.id}
           type="button"
           onClick={() => onApply(view.filters)}
-          className="min-h-10 rounded-full border border-border px-3 text-sm hover:bg-card-hover"
+          className="min-h-11 rounded-xl border border-border px-3 text-sm hover:bg-card-hover"
         >
           {view.name}
           <span
-            className="ml-2 text-muted"
+            role="button"
+            tabIndex={0}
+            aria-label={`ลบมุมมอง ${view.name}`}
+            className="ml-2 inline-flex min-h-8 min-w-8 items-center justify-center text-muted"
             onClick={(event) => {
+              event.stopPropagation();
+              void deleteSavedView(view.id).then(() =>
+                setViews((prev) => prev.filter((item) => item.id !== view.id))
+              );
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
               event.stopPropagation();
               void deleteSavedView(view.id).then(() =>
                 setViews((prev) => prev.filter((item) => item.id !== view.id))
@@ -63,9 +74,10 @@ export function SavedViewsBar({
       ))}
       <div className="flex min-w-52 flex-1 items-center gap-2">
         <Input
+          label="ชื่อมุมมอง"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="ตั้งชื่อมุมมองนี้"
+          placeholder="เช่น ตามวันนี้"
         />
         <Button
           type="button"

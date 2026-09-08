@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, EmptyState, Input, Modal, PageLoader, Textarea, ProfileRoleBadges } from "@/components/ui";
+import { useActionFeedback } from "@/components/workspace/ActionFeedback";
 import { ChatMessageItem } from "@/components/ChatMessageItem";
 import { ChatMentionInput } from "@/components/ChatMentionInput";
 import { uploadFile, isImageFile } from "@/lib/upload";
@@ -66,6 +67,7 @@ export default function ChatPage() {
 }
 
 function ChatPageContent() {
+  const { confirm } = useActionFeedback();
   const router = useRouter();
   const searchParams = useSearchParams();
   const channelParam = searchParams.get("channel");
@@ -535,7 +537,13 @@ function ChatPageContent() {
 
   async function handleDeleteChannel() {
     if (!activeChannel || activeChannel.name === "general") return;
-    if (!confirm(`ลบช่อง #${activeChannel.name}?`)) return;
+    const ok = await confirm({
+      title: "ลบช่องแชท",
+      message: `ลบช่อง #${activeChannel.name} หรือไม่?`,
+      confirmLabel: "ลบ",
+      danger: true,
+    });
+    if (!ok) return;
 
     const supabase = createClient();
     await supabase.from("channels").delete().eq("id", activeChannel.id);
@@ -579,7 +587,13 @@ function ChatPageContent() {
   }
 
   async function handleDeleteMessage(msg: Message) {
-    if (!confirm("ลบข้อความนี้?")) return;
+    const ok = await confirm({
+      title: "ลบข้อความ",
+      message: "ลบข้อความนี้หรือไม่?",
+      confirmLabel: "ลบ",
+      danger: true,
+    });
+    if (!ok) return;
     const supabase = createClient();
     const deleted_at = new Date().toISOString();
     const { error } = await supabase
@@ -765,7 +779,7 @@ function ChatPageContent() {
       >
         <div className="flex min-h-16 items-center justify-between border-b border-border px-4">
           <div>
-            <p className="ticket-kicker">ทีม · Chat</p>
+            <p className="ticket-kicker">ทีม · แชท</p>
             <h2 className="mt-0.5 font-semibold">ช่องสนทนา</h2>
           </div>
           <button

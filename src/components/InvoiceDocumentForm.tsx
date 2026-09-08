@@ -9,6 +9,7 @@ import {
   type DocumentFormData,
 } from "@/lib/invoice-documents";
 import { INVOICE_STATUS_LABELS } from "@/lib/extras-types";
+import { formatBaht } from "@/lib/money";
 import type { Client } from "@/lib/types";
 
 type Props = {
@@ -175,7 +176,8 @@ export function InvoiceDocumentForm({
               <button
                 type="button"
                 onClick={() => removeLine(i)}
-                className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg"
+                className="flex min-h-11 min-w-11 items-center justify-center text-red-400 hover:bg-red-500/10 rounded-lg"
+                aria-label="ลบรายการ"
               >
                 <Trash2 size={14} />
               </button>
@@ -183,7 +185,7 @@ export function InvoiceDocumentForm({
           </div>
         ))}
         <p className="text-sm text-right text-muted">
-          ยอดรวม <span className="text-accent font-semibold">฿{total.toLocaleString()}</span>
+          ยอดรวม <span className="text-accent font-semibold">{formatBaht(total)}</span>
         </p>
       </div>
       )}

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui";
 import { PageHeader, PageShell } from "@/components/mobile-ui";
 import { mergeProfileBank, hasBankInfo } from "@/lib/team-banks";
+import { formatBaht } from "@/lib/money";
 import { AccessDenied } from "@/components/AccessDenied";
 import { useRole } from "@/components/RoleProvider";
 import type { TeamPayout } from "@/lib/extras-types";
@@ -135,7 +136,7 @@ export default function PayoutsPage() {
                 </span>
               }
               description={format(new Date(payout.paid_at), "d MMM yyyy", { locale: th })}
-              trailing={<span className="text-right font-semibold tabular-nums text-(--status-red-fg)">฿{payout.amount.toLocaleString()}</span>}
+              trailing={<span className="text-right font-semibold tabular-nums text-(--status-red-fg)">{formatBaht(payout.amount)}</span>}
             />
           ))}
           {payouts.length === 0 && (

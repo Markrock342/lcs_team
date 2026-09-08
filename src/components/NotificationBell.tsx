@@ -129,6 +129,15 @@ export function NotificationBell() {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
   async function markRead(id: string) {
     const supabase = createClient();
     await supabase.from("notifications").update({ read: true }).eq("id", id);
@@ -178,7 +187,7 @@ export function NotificationBell() {
           setOpen((v) => !v);
           if (!open) load();
         }}
-        className="relative p-2 rounded-lg hover:bg-card-hover active:bg-card-hover touch-manipulation"
+        className="relative flex min-h-11 min-w-11 items-center justify-center rounded-lg hover:bg-card-hover active:bg-card-hover touch-manipulation"
         aria-label="แจ้งเตือน"
         aria-expanded={open}
       >

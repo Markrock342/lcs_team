@@ -13,7 +13,6 @@ import {
   Trash2,
   Upload,
   BookOpen,
-  Sparkles,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -64,6 +63,7 @@ import type {
   SalesProspect,
   SalesStage,
 } from "@/lib/types";
+import { formatBaht } from "@/lib/money";
 
 const emptyDeal = {
   title: "",
@@ -81,7 +81,40 @@ const emptyDeal = {
 
 function money(value: number | null) {
   if (value == null) return "—";
-  return `฿${value.toLocaleString()}`;
+  return formatBaht(value);
+}
+
+function telHref(phone: string) {
+  return `tel:${phone.replace(/[^\d+]/g, "")}`;
+}
+
+function priorityLabel(value: string) {
+  const map: Record<string, string> = { HOT: "ด่วน", WARM: "อุ่น", COLD: "เย็น" };
+  return map[value.toUpperCase()] ?? value;
+}
+
+function prospectRow(item: SalesProspect) {
+  return {
+    id: item.id,
+    name: item.name,
+    company: item.company,
+    contact_name: item.contact_name,
+    contact_phone: item.contact_phone,
+    contact_email: item.contact_email,
+    address: item.address,
+    province: item.province,
+    source: item.source,
+    status: item.status,
+    owner_id: item.owner_id,
+    next_follow_up: item.next_follow_up,
+    notes: item.notes,
+    deal_id: item.deal_id,
+    client_id: item.client_id,
+    import_batch_id: item.import_batch_id,
+    extra: item.extra,
+    created_by: item.created_by,
+    external_key: item.external_key,
+  };
 }
 
 const stageSurface: Record<SalesStage, string> = {
@@ -98,7 +131,7 @@ function toneFromClass(value: string) {
 
 function SalesPageInner() {
   const { canEdit, profile } = useRole();
-  const { toast, setSaving } = useActionFeedback();
+  const { toast, setSaving, confirm } = useActionFeedback();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [deals, setDeals] = useState<SalesDeal[]>([]);
@@ -187,9 +220,16 @@ function SalesPageInner() {
     setLoading(false);
 
     const openId = searchParams.get("open");
-    if (openId && prospectsRes.data) {
-      const found = (prospectsRes.data as SalesProspect[]).find((item) => item.id === openId);
-      if (found) setOpenProspect(found);
+    if (openId) {
+      const foundProspect = ((prospectsRes.data as SalesProspect[]) ?? []).find(
+        (item) => item.id === openId
+      );
+      if (foundProspect) {
+        setOpenProspect(foundProspect);
+      } else {
+        const foundDeal = ((dealsRes.data as SalesDeal[]) ?? []).find((item) => item.id === openId);
+        if (foundDeal) openEdit(foundDeal);
+      }
     }
   }
 
@@ -221,7 +261,10 @@ function SalesPageInner() {
   }
 
   async function saveDeal() {
-    if (!form.title.trim()) return;
+    if (!form.title.trim()) {
+      toast("กรอกชื่อดีลก่อน");
+      return;
+    }
     setFormSaving(true);
     const supabase = createClient();
     const payload = {
@@ -239,15 +282,22 @@ function SalesPageInner() {
       created_by: profile?.id ?? null,
     };
 
+    let errorMessage = "";
     if (editing) {
       const { error } = await supabase.from("sales_deals").update(payload).eq("id", editing.id);
-      if (!error) await logActivity("update", "sales_deal", editing.id, form.title);
+      if (error) errorMessage = error.message;
+      else await logActivity("update", "sales_deal", editing.id, form.title);
     } else {
       const { data, error } = await supabase.from("sales_deals").insert(payload).select("id").single();
-      if (!error && data) await logActivity("create", "sales_deal", data.id, form.title);
+      if (error) errorMessage = error.message;
+      else if (data) await logActivity("create", "sales_deal", data.id, form.title);
     }
 
     setFormSaving(false);
+    if (errorMessage) {
+      toast(errorMessage);
+      return;
+    }
     setModalOpen(false);
     toast("บันทึกดีลแล้ว");
     await load();
@@ -257,7 +307,11 @@ function SalesPageInner() {
     if (!canEdit || deal.stage === stage) return;
     const previous = deal.stage;
     const supabase = createClient();
-    await supabase.from("sales_deals").update({ stage }).eq("id", deal.id);
+    const { error } = await supabase.from("sales_deals").update({ stage }).eq("id", deal.id);
+    if (error) {
+      toast(error.message);
+      return;
+    }
     setDeals((prev) => prev.map((item) => (item.id === deal.id ? { ...item, stage } : item)));
     await logActivity("update", "sales_deal", deal.id, deal.title, { stage });
     if (stage === "won") {
@@ -272,7 +326,13 @@ function SalesPageInner() {
 
   async function deleteDeal(deal: SalesDeal) {
     if (!canEdit) return;
-    if (!confirm(`ลบดีล “${deal.title}” หรือไม่?`)) return;
+    const ok = await confirm({
+      title: "ลบดีล",
+      message: `ลบดีล “${deal.title}” หรือไม่?`,
+      confirmLabel: "ลบ",
+      danger: true,
+    });
+    if (!ok) return;
     const supabase = createClient();
     await supabase.from("sales_deals").delete().eq("id", deal.id);
     await logActivity("delete", "sales_deal", deal.id, deal.title);
@@ -378,34 +438,59 @@ function SalesPageInner() {
 
   async function deleteProspect(item: SalesProspect, alreadyConfirmed = false) {
     if (!canEdit) return;
-    if (!alreadyConfirmed && !confirm(`ลบรายชื่อ “${item.name}” หรือไม่?`)) return;
+    if (!alreadyConfirmed) {
+      const ok = await confirm({
+        title: "ลบรายชื่อ",
+        message: `ลบรายชื่อ “${item.name}” หรือไม่?`,
+        confirmLabel: "ลบ",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    setSaving(true);
     const supabase = createClient();
     const { error } = await supabase.from("sales_prospects").delete().eq("id", item.id);
+    setSaving(false);
     if (error) {
       toast(error.message);
       return;
     }
     if (openProspect?.id === item.id) setOpenProspect(null);
-    toast("ลบรายชื่อแล้ว");
-    await load();
+    setProspects((prev) => prev.filter((row) => row.id !== item.id));
+    toast("ลบรายชื่อแล้ว", async () => {
+      await supabase.from("sales_prospects").insert(prospectRow(item));
+      await load();
+    });
   }
 
   async function deleteBrokenProspects() {
     if (!canEdit) return;
     const broken = prospects.filter((item) => isBrokenProspectName(item.name));
     if (!broken.length) return;
-    if (!confirm(`ลบรายชื่อนำเข้าผิด ${broken.length} รายการ หรือไม่?`)) return;
+    const ok = await confirm({
+      title: "ลบรายการนำเข้าผิด",
+      message: `ลบรายชื่อนำเข้าผิด ${broken.length} รายการ หรือไม่?`,
+      confirmLabel: "ลบ",
+      danger: true,
+    });
+    if (!ok) return;
+    setSaving(true);
     const supabase = createClient();
     const { error } = await supabase
       .from("sales_prospects")
       .delete()
       .in("id", broken.map((item) => item.id));
+    setSaving(false);
     if (error) {
       toast(error.message);
       return;
     }
-    toast(`ลบรายการผิด ${broken.length} รายการแล้ว`);
-    await load();
+    const brokenIds = new Set(broken.map((item) => item.id));
+    setProspects((prev) => prev.filter((item) => !brokenIds.has(item.id)));
+    toast(`ลบรายการผิด ${broken.length} รายการแล้ว`, async () => {
+      await supabase.from("sales_prospects").insert(broken.map(prospectRow));
+      await load();
+    });
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -472,7 +557,7 @@ function SalesPageInner() {
     <PageShell width="full">
       <PageHeader
         title="แผนกขาย"
-        description="รายชื่อเป้าหมาย ติดตามวันนี้ และท่อขาย — ผู้ช่วย Gemini ร่างข้อความให้ ต้องกดยืนยันเอง"
+        description="รายชื่อเป้าหมาย ติดตามวันนี้ และท่อขาย — เปิดการ์ดสนามแล้วร่างข้อความได้ ระบบไม่ส่งแทน"
         action={
           canEdit ? (
             <div className="flex flex-wrap gap-2">
@@ -492,21 +577,13 @@ function SalesPageInner() {
 
       {loadError && <ErrorState description={loadError} onRetry={() => void load()} />}
 
-      <Card>
-        <CardHeader
-          title="ผู้ช่วย Gemini"
-          description="เปิดการ์ดรายชื่อเป้าหมายด้านล่าง แล้วกดร่างอีเมล สคริปต์โทร สรุปการคุย หรืองานถัดไป — AI ไม่ยิงเมลแทน ต้องกดส่งเองจากเมลทีม"
-          icon={<Sparkles size={18} className="text-accent" />}
-        />
-      </Card>
-
       <FilterTabs
         active={view}
         onChange={(key) => setView(key as typeof view)}
         tabs={[
           { key: "prospects", label: "รายชื่อเป้าหมาย", count: prospects.length },
           { key: "today", label: "ติดตามวันนี้", count: followUps.length },
-          { key: "pipeline", label: "Pipeline", count: deals.length },
+          { key: "pipeline", label: "ท่อขาย", count: deals.length },
         ]}
       />
 
@@ -549,7 +626,7 @@ function SalesPageInner() {
                 ไฟล์มีแถวหัวเรื่องก่อนตาราง เลยอ่านเลขลำดับเป็นชื่อสนาม นำเข้าใหม่อีกครั้งได้เลย
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button className="mt-0" onClick={() => setImportOpen(true)}>
+                <Button variant="secondary" className="mt-0" onClick={() => setImportOpen(true)}>
                   นำเข้าใหม่
                 </Button>
                 <Button variant="danger" className="mt-0" onClick={() => void deleteBrokenProspects()}>
@@ -674,9 +751,13 @@ function SalesPageInner() {
                                 </p>
                               </div>
                               <StatusStamp
-                                label={priority || PROSPECT_STATUS_LABELS[item.status]}
+                                label={
+                                  priority
+                                    ? priorityLabel(priority)
+                                    : PROSPECT_STATUS_LABELS[item.status]
+                                }
                                 tone={
-                                  priority === "HOT"
+                                  priority?.toUpperCase() === "HOT"
                                     ? "red"
                                     : toneFromClass(PROSPECT_STATUS_COLORS[item.status])
                                 }
@@ -684,14 +765,22 @@ function SalesPageInner() {
                             </div>
                             <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted">
                               {item.contact_phone && (
-                                <span className="inline-flex items-center gap-1">
+                                <a
+                                  href={telHref(item.contact_phone)}
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="inline-flex min-h-11 items-center gap-1 rounded-lg px-1 text-accent hover:underline"
+                                >
                                   <Phone size={14} /> {item.contact_phone}
-                                </span>
+                                </a>
                               )}
                               {item.contact_email && (
-                                <span className="inline-flex items-center gap-1">
+                                <a
+                                  href={`mailto:${item.contact_email}`}
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="inline-flex min-h-11 items-center gap-1 rounded-lg px-1 text-accent hover:underline"
+                                >
                                   <Mail size={14} /> {item.contact_email}
-                                </span>
+                                </a>
                               )}
                             </div>
                           </button>
@@ -703,7 +792,7 @@ function SalesPageInner() {
                                 onChange={(e) => void assignProspect(item, e.target.value)}
                                 className="min-h-11 rounded-xl border border-border bg-card px-3 text-sm"
                               >
-                                <option value="">มอบหมายให้...</option>
+                                <option value="">ยังไม่กำหนด</option>
                                 {profiles.map((profile) => (
                                   <option key={profile.id} value={profile.id}>
                                     {profile.display_name}

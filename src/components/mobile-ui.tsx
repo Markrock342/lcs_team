@@ -55,7 +55,7 @@ export function FilterTabs({ tabs, active, onChange }: FilterTabsProps) {
             key={tab.key}
             onClick={() => onChange(tab.key)}
             aria-pressed={active === tab.key}
-            className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-colors min-h-10 touch-manipulation ${
+            className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-colors min-h-11 touch-manipulation ${
               active === tab.key
                 ? "bg-accent/20 text-accent border border-accent/40"
                 : "bg-card border border-border text-muted hover:text-foreground active:bg-card-hover"
@@ -104,23 +104,23 @@ interface PageHeaderProps {
 }
 
 const PAGE_KICKERS: { match: string; kicker: string }[] = [
-  { match: "/today", kicker: "วันนี้ · My Day" },
+  { match: "/today", kicker: "วันนี้ · คิวงาน" },
   { match: "/sales", kicker: "แผนกขาย · รายชื่อและท่อขาย" },
-  { match: "/clients", kicker: "ลูกค้า · Accounts" },
-  { match: "/tasks", kicker: "งาน · Board" },
-  { match: "/finance", kicker: "การเงิน · Ledger" },
-  { match: "/chat", kicker: "ทีม · Chat" },
-  { match: "/schedule", kicker: "ตาราง · Calendar" },
-  { match: "/time-reports", kicker: "เวลา · Hours" },
-  { match: "/search", kicker: "ค้นหา · Index" },
-  { match: "/invoices", kicker: "เอกสาร · Docs" },
-  { match: "/payouts", kicker: "บัญชีทีม · Pay" },
+  { match: "/clients", kicker: "ลูกค้า · บัญชีงาน" },
+  { match: "/tasks", kicker: "งาน · กระดาน" },
+  { match: "/finance", kicker: "การเงิน · สมุดบัญชี" },
+  { match: "/chat", kicker: "ทีม · แชท" },
+  { match: "/schedule", kicker: "ตาราง · ปฏิทิน" },
+  { match: "/time-reports", kicker: "เวลา · ชั่วโมงทำงาน" },
+  { match: "/search", kicker: "ค้นหา · ทั้งระบบ" },
+  { match: "/invoices", kicker: "เอกสาร · ใบแจ้งหนี้" },
+  { match: "/payouts", kicker: "บัญชีทีม · จ่ายเงิน" },
   { match: "/templates", kicker: "เทมเพลต · งานและเอกสาร" },
-  { match: "/notifications", kicker: "แจ้งเตือน · Inbox" },
-  { match: "/activity", kicker: "ประวัติ · Log" },
-  { match: "/settings", kicker: "ตั้งค่า · System" },
-  { match: "/more", kicker: "เมนู · More" },
-  { match: "/dashboard", kicker: "โต๊ะงาน · Desk" },
+  { match: "/notifications", kicker: "แจ้งเตือน · กล่องงาน" },
+  { match: "/activity", kicker: "ประวัติ · กิจกรรม" },
+  { match: "/settings", kicker: "ตั้งค่า · ระบบ" },
+  { match: "/more", kicker: "เมนู · เพิ่มเติม" },
+  { match: "/dashboard", kicker: "โต๊ะงาน · ภาพรวม" },
 ];
 
 function kickerForPath(pathname: string) {

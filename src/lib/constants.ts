@@ -157,7 +157,7 @@ export const INTERACTION_OUTCOME_LABELS: Record<InteractionOutcome, string> = {
   reached: "คุยได้",
   no_answer: "ไม่รับสาย",
   voicemail: "ฝากข้อความ",
-  emailed: "ส่งร่างแล้ว",
+  emailed: "ส่งเมลแล้ว",
   interested: "สนใจ",
   not_interested: "ไม่สนใจ",
   callback: "นัดโทรกลับ",

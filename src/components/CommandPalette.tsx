@@ -11,7 +11,6 @@ import {
   Plus,
   Receipt,
   Search,
-  Sparkles,
   Users,
   X,
 } from "lucide-react";
@@ -40,7 +39,6 @@ const QUICK_CREATE = [
   { href: "/clients?create=1", label: "เพิ่มลูกค้า", icon: Users },
   { href: "/sales", label: "ไปแผนกขาย", icon: Handshake },
   { href: "/sales?import=1", label: "นำเข้า Excel รายชื่อขาย", icon: Plus },
-  { href: "/sales?view=prospects", label: "เปิดผู้ช่วย Gemini", icon: Sparkles },
   { href: "/finance?income=1", label: "บันทึกรายรับ", icon: CircleDollarSign },
   { href: "/sales?create=deal", label: "เพิ่มดีลขาย", icon: Handshake },
   { href: "/today", label: "ไปหน้าวันนี้", icon: CheckSquare },
@@ -129,13 +127,20 @@ export function CommandPalette({
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
           <input
             autoFocus
+            id="command-palette-search"
+            aria-label="ค้นหา"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="ค้นหา หรือเลือกคำสั่งด้านล่าง"
-            className="w-full rounded-xl border border-border bg-background py-3 pl-9 pr-9 text-base"
+            className="w-full min-h-11 rounded-xl border border-border bg-background py-3 pl-9 pr-9 text-base"
           />
           {query && (
-            <button type="button" onClick={() => setQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted">
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="ล้างคำค้น"
+              className="absolute right-2 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center text-muted"
+            >
               <X size={16} />
             </button>
           )}

@@ -11,7 +11,7 @@ const ibmPlex = IBM_Plex_Sans_Thai({
 });
 
 export const metadata: Metadata = {
-  title: "Limit Code Studio — Team Workspace",
+  title: "Limit Code Studio — พื้นที่ทำงานทีม",
   description: "ระบบจัดการทีม Limit Code Studio",
   manifest: "/manifest.json",
   appleWebApp: {

@@ -12,12 +12,15 @@ import {
   ListRow,
   MetricTile,
   Modal,
+  Input,
   PageLoader,
   StatusStamp,
   type StatusTone,
 } from "@/components/ui";
 import { PageShell, PageHeader, FilterTabs } from "@/components/mobile-ui";
 import { useRole } from "@/components/RoleProvider";
+import { useActionFeedback } from "@/components/workspace/ActionFeedback";
+import { formatBaht } from "@/lib/money";
 import { LCSDocumentPreview, printDocument } from "@/components/LCSDocumentPreview";
 import { InvoiceDocumentForm } from "@/components/InvoiceDocumentForm";
 import {
@@ -102,6 +105,7 @@ function buildPayload(form: DocumentFormData) {
 
 export default function InvoicesPage() {
   const { canEdit } = useRole();
+  const { toast, confirm } = useActionFeedback();
   const [invoices, setInvoices] = useState<(Invoice & { client?: Client })[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -418,7 +422,12 @@ export default function InvoicesPage() {
     if (linkedReceipt) {
       msg += `\n(ใบเสร็จ ${linkedReceipt.doc_number} จะถูกลบด้วย)`;
     }
-    if (!confirm(msg)) return;
+    if (!await confirm({
+      title: "ลบเอกสาร",
+      message: msg,
+      confirmLabel: "ลบ",
+      danger: true,
+    })) return;
 
     const supabase = createClient();
 
@@ -441,7 +450,7 @@ export default function InvoicesPage() {
 
     const { error } = await supabase.from("invoices").delete().eq("id", inv.id);
     if (error) {
-      alert(error.message);
+      toast(error.message);
       return;
     }
 
@@ -459,7 +468,7 @@ export default function InvoicesPage() {
       );
     } catch (err) {
       console.error(err);
-      alert("Export PDF ไม่สำเร็จ — ลองใหม่อีกครั้ง");
+      toast("ส่งออก PDF ไม่สำเร็จ — ลองอีกครั้ง");
     } finally {
       setExportingPdf(false);
     }
@@ -508,9 +517,9 @@ export default function InvoicesPage() {
         <CardHeader title="ภาพรวมเอกสาร" description="ยอดตามประเภทที่เลือก" />
         <div className="grid grid-cols-2 gap-3 p-4 lg:grid-cols-4">
           <MetricTile label="เอกสาร" value={`${filtered.length} รายการ`} icon={<FileText size={18} />} />
-          <MetricTile label="มูลค่ารวม" value={`฿${totalDocumentValue.toLocaleString()}`} />
-          <MetricTile label="รับชำระแล้ว" value={`฿${totalPaid.toLocaleString()}`} />
-          <MetricTile label="คงค้าง" value={`฿${Math.max(totalDocumentValue - totalPaid, 0).toLocaleString()}`} />
+          <MetricTile label="มูลค่ารวม" value={formatBaht(totalDocumentValue)} />
+          <MetricTile label="รับชำระแล้ว" value={formatBaht(totalPaid)} />
+          <MetricTile label="คงค้าง" value={formatBaht(Math.max(totalDocumentValue - totalPaid, 0))} />
         </div>
       </Card>
 
@@ -520,7 +529,7 @@ export default function InvoicesPage() {
           description={`${filtered.length} รายการ`}
           action={
             <button type="button" onClick={exportInvoices} className="inline-flex min-h-10 items-center gap-2 px-2 text-sm font-medium text-accent hover:underline">
-              <FileDown size={16} /> CSV
+              <FileDown size={16} /> ส่งออก CSV
             </button>
           }
         />
@@ -558,13 +567,13 @@ export default function InvoicesPage() {
               description={
                 <span className="block truncate">
                   {[inv.doc_number, inv.client?.name, linkedReceipt?.doc_number ? `ใบเสร็จ ${linkedReceipt.doc_number}` : null].filter(Boolean).join(" · ")}
-                  {paid > 0 ? ` · ชำระแล้ว ฿${paid.toLocaleString()}` : ""}
+                  {paid > 0 ? ` · ชำระแล้ว ${formatBaht(paid)}` : ""}
                 </span>
               }
               trailing={
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="hidden min-w-28 text-right font-semibold tabular-nums sm:block">
-                    ฿{inv.total_amount.toLocaleString()}
+                    {formatBaht(inv.total_amount)}
                   </span>
                   {canEdit &&
                     inv.status !== "paid" &&
@@ -741,7 +750,7 @@ export default function InvoicesPage() {
               <Printer size={16} /> พิมพ์
             </Button>
             <Button loading={exportingPdf} onClick={handleExportPdf}>
-              <FileDown size={16} /> Export PDF
+              <FileDown size={16} /> ส่งออก PDF
             </Button>
           </div>
           <div
@@ -773,22 +782,20 @@ export default function InvoicesPage() {
             <ErrorState title="บันทึกการชำระไม่สำเร็จ" description={dbError} />
           )}
           <p className="text-sm text-muted">
-            {payModal?.title} — ฿{payModal?.total_amount.toLocaleString()}
+            {payModal?.title} — {payModal ? formatBaht(payModal.total_amount) : ""}
           </p>
-          <input
+          <Input
+            label="จำนวนเงิน (บาท)"
             type="number"
-            className="w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm"
-            placeholder="จำนวนเงิน (บาท)"
             value={payAmount}
             onChange={(e) => setPayAmount(e.target.value)}
             required
           />
-          <input
-            type="text"
-            className="w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm"
-            placeholder="ช่องทางชำระ"
+          <Input
+            label="ช่องทางชำระ"
             value={payMethod}
             onChange={(e) => setPayMethod(e.target.value)}
+            placeholder="เช่น โอนธนาคาร"
           />
           <Button type="submit" loading={saving} className="w-full">
             บันทึก
@@ -810,7 +817,7 @@ export default function InvoicesPage() {
               <ErrorState title="สร้างใบเสร็จไม่สำเร็จ" description={dbError} />
             )}
             <p className="text-sm text-muted">
-              {convertModal.title} · ฿{convertModal.total_amount.toLocaleString()}
+            {convertModal.title} · {formatBaht(convertModal.total_amount)}
               <br />
               ต้องการสร้างใบเสร็จรับเงินจากใบแจ้งหนี้นี้หรือไม่?
             </p>

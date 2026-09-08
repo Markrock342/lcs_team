@@ -53,7 +53,7 @@ export default function TimeReportsPage() {
       supabase.from("profiles").select("*"),
     ]);
     if (entriesRes.error || tasksRes.error || profilesRes.error) {
-      setError("โหลดรายงานเวลาไม่สำเร็จ โปรดลองอีกครั้ง");
+      setError("โหลดรายงานเวลาไม่สำเร็จ ลองอีกครั้ง");
       setLoading(false);
       return;
     }

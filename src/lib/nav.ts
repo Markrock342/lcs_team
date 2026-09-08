@@ -32,9 +32,9 @@ export type NavItem = {
 export const MAIN_NAV: NavItem[] = [
   { href: "/today", label: "วันนี้", icon: Sun, desc: "คิวงาน นัดขาย และข้อความ", color: "text-amber-400" },
   { href: "/dashboard", label: "ภาพรวม", icon: LayoutDashboard },
-  { href: "/tasks", label: "งาน", icon: CheckSquare, desc: "งานใหญ่ · งานย่อย · Kanban" },
-  { href: "/clients", label: "ลูกค้า", icon: Users, desc: "ข้อมูลลูกค้า · Portal" },
-  { href: "/sales", label: "แผนกขาย", icon: Handshake, desc: "รายชื่อเป้าหมาย · ติดตาม · ท่อขาย · ผู้ช่วย Gemini", color: "text-emerald-400" },
+  { href: "/tasks", label: "งาน", icon: CheckSquare, desc: "งานใหญ่ · งานย่อย · กระดาน" },
+  { href: "/clients", label: "ลูกค้า", icon: Users, desc: "ข้อมูลลูกค้า · พอร์ทัล" },
+  { href: "/sales", label: "แผนกขาย", icon: Handshake, desc: "รายชื่อเป้าหมาย · ติดตาม · ท่อขาย · ร่างข้อความ", color: "text-emerald-400" },
   { href: "/finance", label: "การเงิน", icon: CircleDollarSign, desc: "รับเงิน · จ่ายทีม · สรุป", color: "text-sky-400" },
   { href: "/chat", label: "แชททีม", icon: MessageCircle, desc: "แชทกลุ่มทีม" },
 ];
@@ -47,9 +47,9 @@ export const EXTRA_NAV: NavItem[] = [
   { href: "/invoices", label: "ใบแจ้งหนี้", icon: Receipt, desc: "สร้างเอกสาร / ใบเสร็จ", color: "text-emerald-400" },
   { href: "/payouts", label: "บัญชีทีม", icon: Wallet, desc: "เลขบัญชีเพื่อนในทีม", color: "text-rose-400" },
   { href: "/templates", label: "เทมเพลต", icon: LayoutTemplate, desc: "งาน ใบเสนอราคา สัญญา", color: "text-violet-400" },
-  { href: "/notifications", label: "กล่องงาน", icon: Bell, desc: "Inbox ที่จัดการได้", color: "text-pink-400" },
-  { href: "/activity", label: "ประวัติกิจกรรม", icon: History, desc: "Log การเปลี่ยนแปลง", color: "text-amber-400" },
-  { href: "/settings", label: "ตั้งค่า", icon: Settings, desc: "โปรไฟล์ · Theme · สุขภาพระบบ", color: "text-zinc-400" },
+  { href: "/notifications", label: "กล่องงาน", icon: Bell, desc: "งานที่ต้องจัดการ", color: "text-pink-400" },
+  { href: "/activity", label: "ประวัติกิจกรรม", icon: History, desc: "การเปลี่ยนแปลงล่าสุด", color: "text-amber-400" },
+  { href: "/settings", label: "ตั้งค่า", icon: Settings, desc: "โปรไฟล์ · ธีม · สุขภาพระบบ", color: "text-zinc-400" },
 ];
 
 /** Bottom tab มือถือ — 5 ช่อง */

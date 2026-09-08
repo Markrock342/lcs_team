@@ -21,6 +21,7 @@ import {
 import { ROLE_LABELS } from "@/lib/constants";
 import { logActivity, notifyTeam } from "@/lib/activity";
 import { isAdmin } from "@/lib/permissions";
+import { useActionFeedback } from "@/components/workspace/ActionFeedback";
 import type { TaskTemplate, TaskTemplateItem } from "@/lib/extras-types";
 import type { Client, TeamRole } from "@/lib/types";
 import { useRouter } from "next/navigation";
@@ -34,6 +35,7 @@ const emptyItem = {
 };
 
 export default function TemplatesPage() {
+  const { confirm } = useActionFeedback();
   const router = useRouter();
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -68,7 +70,7 @@ export default function TemplatesPage() {
         : Promise.resolve({ data: null }),
     ]);
     if (tpl.error || cls.error) {
-      setError("โหลดเทมเพลตไม่สำเร็จ โปรดลองอีกครั้ง");
+      setError("โหลดเทมเพลตไม่สำเร็จ ลองอีกครั้ง");
       setLoading(false);
       return;
     }
@@ -160,7 +162,13 @@ export default function TemplatesPage() {
   }
 
   async function deleteTemplate(id: string) {
-    if (!confirm("ลบเทมเพลตนี้?")) return;
+    const ok = await confirm({
+      title: "ลบเทมเพลต",
+      message: "ลบเทมเพลตนี้หรือไม่?",
+      confirmLabel: "ลบ",
+      danger: true,
+    });
+    if (!ok) return;
     const supabase = createClient();
     await supabase.from("task_templates").delete().eq("id", id);
     void load();

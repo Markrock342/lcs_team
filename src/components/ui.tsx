@@ -28,6 +28,26 @@ function classes(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function trapFocus(container: HTMLElement, event: KeyboardEvent) {
+  if (event.key !== "Tab") return;
+  const nodes = [...container.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+    (el) => el.offsetParent !== null || el === document.activeElement
+  );
+  if (!nodes.length) return;
+  const first = nodes[0];
+  const last = nodes[nodes.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 export function Card({
   interactive = false,
   className,
@@ -176,11 +196,11 @@ export function Avatar({
   }
 
   const colors = [
-    "bg-[#00a3ff]",
-    "bg-orange-600",
-    "bg-pink-600",
-    "bg-violet-600",
-    "bg-emerald-600",
+    "bg-accent",
+    "bg-(--status-amber-fg)",
+    "bg-(--status-violet-fg)",
+    "bg-(--status-green-fg)",
+    "bg-(--status-blue-fg)",
   ];
   const colorIndex = name.charCodeAt(0) % colors.length;
 
@@ -314,6 +334,7 @@ export function Modal({
     dialogRef.current?.focus();
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
+      if (dialogRef.current) trapFocus(dialogRef.current, event);
     }
     document.addEventListener("keydown", onKeyDown);
     return () => {
@@ -462,15 +483,21 @@ export function Drawer({
   children: React.ReactNode;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
+      if (dialogRef.current) trapFocus(dialogRef.current, event);
     }
     document.addEventListener("keydown", onKeyDown);
-    dialogRef.current?.focus();
-    return () => document.removeEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previousFocusRef.current?.focus();
+    };
   }, [open, onClose]);
 
   if (!open) return null;

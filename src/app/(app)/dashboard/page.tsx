@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/RoleProvider";
+import { formatBaht } from "@/lib/money";
 import {
   Avatar,
   Card,
@@ -73,7 +74,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   function money(value: number) {
-    return `฿${value.toLocaleString()}`;
+    return formatBaht(value);
   }
 
   async function loadData() {
@@ -230,7 +231,7 @@ export default function DashboardPage() {
       <Card>
         <CardHeader
           title="สถานะงานทั้งหมด"
-          description={`${openTasks.length} งานที่ยังต้องดำเนินการ · ${activeClients.length} ลูกค้าที่กำลังดูแล`}
+          description={`${openTasks.length} งานที่ยังต้องทำ · ${activeClients.length} ลูกค้าที่กำลังดูแล`}
           icon={<CheckSquare size={18} className="text-accent" />}
           action={
             <Link href="/tasks" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent">

@@ -33,7 +33,7 @@ export default function TodayPage() {
     const soon = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      setError("กรุณาเข้าสู่ระบบอีกครั้ง");
+      setError("เข้าสู่ระบบอีกครั้ง");
       setLoading(false);
       return;
     }
@@ -114,7 +114,7 @@ export default function TodayPage() {
 
     setItems(next);
     setLoading(false);
-    if (tasksRes.error && dealsRes.error) setError("โหลด My Day ไม่สำเร็จ");
+    if (tasksRes.error && dealsRes.error) setError("โหลดวันนี้ไม่สำเร็จ");
   }
 
   useEffect(() => {
@@ -173,7 +173,7 @@ export default function TodayPage() {
         <Link className="job-jacket flex min-h-16 items-center gap-2 p-4" href="/tasks"><CheckSquare size={18} /> งาน</Link>
         <Link className="job-jacket flex min-h-16 items-center gap-2 p-4" href="/sales?view=today"><CalendarClock size={18} /> แผนกขาย</Link>
         <Link className="job-jacket flex min-h-16 items-center gap-2 p-4" href="/invoices"><Receipt size={18} /> เอกสาร</Link>
-        <Link className="job-jacket flex min-h-16 items-center gap-2 p-4" href="/notifications"><Bell size={18} /> Inbox</Link>
+        <Link className="job-jacket flex min-h-16 items-center gap-2 p-4" href="/notifications"><Bell size={18} /> กล่องงาน</Link>
         <Link className="job-jacket flex min-h-16 items-center gap-2 p-4" href="/chat"><MessageCircle size={18} /> แชท</Link>
       </div>
     </PageShell>

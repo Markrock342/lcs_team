@@ -44,7 +44,7 @@ export default function SchedulePage() {
       supabase.from("profiles").select("*").order("display_name"),
     ]);
     if (tasksRes.error || profilesRes.error) {
-      setError("โหลดตารางงานไม่สำเร็จ โปรดลองอีกครั้ง");
+      setError("โหลดตารางงานไม่สำเร็จ ลองอีกครั้ง");
       setLoading(false);
       return;
     }

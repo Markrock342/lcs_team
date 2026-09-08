@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Moon, Sun, Bell, Download, Smartphone, Shield, User, Camera, Wallet, Sparkles } from "lucide-react";
+import { Moon, Sun, Bell, Download, Smartphone, Shield, User, Camera, Wallet, PenLine } from "lucide-react";
 import { PageHeader, PageShell } from "@/components/mobile-ui";
-import { Button, Select, Avatar, ProfileRoleBadges, PageLoader, ErrorState } from "@/components/ui";
+import { Button, Input, Select, Avatar, ProfileRoleBadges, PageLoader, ErrorState } from "@/components/ui";
 import { SystemHealthPanel } from "@/components/workspace/SystemHealthPanel";
 import { useTheme } from "@/components/ThemeProvider";
 import { subscribeToPush, unsubscribeFromPush, sendTestPush, getPushBlockers } from "@/components/PWARegister";
@@ -95,7 +95,7 @@ export default function SettingsPage() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setProfileError("ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบอีกครั้ง");
+      setProfileError("ไม่พบข้อมูลผู้ใช้ เข้าสู่ระบบอีกครั้ง");
       setProfileLoading(false);
       return;
     }
@@ -369,9 +369,9 @@ export default function SettingsPage() {
 
       <section className="ticket-card overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
-          <Sparkles size={20} className="text-accent" />
+          <PenLine size={20} className="text-accent" />
           <div>
-            <h2 className="font-semibold">ผู้ช่วย Gemini</h2>
+            <h2 className="font-semibold">ผู้ช่วยร่างข้อความ</h2>
             <p className="text-sm text-muted">ร่างข้อความขาย ไม่ส่งแทน และไม่เปลี่ยนสถานะเอง</p>
           </div>
         </div>
@@ -489,28 +489,26 @@ export default function SettingsPage() {
             </div>
           </div>
           <form onSubmit={saveBankInfo} className="p-5 space-y-4">
-            <input
-              className="w-full min-h-11 px-3.5 py-2.5 bg-background border border-border rounded-xl text-base"
-              aria-label="ธนาคาร"
-              placeholder="ธนาคาร เช่น กรุงไทย"
+            <Input
+              label="ธนาคาร"
+              placeholder="เช่น กรุงไทย"
               value={bankForm.bank_name}
               onChange={(e) =>
                 setBankForm({ ...bankForm, bank_name: e.target.value })
               }
             />
-            <input
-              className="w-full min-h-11 px-3.5 py-2.5 bg-background border border-border rounded-xl text-base font-mono"
-              aria-label="เลขบัญชี"
-              placeholder="เลขบัญชี"
+            <Input
+              label="เลขบัญชี"
+              placeholder="xxx-x-xxxxx-x"
+              className="font-mono"
               value={bankForm.bank_account_number}
               onChange={(e) =>
                 setBankForm({ ...bankForm, bank_account_number: e.target.value })
               }
             />
-            <input
-              className="w-full min-h-11 px-3.5 py-2.5 bg-background border border-border rounded-xl text-base"
-              aria-label="ชื่อบัญชี"
-              placeholder="ชื่อบัญชี"
+            <Input
+              label="ชื่อบัญชี"
+              placeholder="ชื่อที่โอนเข้า"
               value={bankForm.bank_account_name}
               onChange={(e) =>
                 setBankForm({ ...bankForm, bank_account_name: e.target.value })
@@ -585,7 +583,7 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted">{ROLE_DESCRIPTIONS[member.role]}</p>
                 {member.id === profile?.id && (
                   <p className="text-sm text-(--status-amber-fg)">
-                    เปลี่ยนสิทธิ์ตัวเองไม่ได้ ต้องให้แอดมินคนอื่นดำเนินการ
+                    เปลี่ยนสิทธิ์ตัวเองไม่ได้ ต้องให้แอดมินคนอื่นทำแทน
                   </p>
                 )}
               </div>

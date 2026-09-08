@@ -91,6 +91,15 @@ export function AppShell({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  useEffect(() => {
+    if (!profileOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setProfileOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [profileOpen]);
+
   async function handleLogout() {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -121,14 +130,14 @@ export function AppShell({
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
                 LCS Studio
               </p>
-              <p className="text-sm font-semibold tracking-tight">Team Workspace</p>
+              <p className="text-sm font-semibold tracking-tight">พื้นที่ทำงานทีม</p>
             </div>
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1">
           <NavLinks items={mainNav} pathname={pathname} />
           <div className="pt-3 mt-3 border-t border-border">
-            <p className="px-3 py-1 text-[10px] text-muted uppercase tracking-[0.16em] font-semibold">เพิ่มเติม</p>
+            <p className="px-3 py-1 text-[10px] text-muted font-semibold">เพิ่มเติม</p>
             <NavLinks items={extraNav} pathname={pathname} />
           </div>
         </nav>
@@ -143,7 +152,12 @@ export function AppShell({
                   <ProfileRoleBadges profile={profile} size="xs" />
                 </div>
               </div>
-              <button onClick={handleLogout} className="p-2 rounded-lg hover:bg-card-hover text-muted" title="ออกจากระบบ">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-xl hover:bg-card-hover text-muted"
+                aria-label="ออกจากระบบ"
+              >
                 <LogOut size={16} />
               </button>
             </div>
@@ -151,7 +165,7 @@ export function AppShell({
         )}
       </aside>
 
-      <header className="lg:hidden fixed top-0 inset-x-0 z-40 bg-sidebar/95 backdrop-blur-md border-b border-border pt-safe">
+      <header className="lg:hidden fixed top-0 inset-x-0 z-40 bg-sidebar border-b border-border pt-safe">
         <div className="flex items-center justify-between gap-2 px-3 h-14 max-w-[100vw]">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <Logo size="xs" />
@@ -161,7 +175,7 @@ export function AppShell({
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="p-2 rounded-lg text-muted hover:text-accent touch-manipulation"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted hover:text-accent touch-manipulation"
               aria-label="ค้นหา"
             >
               <Search size={18} />
@@ -171,7 +185,13 @@ export function AppShell({
             </Suspense>
             {profile && (
               <div className="relative" ref={profileRef}>
-                <button onClick={() => setProfileOpen(!profileOpen)} className="p-1 rounded-full">
+                <button
+                  type="button"
+                  onClick={() => setProfileOpen(!profileOpen)}
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-full"
+                  aria-label="เมนูโปรไฟล์"
+                  aria-expanded={profileOpen}
+                >
                   <Avatar name={profile.display_name} src={profile.avatar_url} size="sm" />
                 </button>
                 {profileOpen && (

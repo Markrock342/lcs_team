@@ -44,7 +44,7 @@ export function ProspectDrawer({
   onChanged: () => void;
   onDeleted?: (prospect: SalesProspect) => void;
 }) {
-  const { toast, setSaving } = useActionFeedback();
+  const { toast, setSaving, confirm } = useActionFeedback();
   const { canEdit } = useRole();
   const [name, setName] = useState("");
   const [contactName, setContactName] = useState("");
@@ -60,6 +60,7 @@ export function ProspectDrawer({
   const [log, setLog] = useState("");
   const [fromAi, setFromAi] = useState(false);
   const [history, setHistory] = useState<SalesInteraction[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
@@ -77,13 +78,17 @@ export function ProspectDrawer({
     setStatus(prospect.status);
     setFromAi(false);
     setLog("");
+    setHistoryLoading(true);
     const supabase = createClient();
     void supabase
       .from("sales_interactions")
       .select("*, creator:profiles!sales_interactions_created_by_fkey(*)")
       .eq("prospect_id", prospect.id)
       .order("created_at", { ascending: false })
-      .then(({ data }) => setHistory((data as SalesInteraction[]) ?? []));
+      .then(({ data }) => {
+        setHistory((data as SalesInteraction[]) ?? []);
+        setHistoryLoading(false);
+      });
   }, [prospect]);
 
   if (!prospect) return null;
@@ -92,7 +97,7 @@ export function ProspectDrawer({
   async function saveMeta() {
     setSaving(true);
     const supabase = createClient();
-    await supabase
+    const { error } = await supabase
       .from("sales_prospects")
       .update({
         name: name.trim() || current.name,
@@ -107,6 +112,10 @@ export function ProspectDrawer({
       })
       .eq("id", current.id);
     setSaving(false);
+    if (error) {
+      toast(error.message);
+      return;
+    }
     toast(ownerId ? "บันทึกและมอบหมายแล้ว" : "บันทึกแล้ว");
     onChanged();
   }
@@ -121,7 +130,7 @@ export function ProspectDrawer({
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     const nextStatus = nextStatusFromOutcome(status, nextOutcome);
-    await supabase.from("sales_interactions").insert({
+    const { error: logError } = await supabase.from("sales_interactions").insert({
       prospect_id: current.id,
       type: nextType,
       outcome: nextOutcome,
@@ -129,7 +138,12 @@ export function ProspectDrawer({
       ai_generated: ai,
       created_by: user?.id ?? null,
     });
-    await supabase
+    if (logError) {
+      setSaving(false);
+      toast(logError.message);
+      return;
+    }
+    const { error: updateError } = await supabase
       .from("sales_prospects")
       .update({
         status: nextStatus,
@@ -137,6 +151,11 @@ export function ProspectDrawer({
         next_follow_up: followUp || null,
       })
       .eq("id", current.id);
+    if (updateError) {
+      setSaving(false);
+      toast(updateError.message);
+      return;
+    }
     await logActivity("update", "sales_prospect", current.id, current.name, {
       type: nextType,
       outcome: nextOutcome,
@@ -149,6 +168,12 @@ export function ProspectDrawer({
   }
 
   async function convert() {
+    const ok = await confirm({
+      title: "แปลงเป็นดีล",
+      message: `ย้าย “${current.name}” เข้าท่อขายหรือไม่?`,
+      confirmLabel: "แปลงเป็นดีล",
+    });
+    if (!ok) return;
     setSaving(true);
     const result = await convertProspectToDeal(current);
     setSaving(false);
@@ -165,18 +190,18 @@ export function ProspectDrawer({
     setLog(text);
     setFromAi(true);
     setType(mode === "email" ? "email_draft" : mode === "call" ? "call" : "note");
+    toast("ใส่ในบันทึกแล้ว — ตรวจแล้วค่อยส่ง");
   }
 
   async function sendFromTeamMail() {
     const to = email.trim() || current.contact_email;
     if (!to || !log.trim()) return;
-    if (
-      !confirm(
-        `ส่งเมลนี้จาก salelimitcode@gmail.com ถึง ${name || current.name} ที่ ${to} หรือไม่?`
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: "ส่งเมลจากทีม",
+      message: `ส่งจาก salelimitcode@gmail.com ถึง ${name || current.name} ที่ ${to} หรือไม่? ระบบส่งให้ครั้งนี้ตามที่กดยืนยัน`,
+      confirmLabel: "ส่งเมล",
+    });
+    if (!ok) return;
     setSending(true);
     try {
       const response = await fetch("/api/sales/send-email", {
@@ -261,8 +286,8 @@ export function ProspectDrawer({
             </option>
           ))}
         </Select>
-        <Input label="นัดติดตาม" type="date" value={followUp} onChange={(e) => setFollowUp(e.target.value)} />
-        <Textarea label="บันทึกในรายชื่อ" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <Input label="นัดติดตาม" type="date" value={followUp} onChange={(e) => setFollowUp(e.target.value)} disabled={!canEdit} />
+        <Textarea label="บันทึกในรายชื่อ" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={!canEdit} />
         {canEdit && (
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void saveMeta()}>บันทึกการแก้ไข</Button>
@@ -270,8 +295,16 @@ export function ProspectDrawer({
               variant="danger"
               type="button"
               onClick={() => {
-                if (!confirm(`ลบรายชื่อ “${current.name}” หรือไม่?`)) return;
-                onDeleted?.(current);
+                void (async () => {
+                  const ok = await confirm({
+                    title: "ลบรายชื่อ",
+                    message: `ลบรายชื่อ “${current.name}” หรือไม่?`,
+                    confirmLabel: "ลบ",
+                    danger: true,
+                  });
+                  if (!ok) return;
+                  onDeleted?.(current);
+                })();
               }}
             >
               ลบรายชื่อ
@@ -319,7 +352,7 @@ export function ProspectDrawer({
             onChange={(e) => setLog(e.target.value)}
           />
           <div className="flex flex-wrap gap-2">
-            <Button disabled={!log.trim()} onClick={() => void saveInteraction(log, type, fromAi)}>
+            <Button disabled={!log.trim()} variant="secondary" onClick={() => void saveInteraction(log, type, fromAi)}>
               ยืนยันและบันทึก
             </Button>
             {type === "email_draft" && log.trim() && canEdit && (
@@ -329,7 +362,7 @@ export function ProspectDrawer({
                 disabled={!email.trim()}
                 onClick={() => void sendFromTeamMail()}
               >
-                {email.trim() ? "ส่งจาก salelimitcode@gmail.com" : "ยังไม่มีอีเมลสนาม"}
+                {email.trim() ? "ส่งจากเมลทีม" : "ยังไม่มีอีเมลสนาม"}
               </Button>
             )}
             {type === "email_draft" && email.trim() && log.trim() && (
@@ -339,14 +372,15 @@ export function ProspectDrawer({
                 onClick={() => {
                   const subject = encodeURIComponent(`ติดต่อจาก Limit Code Studio — ${name || prospect.name}`);
                   const body = encodeURIComponent(log);
-                  window.open(`mailto:${email.trim()}?subject=${subject}&body=${body}`);
+                  const popup = window.open(`mailto:${email.trim()}?subject=${subject}&body=${body}`);
+                  if (!popup) toast("เบราว์เซอร์บล็อกหน้าต่างใหม่ — คัดลอกร่างไปวางในเมลเอง");
                 }}
               >
                 เปิดแอปอีเมล
               </Button>
             )}
             {prospect.status !== "converted" && (
-              <Button variant="secondary" onClick={() => void convert()}>
+              <Button variant="ghost" onClick={() => void convert()}>
                 แปลงเป็นดีล
               </Button>
             )}
@@ -355,13 +389,20 @@ export function ProspectDrawer({
 
         <section className="space-y-2">
           <h3 className="font-semibold">ไทม์ไลน์</h3>
-          {history.length === 0 && <p className="text-sm text-muted">ยังไม่มีบันทึกการติดต่อ</p>}
+          {historyLoading && <p className="text-sm text-muted">กำลังโหลดบันทึก...</p>}
+          {!historyLoading && history.length === 0 && <p className="text-sm text-muted">ยังไม่มีบันทึกการติดต่อ</p>}
           {history.map((item) => (
             <article key={item.id} className="rounded-xl bg-surface-soft p-3 text-sm">
               <p className="font-medium">
                 {INTERACTION_TYPE_LABELS[item.type]}
                 {item.outcome ? ` · ${INTERACTION_OUTCOME_LABELS[item.outcome]}` : ""}
                 {item.ai_generated ? " · จาก AI" : ""}
+              </p>
+              <p className="mt-0.5 text-xs text-muted">
+                {new Date(item.created_at).toLocaleString("th-TH", {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
               </p>
               <p className="mt-1 whitespace-pre-wrap text-muted">{item.content}</p>
             </article>
