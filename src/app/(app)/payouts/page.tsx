@@ -66,7 +66,7 @@ export default function PayoutsPage() {
     return (
       <AccessDenied
         title="ไม่มีสิทธิ์เข้าการเงิน"
-        message="หน้านี้จำกัดเฉพาะแอดมินและแผนกบัญชี (FN)"
+        message="หน้านี้จำกัดเฉพาะแอดมินและแผนกบัญชี"
       />
     );
   }

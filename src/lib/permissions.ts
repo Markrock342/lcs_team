@@ -29,6 +29,7 @@ export const ROLE_PERMISSIONS: Record<TeamRole, Permission[]> = {
   ],
   accounting: ["manage_tasks", "export_data", "view_finance"],
   backend: ["manage_tasks"],
+  frontend: ["manage_tasks"],
   design: ["manage_tasks"],
   sale: [
     "manage_clients",
@@ -41,9 +42,10 @@ export const ROLE_PERMISSIONS: Record<TeamRole, Permission[]> = {
 export const ROLE_DESCRIPTIONS: Record<TeamRole, string> = {
   admin: "Admin — สิทธิ์ครบ รวมหน้าการเงินและจัดการทีม",
   pm: "PM — ลูกค้า งาน ใบแจ้งหนี้ เทมเพลต ไม่เห็นสลิปและยอดกองกลาง",
-  accounting: "FN — แผนกบัญชี จัดการหน้าการเงิน สลิป และยอดเงิน",
+  accounting: "บัญชี — จัดการหน้าการเงิน สลิป และยอดเงิน",
   backend: "BE — รับงาน dev/API ที่มอบหมาย",
-  design: "UI — รับงานออกแบบและ frontend ที่มอบหมาย",
+  frontend: "FN — รับงาน frontend ที่มอบหมาย",
+  design: "UI — รับงานออกแบบที่มอบหมาย",
   sale: "Sale — ลีด ดีล ใบเสนอราคา และลูกค้า",
   guest: "Guest — ดูได้อย่างเดียว + แชท ไม่เห็นการเงินทีม",
 };
@@ -54,6 +56,7 @@ export const ASSIGNABLE_ROLES: TeamRole[] = [
   "pm",
   "accounting",
   "backend",
+  "frontend",
   "design",
   "sale",
   "guest",
@@ -82,7 +85,7 @@ type FinanceActor =
   | null
   | undefined;
 
-/** หน้าการเงิน / สลิป / ยอดเงิน — เฉพาะแอดมิน หรือป้าย/สิทธิ์บัญชี (FN) */
+/** หน้าการเงิน / สลิป / ยอดเงิน — เฉพาะแอดมิน หรือป้าย/สิทธิ์บัญชี */
 export function canViewFinance(actor: FinanceActor): boolean {
   if (!actor) return false;
   if (typeof actor === "string") {

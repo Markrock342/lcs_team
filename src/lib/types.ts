@@ -3,6 +3,7 @@ export const TEAM_ROLES = [
   "pm",
   "accounting",
   "backend",
+  "frontend",
   "design",
   "sale",
   "guest",

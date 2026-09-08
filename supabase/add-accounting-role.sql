@@ -1,9 +1,10 @@
--- แผนกบัญชี (FN) + จำกัดหน้าการเงินให้แอดมินและบัญชีเท่านั้น
+-- แผนกบัญชี + ป้าย BE / FN / UI
 -- รันใน Supabase SQL Editor (รันซ้ำได้)
+-- FN = Front End, UI = Design, บัญชี ≠ FN
 
 ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
 ALTER TABLE profiles ADD CONSTRAINT profiles_role_check
-  CHECK (role IN ('admin', 'pm', 'accounting', 'backend', 'design', 'sale', 'guest'));
+  CHECK (role IN ('admin', 'pm', 'accounting', 'backend', 'frontend', 'design', 'sale', 'guest'));
 
 CREATE OR REPLACE FUNCTION public.can_manage_finance()
 RETURNS boolean
@@ -53,7 +54,7 @@ CREATE POLICY "Team accounting categories"
   USING (public.can_manage_finance())
   WITH CHECK (public.can_manage_finance());
 
--- PM ยังบันทึกชำระใบแจ้งหนี้ได้ — ลงสมุดบัญชีด้วย trigger ไม่ต้องมีสิทธิ์ FN
+-- PM ยังบันทึกชำระใบแจ้งหนี้ได้ — ลงสมุดบัญชีด้วย trigger ไม่ต้องมีสิทธิ์บัญชี
 CREATE OR REPLACE FUNCTION public.sync_invoice_payment_to_ledger()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -162,14 +163,9 @@ CREATE TRIGGER invoice_payments_sync_ledger_delete
   FOR EACH ROW
   EXECUTE FUNCTION public.sync_invoice_payment_to_ledger();
 
--- sonthaya: ป้าย BE + FN (สิทธิ์จริงยังเป็น PM)
+-- sonthaya: สิทธิ์จริง BE พ่วงป้ายบัญชี (เข้าหน้าการเงินได้)
 UPDATE public.profiles
-SET display_roles = (
-  SELECT ARRAY(
-    SELECT DISTINCT role_name
-    FROM unnest(
-      COALESCE(display_roles, ARRAY[]::TEXT[]) || ARRAY['backend', 'accounting']::TEXT[]
-    ) AS role_name
-  )
-)
+SET
+  role = 'backend',
+  display_roles = ARRAY['backend', 'accounting']::TEXT[]
 WHERE lower(username) = 'sonthaya20322';

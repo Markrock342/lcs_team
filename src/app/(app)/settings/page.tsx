@@ -580,7 +580,7 @@ export default function SettingsPage() {
                     })}
                   </div>
                   <p className="mt-2 text-sm text-muted">
-                    ป้าย FN หรือสิทธิ์บัญชี/แอดมิน ถึงจะเข้าหน้าการเงิน สลิป และยอดเงินได้
+                    ป้ายบัญชี หรือแอดมิน ถึงจะเข้าหน้าการเงินได้ — FN คือ Front End ไม่ใช่บัญชี
                   </p>
                 </div>
                 <p className="text-sm text-muted">{ROLE_DESCRIPTIONS[member.role]}</p>
