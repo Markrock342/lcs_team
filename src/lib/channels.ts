@@ -10,11 +10,16 @@ export function slugifyChannelName(name: string): string {
 }
 
 export function formatChannelDisplay(name: string): string {
+  if (name.startsWith("dm:")) return "ข้อความส่วนตัว";
   return `#${name}`;
 }
 
 export function chatChannelHref(channelId: string): string {
   return `/chat?channel=${encodeURIComponent(channelId)}`;
+}
+
+export function chatDmHref(userId: string): string {
+  return `/chat?dm=${encodeURIComponent(userId)}`;
 }
 
 export function getChatChannelIdFromLink(link: string | null | undefined): string | null {

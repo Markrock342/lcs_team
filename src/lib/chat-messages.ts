@@ -33,7 +33,7 @@ function normalizeMessage(msg: Message): Message {
   return rest;
 }
 
-function isSchemaError(message: string) {
+export function isSchemaError(message: string) {
   const m = message.toLowerCase();
   return (
     m.includes("column") ||
@@ -82,20 +82,48 @@ async function fetchWithProfilesFallback(
 
 export async function fetchChannelMessages(
   supabase: SupabaseClient,
-  channelId: string
+  channelId: string,
+  opts?: { threadId?: string | null }
 ): Promise<{ data: Message[]; error: string | null }> {
   for (const select of [MESSAGE_SELECT_FULL, MESSAGE_SELECT_BASIC]) {
-    const res = await supabase
+    let query = supabase
       .from("messages")
       .select(select)
       .eq("channel_id", channelId)
       .order("created_at", { ascending: true })
       .limit(200);
 
+    if (opts?.threadId) {
+      query = query.or(`id.eq.${opts.threadId},thread_id.eq.${opts.threadId}`);
+    } else {
+      query = query.is("thread_id", null);
+    }
+
+    const res = await query;
+
     if (!res.error) {
       const data =
         (res.data as unknown as Message[] | null)?.map(normalizeMessage) ?? [];
       return { data, error: null };
+    }
+
+    if (
+      opts?.threadId === undefined &&
+      isSchemaError(res.error.message) &&
+      res.error.message.toLowerCase().includes("thread_id")
+    ) {
+      const fallback = await supabase
+        .from("messages")
+        .select(select)
+        .eq("channel_id", channelId)
+        .order("created_at", { ascending: true })
+        .limit(200);
+      if (!fallback.error) {
+        const data =
+          (fallback.data as unknown as Message[] | null)?.map(normalizeMessage) ??
+          [];
+        return { data, error: null };
+      }
     }
 
     if (!isSchemaError(res.error.message)) {
@@ -104,6 +132,25 @@ export async function fetchChannelMessages(
   }
 
   return fetchWithProfilesFallback(supabase, channelId);
+}
+
+export async function fetchThreadCounts(
+  supabase: SupabaseClient,
+  rootIds: string[]
+): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {};
+  if (!rootIds.length) return counts;
+  const { data, error } = await supabase
+    .from("messages")
+    .select("thread_id")
+    .in("thread_id", rootIds)
+    .is("deleted_at", null);
+  if (error) return counts;
+  for (const row of data ?? []) {
+    if (!row.thread_id) continue;
+    counts[row.thread_id] = (counts[row.thread_id] ?? 0) + 1;
+  }
+  return counts;
 }
 
 async function fetchOneWithProfileFallback(
@@ -157,6 +204,7 @@ type InsertPayload = {
   file_type: string | null;
   mentioned_ids?: string[];
   reply_to_id?: string | null;
+  thread_id?: string | null;
   linked_task_id?: string | null;
 };
 
@@ -166,7 +214,8 @@ export async function insertChatMessage(
 ): Promise<{ data: Message | null; error: string | null }> {
   const attempts: Record<string, unknown>[] = [
     { ...payload },
-    { ...payload, reply_to_id: undefined },
+    { ...payload, thread_id: undefined },
+    { ...payload, reply_to_id: undefined, thread_id: undefined },
     {
       channel_id: payload.channel_id,
       sender_id: payload.sender_id,

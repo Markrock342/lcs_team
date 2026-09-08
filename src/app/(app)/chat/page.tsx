@@ -15,6 +15,9 @@ import {
   Trash2,
   MoreVertical,
   CornerDownRight,
+  Pin,
+  UserRound,
+  MessageSquare,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, EmptyState, Input, Modal, PageLoader, Textarea, ProfileRoleBadges } from "@/components/ui";
@@ -33,9 +36,18 @@ import { useOnlinePresence, useTypingIndicator } from "@/hooks/usePresence";
 import {
   fetchChannelMessages,
   fetchMessageById,
+  fetchThreadCounts,
   insertChatMessage,
   markMessagesAsReadSafe,
 } from "@/lib/chat-messages";
+import {
+  channelTitle,
+  fetchUnreadCounts,
+  isDmChannel,
+  markChannelRead,
+  openDirectMessage,
+} from "@/lib/chat-workspace";
+import { runSlashCommand } from "@/lib/chat-slash";
 import type { Channel, Message, Profile, MessageReaction, Task } from "@/lib/types";
 import { format, isToday, isYesterday } from "date-fns";
 import { th } from "date-fns/locale";
@@ -97,6 +109,12 @@ function ChatPageContent() {
   const [reactionsMap, setReactionsMap] = useState<Record<string, MessageReaction[]>>({});
   const [chatError, setChatError] = useState("");
   const [sendError, setSendError] = useState("");
+  const [unread, setUnread] = useState<Record<string, number>>({});
+  const [threadRoot, setThreadRoot] = useState<Message | null>(null);
+  const [threadMessages, setThreadMessages] = useState<Message[]>([]);
+  const [threadCounts, setThreadCounts] = useState<Record<string, number>>({});
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [slashNotice, setSlashNotice] = useState("");
   const [, setPresenceTick] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
@@ -104,6 +122,8 @@ function ChatPageContent() {
   const pendingScrollBottomRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sendAbortRef = useRef<AbortController | null>(null);
+  const threadRootRef = useRef<Message | null>(null);
+  threadRootRef.current = threadRoot;
 
   const filePreviewUrl = useMemo(
     () => (file && isImageFile(file.type) ? URL.createObjectURL(file) : null),
@@ -157,8 +177,10 @@ function ChatPageContent() {
         grouped[r.message_id].push(r);
       }
       setReactionsMap(grouped);
+      setThreadCounts(await fetchThreadCounts(supabase, ids));
     } else {
       setReactionsMap({});
+      setThreadCounts({});
     }
 
     return data;
@@ -203,8 +225,24 @@ function ChatPageContent() {
         setCurrentUser(profile ?? null);
       }
 
+      const dmParam = searchParams.get("dm");
+      let opened: Channel | null = null;
+      if (dmParam && user) {
+        const dm = await openDirectMessage(supabase, user.id, dmParam);
+        if (dm.channel) {
+          opened = dm.channel;
+          if (!channelList.some((c) => c.id === dm.channel!.id)) {
+            channelList.push(dm.channel);
+            setChannels([...channelList]);
+          }
+        } else if (dm.error) {
+          setChatError(dm.error);
+        }
+      }
+
       const fromParam = resolveChannelFromParam(channelParam, channelList);
       const first =
+        opened ??
         fromParam ??
         channelList.find((c) => c.name === "general") ??
         channelList[0] ??
@@ -216,7 +254,17 @@ function ChatPageContent() {
           router.replace(chatChannelHref(first.id), { scroll: false });
         }
         const msgs = await loadMessages(first.id);
-        if (user) await markMessagesAsRead(msgs, user.id);
+        if (user) {
+          await markMessagesAsRead(msgs, user.id);
+          await markChannelRead(createClient(), first.id, user.id);
+          const counts = await fetchUnreadCounts(
+            supabase,
+            user.id,
+            channelList.map((c) => c.id)
+          );
+          counts[first.id] = 0;
+          setUnread(counts);
+        }
         setShowMobileChannels(false);
       }
 
@@ -237,6 +285,8 @@ function ChatPageContent() {
     setActiveChannel(ch);
     setShowMobileChannels(false);
     setReplyTo(null);
+    setThreadRoot(null);
+    setEditingMessage(null);
     pendingScrollBottomRef.current = true;
     isNearBottomRef.current = true;
   }, [channelParam, channels, loading, activeChannel?.id]);
@@ -249,7 +299,11 @@ function ChatPageContent() {
 
     async function sync() {
       const msgs = await loadMessages(activeChannel!.id);
-      if (!cancelled) await markMessagesAsRead(msgs, currentUser!.id);
+      if (!cancelled) {
+        await markMessagesAsRead(msgs, currentUser!.id);
+        await markChannelRead(createClient(), activeChannel!.id, currentUser!.id);
+        setUnread((prev) => ({ ...prev, [activeChannel!.id]: 0 }));
+      }
     }
 
     sync();
@@ -271,6 +325,21 @@ function ChatPageContent() {
           const full = await fetchMessageById(supabase, newMsg.id);
 
           if (!full) return;
+
+          if (full.thread_id) {
+            setThreadCounts((prev) => ({
+              ...prev,
+              [full.thread_id!]: (prev[full.thread_id!] ?? 0) + 1,
+            }));
+            const root = threadRootRef.current;
+            if (root && (root.id === full.thread_id || root.id === full.id)) {
+              setThreadMessages((prev) => {
+                if (prev.some((m) => m.id === full.id)) return prev;
+                return [...prev, full];
+              });
+            }
+            return;
+          }
 
           setMessages((prev) => {
             if (prev.some((m) => m.id === full.id)) return prev;
@@ -296,6 +365,9 @@ function ChatPageContent() {
           const full = await fetchMessageById(supabase, updated.id);
           if (!full) return;
           setMessages((prev) =>
+            prev.map((m) => (m.id === full.id ? full : m))
+          );
+          setThreadMessages((prev) =>
             prev.map((m) => (m.id === full.id ? full : m))
           );
         }
@@ -361,6 +433,42 @@ function ChatPageContent() {
       supabase.removeChannel(chSub);
     };
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const supabase = createClient();
+    const sub = supabase
+      .channel("chat-unread")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        (payload) => {
+          const msg = payload.new as Message;
+          if (msg.sender_id === currentUser.id) return;
+          if (msg.thread_id) return;
+          if (msg.channel_id === activeChannel?.id) return;
+          setUnread((prev) => ({
+            ...prev,
+            [msg.channel_id]: (prev[msg.channel_id] ?? 0) + 1,
+          }));
+          void supabase
+            .from("channels")
+            .select("*")
+            .eq("id", msg.channel_id)
+            .maybeSingle()
+            .then(({ data }) => {
+              if (!data) return;
+              setChannels((prev) =>
+                prev.some((c) => c.id === data.id) ? prev : [...prev, data as Channel]
+              );
+            });
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(sub);
+    };
+  }, [currentUser, activeChannel?.id]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -430,6 +538,9 @@ function ChatPageContent() {
     setActiveChannel(ch);
     setShowMobileChannels(false);
     setReplyTo(null);
+    setThreadRoot(null);
+    setEditingMessage(null);
+    setSlashNotice("");
     isNearBottomRef.current = true;
     pendingScrollBottomRef.current = true;
     router.replace(chatChannelHref(ch.id), { scroll: false });
@@ -586,6 +697,64 @@ function ChatPageContent() {
     }
   }
 
+  async function startDirectMessage(userId: string) {
+    if (!currentUser || userId === currentUser.id) return;
+    const { channel, error } = await openDirectMessage(
+      createClient(),
+      currentUser.id,
+      userId
+    );
+    if (error) {
+      setChatError(error);
+      return;
+    }
+    if (channel) {
+      setChannels((prev) =>
+        prev.some((c) => c.id === channel.id) ? prev : [...prev, channel]
+      );
+      selectChannel(channel);
+    }
+  }
+
+  async function openThread(msg: Message) {
+    const root = msg.thread_id
+      ? messages.find((m) => m.id === msg.thread_id) ?? msg
+      : msg;
+    setThreadRoot(root);
+    const { data } = await fetchChannelMessages(createClient(), root.channel_id, {
+      threadId: root.id,
+    });
+    setThreadMessages(data);
+  }
+
+  async function togglePin(msg: Message) {
+    const supabase = createClient();
+    const pinned = msg.pinned_at
+      ? { pinned_at: null, pinned_by: null }
+      : {
+          pinned_at: new Date().toISOString(),
+          pinned_by: currentUser?.id ?? null,
+        };
+    const { error } = await supabase.from("messages").update(pinned).eq("id", msg.id);
+    if (error) {
+      setSendError(
+        error.message.toLowerCase().includes("column")
+          ? "รัน supabase/add-chat-workspace.sql ใน Supabase ก่อน"
+          : error.message
+      );
+      return;
+    }
+    const next = { ...msg, ...pinned };
+    setMessages((prev) => prev.map((m) => (m.id === msg.id ? next : m)));
+    setThreadMessages((prev) => prev.map((m) => (m.id === msg.id ? next : m)));
+  }
+
+  function startEdit(msg: Message) {
+    setEditingMessage(msg);
+    setContent(msg.content ?? "");
+    setReplyTo(null);
+  }
+
   async function handleDeleteMessage(msg: Message) {
     const ok = await confirm({
       title: "ลบข้อความ",
@@ -603,6 +772,9 @@ function ChatPageContent() {
 
     if (!error) {
       setMessages((prev) =>
+        prev.map((m) => (m.id === msg.id ? { ...m, deleted_at } : m))
+      );
+      setThreadMessages((prev) =>
         prev.map((m) => (m.id === msg.id ? { ...m, deleted_at } : m))
       );
     }
@@ -653,9 +825,53 @@ function ChatPageContent() {
 
     setSending(true);
     setSendError("");
+    setSlashNotice("");
     sendAbortRef.current = new AbortController();
     const signal = sendAbortRef.current.signal;
     const supabase = createClient();
+
+    if (editingMessage) {
+      const edited_at = new Date().toISOString();
+      const nextContent = content.trim();
+      const { error } = await supabase
+        .from("messages")
+        .update({ content: nextContent, edited_at })
+        .eq("id", editingMessage.id);
+      setSending(false);
+      sendAbortRef.current = null;
+      if (error) {
+        setSendError(error.message);
+        return;
+      }
+      const next = { ...editingMessage, content: nextContent, edited_at };
+      setMessages((prev) => prev.map((m) => (m.id === next.id ? next : m)));
+      setThreadMessages((prev) => prev.map((m) => (m.id === next.id ? next : m)));
+      setEditingMessage(null);
+      setContent("");
+      return;
+    }
+
+    let outgoing = content.trim() || null;
+    let slashTaskId = linkedTaskId || null;
+    if (outgoing?.startsWith("/")) {
+      const slash = await runSlashCommand(supabase, outgoing, currentUser.id);
+      if (slash?.kind === "help") {
+        setSlashNotice(slash.text);
+        setSending(false);
+        sendAbortRef.current = null;
+        return;
+      }
+      if (slash?.kind === "error") {
+        setSendError(slash.text);
+        setSending(false);
+        sendAbortRef.current = null;
+        return;
+      }
+      if (slash?.kind === "ok") {
+        outgoing = slash.href ? `${slash.content}\n${slash.href}` : slash.content;
+        slashTaskId = slash.linkedTaskId ?? slashTaskId;
+      }
+    }
 
     let file_url: string | null = null;
     let file_name: string | null = null;
@@ -675,7 +891,7 @@ function ChatPageContent() {
       }
     }
 
-    const mentionIds = parseMentions(content, profiles);
+    const mentionIds = parseMentions(outgoing ?? "", profiles);
     const replyId = replyTo?.deleted_at ? null : replyTo?.id ?? null;
 
     const { data: msgData, error: insertError } = await insertChatMessage(
@@ -683,13 +899,14 @@ function ChatPageContent() {
       {
         channel_id: activeChannel.id,
         sender_id: currentUser.id,
-        content: content.trim() || null,
+        content: outgoing,
         file_url,
         file_name,
         file_type,
         mentioned_ids: mentionIds,
         reply_to_id: replyId,
-        linked_task_id: linkedTaskId || null,
+        thread_id: threadRoot?.id ?? null,
+        linked_task_id: slashTaskId,
       }
     );
 
@@ -727,10 +944,21 @@ function ChatPageContent() {
     sendAbortRef.current = null;
 
     if (msgData) {
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === msgData.id)) return prev;
-        return [...prev, msgData];
-      });
+      if (threadRoot) {
+        setThreadMessages((prev) => {
+          if (prev.some((m) => m.id === msgData.id)) return prev;
+          return [...prev, msgData];
+        });
+        setThreadCounts((prev) => ({
+          ...prev,
+          [threadRoot.id]: (prev[threadRoot.id] ?? 0) + 1,
+        }));
+      } else {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msgData.id)) return prev;
+          return [...prev, msgData];
+        });
+      }
     }
   }
 
@@ -767,6 +995,14 @@ function ChatPageContent() {
     );
   }
 
+  const roomChannels = channels.filter((c) => !isDmChannel(c));
+  const dmChannels = channels.filter((c) => isDmChannel(c));
+  const pinnedMessages = messages.filter((m) => m.pinned_at);
+  const activeTitle = activeChannel
+    ? channelTitle(activeChannel, profiles, currentUser?.id)
+    : "";
+  const activeIsDm = activeChannel ? isDmChannel(activeChannel) : false;
+
   let lastDate = "";
 
   return (
@@ -792,24 +1028,70 @@ function ChatPageContent() {
           </button>
         </div>
 
-        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-touch p-2 space-y-0.5">
-          {channels.map((ch) => {
-            const active = activeChannel?.id === ch.id;
-            return (
-              <button
-                key={ch.id}
-                onClick={() => selectChannel(ch)}
-                className={`flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-accent/15 text-accent"
-                    : "text-muted hover:text-foreground hover:bg-card-hover"
-                }`}
-              >
-                <Hash size={16} className="shrink-0 opacity-60" />
-                <span className="truncate">{ch.name}</span>
-              </button>
-            );
-          })}
+        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-touch p-2 space-y-3">
+          <div className="space-y-0.5">
+            <p className="px-3 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+              ช่อง
+            </p>
+            {roomChannels.map((ch) => {
+              const active = activeChannel?.id === ch.id;
+              return (
+                <button
+                  key={ch.id}
+                  onClick={() => selectChannel(ch)}
+                  className={`flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors ${
+                    active
+                      ? "bg-accent/15 text-accent"
+                      : unread[ch.id]
+                        ? "text-foreground"
+                        : "text-muted hover:text-foreground hover:bg-card-hover"
+                  }`}
+                >
+                  <Hash size={16} className="shrink-0 opacity-60" />
+                  <span className="truncate">{ch.name}</span>
+                  {!!unread[ch.id] && (
+                    <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-white">
+                      {unread[ch.id] > 99 ? "99+" : unread[ch.id]}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <div className="space-y-0.5">
+            <p className="px-3 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+              ข้อความส่วนตัว
+            </p>
+            {dmChannels.length === 0 && (
+              <p className="px-3 py-2 text-xs text-muted">กดชื่อเพื่อนด้านล่างเพื่อเริ่มคุย</p>
+            )}
+            {dmChannels.map((ch) => {
+              const active = activeChannel?.id === ch.id;
+              return (
+                <button
+                  key={ch.id}
+                  onClick={() => selectChannel(ch)}
+                  className={`flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors ${
+                    active
+                      ? "bg-accent/15 text-accent"
+                      : unread[ch.id]
+                        ? "text-foreground"
+                        : "text-muted hover:text-foreground hover:bg-card-hover"
+                  }`}
+                >
+                  <UserRound size={16} className="shrink-0 opacity-60" />
+                  <span className="truncate">
+                    {channelTitle(ch, profiles, currentUser?.id)}
+                  </span>
+                  {!!unread[ch.id] && (
+                    <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-white">
+                      {unread[ch.id] > 99 ? "99+" : unread[ch.id]}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </nav>
 
         {/* Team presence */}
@@ -823,8 +1105,15 @@ function ChatPageContent() {
           <div className="max-h-40 space-y-3 overflow-y-auto overscroll-contain scroll-touch">
             {profiles.map((p) => {
               const online = onlineIds.has(p.id) || isOnline(p.last_seen_at);
+              const isSelf = p.id === currentUser?.id;
               return (
-                <div key={p.id} className="flex min-w-0 items-start gap-2 text-sm">
+                <button
+                  key={p.id}
+                  type="button"
+                  disabled={isSelf}
+                  onClick={() => startDirectMessage(p.id)}
+                  className="flex min-h-11 min-w-0 w-full items-start gap-2 rounded-xl px-1 text-left text-sm hover:bg-card-hover disabled:hover:bg-transparent"
+                >
                   <div
                     className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${
                       online ? "bg-(--status-green-fg)" : "bg-muted"
@@ -844,7 +1133,7 @@ function ChatPageContent() {
                       {onlineIds.has(p.id) ? "ออนไลน์" : formatPresenceStatus(p.last_seen_at)}
                     </p>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -855,7 +1144,7 @@ function ChatPageContent() {
       <div
         className={`${
           showMobileChannels ? "hidden" : "flex"
-        } lg:flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden`}
+        } lg:flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden relative`}
       >
         {activeChannel ? (
           <>
@@ -868,15 +1157,23 @@ function ChatPageContent() {
               >
                 <ChevronLeft size={20} />
               </button>
-              <Hash size={20} className="text-muted shrink-0" />
+              {activeIsDm ? (
+                <UserRound size={20} className="text-muted shrink-0" />
+              ) : (
+                <Hash size={20} className="text-muted shrink-0" />
+              )}
               <div className="min-w-0 flex-1">
-                <h1 className="font-semibold truncate">{activeChannel.name}</h1>
-                {activeChannel.description && (
+                <h1 className="font-semibold truncate">{activeTitle}</h1>
+                {activeChannel.description && !activeIsDm && (
                   <p className="text-xs text-muted truncate">
                     {activeChannel.description}
                   </p>
                 )}
+                {activeIsDm && (
+                  <p className="text-xs text-muted truncate">ข้อความส่วนตัว</p>
+                )}
               </div>
+              {!activeIsDm && (
               <div className="relative shrink-0">
                 <button
                   onClick={() => setChannelMenuOpen(!channelMenuOpen)}
@@ -905,7 +1202,18 @@ function ChatPageContent() {
                   </div>
                 )}
               </div>
+              )}
             </div>
+
+            {pinnedMessages.length > 0 && (
+              <div className="flex items-center gap-2 border-b border-border bg-surface-soft px-4 py-2 text-sm">
+                <Pin size={14} className="text-accent shrink-0" />
+                <p className="min-w-0 flex-1 truncate">
+                  {pinnedMessages[0].content || pinnedMessages[0].file_name || "ข้อความที่ปักหมุด"}
+                  {pinnedMessages.length > 1 ? ` · อีก ${pinnedMessages.length - 1} รายการ` : ""}
+                </p>
+              </div>
+            )}
 
             {/* Messages — Discord layout */}
             {(chatError || sendError) && (
@@ -913,9 +1221,17 @@ function ChatPageContent() {
                 {sendError || chatError}
               </div>
             )}
+            {slashNotice && (
+              <div className="mx-4 mt-3 whitespace-pre-wrap rounded-xl bg-surface-soft px-4 py-3 text-sm text-muted">
+                {slashNotice}
+              </div>
+            )}
+            <div
+              className={`relative flex-1 min-h-0 ${threadRoot ? "lg:flex" : ""}`}
+            >
             <div
               ref={messagesScrollRef}
-              className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-touch px-3 py-5 sm:px-5 space-y-1"
+              className="h-full min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-touch px-3 py-5 sm:px-5 space-y-1"
             >
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center py-12">
@@ -954,6 +1270,10 @@ function ChatPageContent() {
                         formatTime={formatMsgTime}
                         onReply={setReplyTo}
                         onDelete={handleDeleteMessage}
+                        onThread={openThread}
+                        onPin={togglePin}
+                        onEdit={startEdit}
+                        threadCount={threadCounts[msg.id] ?? 0}
                         reactions={reactionsMap[msg.id] ?? []}
                         onReaction={toggleReaction}
                       />
@@ -962,6 +1282,49 @@ function ChatPageContent() {
                 })
               )}
               <div ref={messagesEndRef} />
+            </div>
+            {threadRoot && (
+              <div className="absolute inset-0 z-20 flex flex-col bg-card lg:static lg:w-80 lg:border-l lg:border-border">
+                <div className="flex min-h-14 items-center gap-2 border-b border-border px-3">
+                  <MessageSquare size={16} className="text-accent" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">เธรด</p>
+                    <p className="truncate text-xs text-muted">
+                      {threadRoot.content || threadRoot.file_name || "ข้อความ"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setThreadRoot(null);
+                      setThreadMessages([]);
+                    }}
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover"
+                    aria-label="ปิดเธรด"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-4 space-y-1">
+                  {threadMessages.map((msg) => (
+                    <ChatMessageItem
+                      key={msg.id}
+                      msg={msg}
+                      currentUserId={currentUser?.id}
+                      currentUserRole={currentUser?.role}
+                      profiles={profiles}
+                      formatTime={formatMsgTime}
+                      onReply={setReplyTo}
+                      onDelete={handleDeleteMessage}
+                      onPin={togglePin}
+                      onEdit={startEdit}
+                      reactions={reactionsMap[msg.id] ?? []}
+                      onReaction={toggleReaction}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
             </div>
 
             {typingUsers.length > 0 && (
@@ -998,6 +1361,24 @@ function ChatPageContent() {
                   onClick={() => setReplyTo(null)}
                   className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover hover:text-foreground"
                   aria-label="ยกเลิกการตอบกลับ"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+
+            {editingMessage && (
+              <div className="mx-4 mb-2 flex items-center gap-2 rounded-xl bg-surface-soft px-3 py-2">
+                <Pencil size={14} className="text-accent shrink-0" />
+                <p className="flex-1 min-w-0 truncate text-xs">กำลังแก้ข้อความ</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingMessage(null);
+                    setContent("");
+                  }}
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover"
+                  aria-label="ยกเลิกการแก้ไข"
                 >
                   <X size={16} />
                 </button>
@@ -1080,7 +1461,15 @@ function ChatPageContent() {
                   currentUserId={currentUser?.id}
                   onPaste={handlePaste}
                   disabled={sending}
-                  placeholder={`ส่งข้อความใน #${activeChannel.name}`}
+                  placeholder={
+                    editingMessage
+                      ? "แก้ข้อความ"
+                      : threadRoot
+                        ? "ตอบในเธรด"
+                        : activeIsDm
+                          ? `ส่งถึง ${activeTitle}`
+                          : `ส่งข้อความใน #${activeChannel.name} หรือพิมพ์ /`
+                  }
                 />
                 <button
                   type={sending ? "button" : "submit"}

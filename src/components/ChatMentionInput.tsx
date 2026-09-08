@@ -7,6 +7,7 @@ import {
   filterMentionProfiles,
   getMentionContext,
 } from "@/lib/mentions";
+import { slashSuggestions } from "@/lib/chat-slash";
 import type { Profile } from "@/lib/types";
 
 type ChatMentionInputProps = {
@@ -33,9 +34,12 @@ export function ChatMentionInput({
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
 
+  const slashItems = useMemo(() => slashSuggestions(value), [value]);
+  const slashOpen = slashItems.length > 0 && !value.includes(" ") && !dismissed;
+
   const mentionContext = useMemo(
-    () => getMentionContext(value, cursor),
-    [value, cursor]
+    () => (slashItems.length > 0 && !value.includes(" ") ? null : getMentionContext(value, cursor)),
+    [value, cursor, slashItems.length]
   );
 
   const suggestions = useMemo(() => {
@@ -47,12 +51,12 @@ export function ChatMentionInput({
     );
   }, [mentionContext, dismissed, profiles, currentUserId]);
 
-  const showMenu = suggestions.length > 0 && !!mentionContext;
+  const showMenu = (suggestions.length > 0 && !!mentionContext) || slashOpen;
 
   useEffect(() => {
     setHighlightIndex(0);
     setDismissed(false);
-  }, [mentionContext?.query, mentionContext?.start]);
+  }, [mentionContext?.query, mentionContext?.start, slashItems.length]);
 
   const syncCursor = useCallback(() => {
     setCursor(inputRef.current?.selectionStart ?? value.length);
@@ -80,6 +84,31 @@ export function ChatMentionInput({
   );
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (slashOpen) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlightIndex((i) => (i + 1) % slashItems.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setHighlightIndex(
+          (i) => (i - 1 + slashItems.length) % slashItems.length
+        );
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        onChange(`${slashItems[highlightIndex].cmd} `);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setDismissed(true);
+      }
+      return;
+    }
+
     if (!showMenu) return;
 
     if (e.key === "ArrowDown") {
@@ -110,7 +139,32 @@ export function ChatMentionInput({
 
   return (
     <div className="relative flex-1 min-w-0">
-      {showMenu && (
+      {slashOpen && (
+        <ul
+          role="listbox"
+          className="absolute bottom-full left-0 right-0 mb-1 max-h-48 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card shadow-lg z-20 py-1"
+        >
+          {slashItems.map((item, index) => (
+            <li key={item.cmd} role="option" aria-selected={index === highlightIndex}>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => onChange(`${item.cmd} `)}
+                className={`w-full px-3 py-2 text-left text-sm transition-colors ${
+                  index === highlightIndex
+                    ? "bg-accent/15 text-accent"
+                    : "hover:bg-card-hover"
+                }`}
+              >
+                <span className="font-medium">{item.cmd}</span>
+                <span className="ml-2 text-muted">{item.hint}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {showMenu && !slashOpen && (
         <ul
           role="listbox"
           className="absolute bottom-full left-0 right-0 mb-1 max-h-48 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card shadow-lg z-20 py-1"

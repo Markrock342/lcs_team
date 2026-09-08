@@ -46,6 +46,7 @@
 - Controls: existing Button/Input/Select/Textarea, upgraded with label association and focus-visible states
 - Briefing: `WorkspaceBrief` on the dashboard — recessed composer, status stamp, typewriter caret
 - Team roster: `/team` call sheet of members with department badges, presence, and open tasks
+- Chat: ticket-card split of rooms vs DMs; unread pills; Slack-style threads; pin/edit stamps; slash `/งาน` `/ลูกค้า` `/ดีล` `/help`
 - Sales prospects: category → region → province → court cards; never dump a full import as one grid
 - Modal: focused task sheet on mobile, dialog on desktop, Escape close and focus restoration
 

@@ -183,6 +183,13 @@ export interface Channel {
   description: string | null;
   created_by: string | null;
   created_at: string;
+  kind?: "channel" | "dm" | null;
+  dm_key?: string | null;
+}
+
+export interface ChannelMember {
+  channel_id: string;
+  user_id: string;
 }
 
 export interface MessageRead {
@@ -200,9 +207,13 @@ export interface Message {
   file_name: string | null;
   file_type: string | null;
   reply_to_id: string | null;
+  thread_id?: string | null;
   deleted_at: string | null;
   mentioned_ids?: string[] | null;
   linked_task_id?: string | null;
+  pinned_at?: string | null;
+  pinned_by?: string | null;
+  edited_at?: string | null;
   created_at: string;
   sender?: Profile | null;
   linked_task?: Pick<Task, "id" | "title" | "status"> | null;

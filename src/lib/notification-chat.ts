@@ -10,13 +10,18 @@ type MessageRow = {
   file_name: string | null;
   deleted_at: string | null;
   mentioned_ids: string[] | null;
-  channels: { name: string } | { name: string }[] | null;
+  channels: { name: string; kind?: string | null } | { name: string; kind?: string | null }[] | null;
 };
 
 function channelName(channels: MessageRow["channels"]): string {
   if (!channels) return "แชท";
   if (Array.isArray(channels)) return channels[0]?.name ?? "แชท";
   return channels.name;
+}
+
+function channelKind(channels: MessageRow["channels"]): string {
+  const row = Array.isArray(channels) ? channels[0] : channels;
+  return row?.kind ?? "channel";
 }
 
 export async function processChatMessageNotifications(
@@ -28,7 +33,7 @@ export async function processChatMessageNotifications(
   const { data: msg, error } = await adminDb
     .from("messages")
     .select(
-      "id, channel_id, sender_id, content, file_name, deleted_at, mentioned_ids, channels(name)"
+      "id, channel_id, sender_id, content, file_name, deleted_at, mentioned_ids, channels(name, kind)"
     )
     .eq("id", messageId)
     .maybeSingle();
@@ -45,7 +50,18 @@ export async function processChatMessageNotifications(
     .eq("id", message.sender_id)
     .maybeSingle();
 
-  const { data: profiles } = await adminDb.from("profiles").select("id");
+  const kind = channelKind(message.channels);
+  let recipientIds: string[] = [];
+  if (kind === "dm") {
+    const { data: members } = await adminDb
+      .from("channel_members")
+      .select("user_id")
+      .eq("channel_id", message.channel_id);
+    recipientIds = (members ?? []).map((m) => m.user_id);
+  } else {
+    const { data: profiles } = await adminDb.from("profiles").select("id");
+    recipientIds = (profiles ?? []).map((p) => p.id);
+  }
 
   const preview =
     message.content?.trim().slice(0, 80) ||
@@ -53,17 +69,20 @@ export async function processChatMessageNotifications(
     "ส่งไฟล์";
   const link = chatChannelHref(message.channel_id);
   const chName = channelName(message.channels);
+  const isDm = kind === "dm";
   const mentionedIds = message.mentioned_ids ?? [];
 
-  const items = (profiles ?? [])
-    .filter((p) => p.id !== message.sender_id)
-    .map((p) => {
-      const mentioned = mentionedIds.includes(p.id);
+  const items = recipientIds
+    .filter((id) => id !== message.sender_id)
+    .map((id) => {
+      const mentioned = mentionedIds.includes(id);
       return {
-        userId: p.id,
+        userId: id,
         title: mentioned
-          ? `💬 ถูก mention ใน #${chName}`
-          : `#${chName}`,
+          ? `💬 ถูก mention ใน ${isDm ? "ข้อความส่วนตัว" : `#${chName}`}`
+          : isDm
+            ? "ข้อความส่วนตัว"
+            : `#${chName}`,
         body: `${sender?.display_name ?? "ทีม"}: ${preview}`,
         link,
         sourceType: "message",

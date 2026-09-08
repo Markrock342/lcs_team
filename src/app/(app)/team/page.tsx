@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Shield, UsersRound } from "lucide-react";
+import { MessageSquare, Shield, UsersRound } from "lucide-react";
+import { chatDmHref } from "@/lib/channels";
 import { createClient } from "@/lib/supabase/client";
 import {
   Avatar,
@@ -25,7 +26,7 @@ import type { Profile, TeamRole } from "@/lib/types";
 type FilterKey = "all" | "online" | TeamRole;
 
 export default function TeamPage() {
-  const { role } = useRole();
+  const { role, profile } = useRole();
   const canManage = !!role && isAdmin(role);
   const [members, setMembers] = useState<Profile[]>([]);
   const [openByMember, setOpenByMember] = useState<Record<string, number>>({});
@@ -161,6 +162,13 @@ export default function TeamPage() {
                     {" · "}
                     {formatPresenceStatus(member.last_seen_at)}
                   </p>
+                  {profile && member.id !== profile.id && (
+                    <Link href={chatDmHref(member.id)}>
+                      <Button variant="secondary">
+                        <MessageSquare size={16} /> ข้อความ
+                      </Button>
+                    </Link>
+                  )}
                 </div>
               </article>
             );

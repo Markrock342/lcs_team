@@ -6,6 +6,9 @@ import {
   Download,
   CornerDownRight,
   Eye,
+  Pin,
+  Pencil,
+  MessageSquare,
 } from "lucide-react";
 import Image from "next/image";
 import { Avatar } from "@/components/ui";
@@ -23,6 +26,10 @@ type ChatMessageItemProps = {
   formatTime: (date: string) => string;
   onReply: (msg: Message) => void;
   onDelete: (msg: Message) => void;
+  onThread?: (msg: Message) => void;
+  onPin?: (msg: Message) => void;
+  onEdit?: (msg: Message) => void;
+  threadCount?: number;
   reactions?: MessageReaction[];
   onReaction?: (messageId: string, emoji: string) => void;
 };
@@ -37,6 +44,10 @@ export function ChatMessageItem({
   formatTime,
   onReply,
   onDelete,
+  onThread,
+  onPin,
+  onEdit,
+  threadCount = 0,
   reactions = [],
   onReaction,
 }: ChatMessageItemProps) {
@@ -62,7 +73,26 @@ export function ChatMessageItem({
             {msg.sender?.display_name ?? "ไม่มีชื่อ"}
           </span>
           <span className="text-[10px] text-muted">{formatTime(msg.created_at)}</span>
+          {msg.edited_at && !deleted && (
+            <span className="text-[10px] text-muted">(แก้ไขแล้ว)</span>
+          )}
+          {msg.pinned_at && !deleted && (
+            <span className="inline-flex items-center gap-0.5 text-[10px] text-accent">
+              <Pin size={10} /> ปักหมุด
+            </span>
+          )}
           <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 max-lg:opacity-100 transition-opacity">
+            {!deleted && onThread && (
+              <button
+                type="button"
+                onClick={() => onThread(msg)}
+                className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-card-hover text-muted hover:text-accent touch-manipulation"
+                title="เปิดเธรด"
+                aria-label="เปิดเธรด"
+              >
+                <MessageSquare size={14} />
+              </button>
+            )}
             {!deleted && (
               <button
                 type="button"
@@ -72,6 +102,28 @@ export function ChatMessageItem({
                 aria-label="ตอบกลับ"
               >
                 <Reply size={14} />
+              </button>
+            )}
+            {!deleted && onPin && (
+              <button
+                type="button"
+                onClick={() => onPin(msg)}
+                className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-card-hover text-muted hover:text-accent touch-manipulation"
+                title={msg.pinned_at ? "เลิกปักหมุด" : "ปักหมุด"}
+                aria-label={msg.pinned_at ? "เลิกปักหมุด" : "ปักหมุด"}
+              >
+                <Pin size={14} />
+              </button>
+            )}
+            {isOwn && !deleted && onEdit && (
+              <button
+                type="button"
+                onClick={() => onEdit(msg)}
+                className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-card-hover text-muted hover:text-accent touch-manipulation"
+                title="แก้ไข"
+                aria-label="แก้ไขข้อความ"
+              >
+                <Pencil size={14} />
               </button>
             )}
             {msg.file_url && isImageFile(msg.file_type) && !deleted && (
@@ -223,6 +275,15 @@ export function ChatMessageItem({
             <Eye size={10} />
             อ่านแล้ว: {readBy.join(", ")}
           </p>
+        )}
+        {!deleted && onThread && threadCount > 0 && (
+          <button
+            type="button"
+            onClick={() => onThread(msg)}
+            className="mt-1 text-xs font-medium text-accent hover:underline"
+          >
+            {threadCount} ข้อความในเธรด
+          </button>
         )}
       </div>
     </div>
