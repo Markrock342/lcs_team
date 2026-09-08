@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Reply,
   Trash2,
@@ -9,9 +10,11 @@ import {
   Pin,
   Pencil,
   MessageSquare,
+  SmilePlus,
 } from "lucide-react";
 import Image from "next/image";
 import { Avatar } from "@/components/ui";
+import { ChatEmojiPicker } from "@/components/ChatEmojiPicker";
 import { isImageFile } from "@/lib/upload";
 import { downloadChatFile, getReadReceiptNames } from "@/lib/chat";
 import { getMessageReplyPreview } from "@/lib/chat-messages";
@@ -34,8 +37,6 @@ type ChatMessageItemProps = {
   onReaction?: (messageId: string, emoji: string) => void;
 };
 
-const QUICK_EMOJIS = ["👍", "❤️", "😂", "🎉"];
-
 export function ChatMessageItem({
   msg,
   currentUserId,
@@ -57,6 +58,7 @@ export function ChatMessageItem({
   const deleted = !!msg.deleted_at;
   const readBy = getReadReceiptNames(msg.reads, msg.sender_id, profiles);
   const replyPreview = getMessageReplyPreview(msg);
+  const [emojiOpen, setEmojiOpen] = useState(false);
 
   return (
     <div className="flex gap-3 py-1 px-2 -mx-2 rounded-lg hover:bg-card-hover/50 group">
@@ -81,7 +83,38 @@ export function ChatMessageItem({
               <Pin size={10} /> ปักหมุด
             </span>
           )}
-          <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 max-lg:opacity-100 transition-opacity">
+          <div
+            className={`relative ml-auto flex items-center gap-0.5 transition-opacity ${
+              emojiOpen
+                ? "opacity-100"
+                : "opacity-0 group-hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 max-lg:opacity-100"
+            }`}
+          >
+            {!deleted && onReaction && (
+              <>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => setEmojiOpen((open) => !open)}
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-card-hover text-muted hover:text-accent touch-manipulation"
+                  title="อิโมจิ"
+                  aria-label="รีแอคด้วยอิโมจิ"
+                  aria-expanded={emojiOpen}
+                >
+                  <SmilePlus size={14} />
+                </button>
+                <ChatEmojiPicker
+                  open={emojiOpen}
+                  onClose={() => setEmojiOpen(false)}
+                  onPick={(emoji) => {
+                    onReaction(msg.id, emoji);
+                    setEmojiOpen(false);
+                  }}
+                  align="right"
+                  placement="below"
+                />
+              </>
+            )}
             {!deleted && onThread && (
               <button
                 type="button"
@@ -231,8 +264,8 @@ export function ChatMessageItem({
           </>
         )}
 
-        {!deleted && onReaction && (
-          <div className="flex flex-wrap items-center gap-1 mt-1">
+        {!deleted && onReaction && reactions.length > 0 && (
+          <div className="mt-1 flex flex-wrap items-center gap-1">
             {Object.entries(
               reactions.reduce(
                 (acc, r) => {
@@ -246,27 +279,16 @@ export function ChatMessageItem({
                 key={emoji}
                 type="button"
                 onClick={() => onReaction(msg.id, emoji)}
-                className={`text-xs px-1.5 py-0.5 rounded-full border ${
+                className={`flex min-h-11 items-center gap-1 rounded-full border px-2.5 text-sm ${
                   reactions.some((r) => r.user_id === currentUserId && r.emoji === emoji)
                     ? "border-accent/50 bg-accent/15"
                     : "border-border bg-background"
                 }`}
+                aria-label={`รีแอค ${emoji} ${count} คน`}
               >
                 {emoji} {count}
               </button>
             ))}
-            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 max-lg:opacity-100 transition-opacity">
-              {QUICK_EMOJIS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => onReaction(msg.id, emoji)}
-                  className="text-xs p-1 rounded hover:bg-card-hover"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
           </div>
         )}
 

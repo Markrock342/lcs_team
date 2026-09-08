@@ -18,12 +18,14 @@ import {
   Pin,
   UserRound,
   MessageSquare,
+  SmilePlus,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, EmptyState, Input, Modal, PageLoader, Textarea, ProfileRoleBadges } from "@/components/ui";
 import { useActionFeedback } from "@/components/workspace/ActionFeedback";
 import { ChatMessageItem } from "@/components/ChatMessageItem";
-import { ChatMentionInput } from "@/components/ChatMentionInput";
+import { ChatMentionInput, type ChatMentionInputHandle } from "@/components/ChatMentionInput";
+import { ChatEmojiPicker } from "@/components/ChatEmojiPicker";
 import { uploadFile, isImageFile } from "@/lib/upload";
 import { slugifyChannelName, formatChannelDisplay, chatChannelHref, resolveChannelFromParam } from "@/lib/channels";
 import { parseMentions, logActivity } from "@/lib/activity";
@@ -117,6 +119,7 @@ function ChatPageContent() {
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [slashNotice, setSlashNotice] = useState("");
   const [highlightMsgId, setHighlightMsgId] = useState<string | null>(null);
+  const [composerEmojiOpen, setComposerEmojiOpen] = useState(false);
   const [, setPresenceTick] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
@@ -124,6 +127,7 @@ function ChatPageContent() {
   const pendingScrollBottomRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sendAbortRef = useRef<AbortController | null>(null);
+  const mentionInputRef = useRef<ChatMentionInputHandle>(null);
   const threadRootRef = useRef<Message | null>(null);
   threadRootRef.current = threadRoot;
 
@@ -428,6 +432,36 @@ function ChatPageContent() {
               };
             })
           );
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "message_reactions" },
+        (payload) => {
+          const row = payload.new as MessageReaction;
+          setReactionsMap((prev) => {
+            const list = prev[row.message_id] ?? [];
+            if (list.some((r) => r.id === row.id)) return prev;
+            if (list.some((r) => r.user_id === row.user_id && r.emoji === row.emoji)) {
+              return prev;
+            }
+            return { ...prev, [row.message_id]: [...list, row] };
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "message_reactions" },
+        (payload) => {
+          const row = payload.old as { id?: string; message_id?: string };
+          if (!row.id) return;
+          setReactionsMap((prev) => {
+            const next: Record<string, MessageReaction[]> = {};
+            for (const [id, list] of Object.entries(prev)) {
+              next[id] = list.filter((r) => r.id !== row.id);
+            }
+            return next;
+          });
         }
       )
       .subscribe();
@@ -832,35 +866,71 @@ function ChatPageContent() {
   }
 
   async function toggleReaction(messageId: string, emoji: string) {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
+    if (!currentUser) return;
     const existing = reactionsMap[messageId]?.find(
-      (r) => r.user_id === user.id && r.emoji === emoji
+      (r) => r.user_id === currentUser.id && r.emoji === emoji
     );
+    const supabase = createClient();
 
     if (existing) {
-      await supabase.from("message_reactions").delete().eq("id", existing.id);
       setReactionsMap((prev) => ({
         ...prev,
         [messageId]: (prev[messageId] ?? []).filter((r) => r.id !== existing.id),
       }));
-    } else {
-      const { data } = await supabase
+      const { error } = await supabase
         .from("message_reactions")
-        .insert({ message_id: messageId, user_id: user.id, emoji })
-        .select("*, user:profiles(id, display_name)")
-        .single();
-      if (data) {
+        .delete()
+        .eq("id", existing.id);
+      if (error) {
         setReactionsMap((prev) => ({
           ...prev,
-          [messageId]: [...(prev[messageId] ?? []), data as MessageReaction],
+          [messageId]: [...(prev[messageId] ?? []), existing],
         }));
+        setSendError(error.message);
       }
+      return;
     }
+
+    const optimistic: MessageReaction = {
+      id: `temp-${messageId}-${emoji}`,
+      message_id: messageId,
+      user_id: currentUser.id,
+      emoji,
+      created_at: new Date().toISOString(),
+      user: { id: currentUser.id, display_name: currentUser.display_name },
+    };
+    setReactionsMap((prev) => ({
+      ...prev,
+      [messageId]: [...(prev[messageId] ?? []), optimistic],
+    }));
+
+    const { data, error } = await supabase
+      .from("message_reactions")
+      .insert({ message_id: messageId, user_id: currentUser.id, emoji })
+      .select("*, user:profiles(id, display_name)")
+      .single();
+
+    if (error || !data) {
+      setReactionsMap((prev) => ({
+        ...prev,
+        [messageId]: (prev[messageId] ?? []).filter((r) => r.id !== optimistic.id),
+      }));
+      setSendError(
+        error?.message?.toLowerCase().includes("relation") ||
+          error?.message?.toLowerCase().includes("schema cache")
+          ? "รีแอคอิโมจิยังไม่พร้อม — รัน supabase/add-chat-workspace.sql ใน Supabase"
+          : error?.message ?? "รีแอคไม่สำเร็จ"
+      );
+      return;
+    }
+
+    setReactionsMap((prev) => ({
+      ...prev,
+      [messageId]: [
+        ...(prev[messageId] ?? []).filter((r) => r.id !== optimistic.id),
+        data as MessageReaction,
+      ],
+    }));
   }
 
   async function handleSend(e: React.FormEvent) {
@@ -1539,7 +1609,28 @@ function ChatPageContent() {
                 >
                   <Paperclip size={18} />
                 </button>
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={() => setComposerEmojiOpen((open) => !open)}
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover hover:text-foreground"
+                    aria-label="แทรกอิโมจิ"
+                    aria-expanded={composerEmojiOpen}
+                  >
+                    <SmilePlus size={18} />
+                  </button>
+                  <ChatEmojiPicker
+                    open={composerEmojiOpen}
+                    onClose={() => setComposerEmojiOpen(false)}
+                    onPick={(emoji) => {
+                      mentionInputRef.current?.insertAtCursor(emoji);
+                      setComposerEmojiOpen(false);
+                    }}
+                  />
+                </div>
                 <ChatMentionInput
+                  ref={mentionInputRef}
                   value={content}
                   onChange={(v) => {
                     setContent(v);

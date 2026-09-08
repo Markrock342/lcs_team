@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui";
 import {
   applyMention,
@@ -20,15 +20,24 @@ type ChatMentionInputProps = {
   disabled?: boolean;
 };
 
-export function ChatMentionInput({
-  value,
-  onChange,
-  profiles,
-  currentUserId,
-  placeholder,
-  onPaste,
-  disabled,
-}: ChatMentionInputProps) {
+export type ChatMentionInputHandle = {
+  insertAtCursor: (text: string) => void;
+  focus: () => void;
+};
+
+export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionInputProps>(
+  function ChatMentionInput(
+    {
+      value,
+      onChange,
+      profiles,
+      currentUserId,
+      placeholder,
+      onPaste,
+      disabled,
+    },
+    ref
+  ) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [cursor, setCursor] = useState(0);
   const [highlightIndex, setHighlightIndex] = useState(0);
@@ -57,6 +66,26 @@ export function ChatMentionInput({
     setHighlightIndex(0);
     setDismissed(false);
   }, [mentionContext?.query, mentionContext?.start, slashItems.length]);
+
+  useImperativeHandle(ref, () => ({
+    insertAtCursor(text: string) {
+      const input = inputRef.current;
+      const start = input?.selectionStart ?? value.length;
+      const end = input?.selectionEnd ?? value.length;
+      const next = `${value.slice(0, start)}${text}${value.slice(end)}`;
+      onChange(next);
+      requestAnimationFrame(() => {
+        if (!input) return;
+        const pos = start + text.length;
+        input.focus();
+        input.setSelectionRange(pos, pos);
+        setCursor(pos);
+      });
+    },
+    focus() {
+      inputRef.current?.focus();
+    },
+  }));
 
   const syncCursor = useCallback(() => {
     setCursor(inputRef.current?.selectionStart ?? value.length);
@@ -214,4 +243,5 @@ export function ChatMentionInput({
       />
     </div>
   );
-}
+  }
+);

@@ -46,7 +46,7 @@
 - Controls: existing Button/Input/Select/Textarea, upgraded with label association and focus-visible states
 - Briefing: `WorkspaceBrief` on the dashboard — recessed composer, status stamp, typewriter caret
 - Team roster: `/team` call sheet of members with department badges, presence, and open tasks
-- Chat: ticket-card split of rooms vs DMs; unread pills on the room list and app nav; Slack-style threads; pin/edit stamps; drafts stay in the composer when switching rooms; slash `/งาน` `/ลูกค้า` `/ดีล` `/help`
+- Chat: ticket-card split of rooms vs DMs; unread pills on the room list and app nav; Slack-style threads; pin/edit stamps; drafts stay in the composer when switching rooms; slash `/งาน` `/ลูกค้า` `/ดีล` `/help`; emoji picker on composer and message toolbar
 - Search/⌘K: one palette; results open the exact task, prospect, deal, or chat message
 - Notifications: the bell count is unread only
 - Sales prospects: category → region → province → court cards; never dump a full import as one grid

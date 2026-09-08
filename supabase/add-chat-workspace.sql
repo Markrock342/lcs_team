@@ -147,6 +147,21 @@ CREATE TRIGGER messages_restrict_update
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE channel_members TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE channel_reads TO authenticated;
 
+CREATE TABLE IF NOT EXISTS message_reactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  emoji TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(message_id, user_id, emoji)
+);
+CREATE INDEX IF NOT EXISTS idx_message_reactions_msg ON message_reactions(message_id);
+ALTER TABLE message_reactions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Team reactions" ON message_reactions;
+CREATE POLICY "Team reactions" ON message_reactions
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE message_reactions TO authenticated;
+
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE channel_members;
@@ -156,6 +171,12 @@ END $$;
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE channel_reads;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE message_reactions;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
