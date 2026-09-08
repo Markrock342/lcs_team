@@ -2,9 +2,13 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseEnv } from "@/lib/env";
 
+/** ต่ำกว่าเพดาน Vercel middleware — อย่าปล่อย getUser() ค้างจน 504 ทั้งเว็บ */
+const AUTH_FETCH_TIMEOUT_MS = 8000;
+
 const PROTECTED_PREFIXES = [
   "/dashboard",
   "/clients",
+  "/sales",
   "/tasks",
   "/schedule",
   "/chat",
@@ -28,26 +32,35 @@ function isPublic(pathname: string) {
   return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
+function hasAuthCookie(request: NextRequest) {
+  return request.cookies
+    .getAll()
+    .some((cookie) => cookie.name.includes("-auth-token") && Boolean(cookie.value));
+}
+
+function redirectTo(request: NextRequest, pathname: string) {
+  const url = request.nextUrl.clone();
+  url.pathname = pathname;
+  return NextResponse.redirect(url);
+}
+
 export async function updateSession(request: NextRequest) {
   const env = getSupabaseEnv();
   const pathname = request.nextUrl.pathname;
 
   // หน้า setup ถูกลบแล้ว — redirect เก่าไป login
   if (pathname === "/setup" || pathname.startsWith("/setup/")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return redirectTo(request, "/login");
   }
 
-  if (isPublic(pathname)) {
+  // API / หน้า public ไม่ต้องรอ Auth — กัน MIDDLEWARE_INVOCATION_TIMEOUT
+  if (pathname.startsWith("/api/") || isPublic(pathname)) {
     return NextResponse.next();
   }
 
-  if (!env) {
+  if (!env || !hasAuthCookie(request)) {
     if (pathname === "/" || isProtected(pathname)) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      return NextResponse.redirect(url);
+      return redirectTo(request, "/login");
     }
     return NextResponse.next();
   }
@@ -55,6 +68,13 @@ export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(env.url, env.key, {
+    global: {
+      fetch: (input, init) =>
+        fetch(input, {
+          ...init,
+          signal: AbortSignal.timeout(AUTH_FETCH_TIMEOUT_MS),
+        }),
+    },
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -71,26 +91,24 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user && isProtected(pathname)) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+  let user = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch {
+    // Auth ช้าหรือหลุด — ส่งไป login แทนการค้างจน Vercel ตัด 504
+    if (pathname === "/" || isProtected(pathname)) {
+      return redirectTo(request, "/login");
+    }
+    return supabaseResponse;
   }
 
-  if (user && pathname === "/login") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+  if (!user && isProtected(pathname)) {
+    return redirectTo(request, "/login");
   }
 
   if (pathname === "/") {
-    const url = request.nextUrl.clone();
-    url.pathname = user ? "/dashboard" : "/login";
-    return NextResponse.redirect(url);
+    return redirectTo(request, user ? "/dashboard" : "/login");
   }
 
   return supabaseResponse;

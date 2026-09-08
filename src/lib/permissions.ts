@@ -29,16 +29,22 @@ export const ROLE_PERMISSIONS: Record<TeamRole, Permission[]> = {
   ],
   backend: ["manage_tasks", "view_finance"],
   design: ["manage_tasks", "view_finance"],
-  // Guest = อ่านอย่างเดียว: ดูงาน/ลูกค้าได้ แชทได้ แต่แก้ไข/ลบ/สร้างไม่ได้ และดูการเงินทีมไม่ได้
+  sale: [
+    "manage_clients",
+    "manage_invoices",
+    "export_data",
+    "view_finance",
+  ],
   guest: [],
 };
 
 export const ROLE_DESCRIPTIONS: Record<TeamRole, string> = {
-  admin: "แอดมิน — สิทธิ์ครบทุกอย่าง รวม PM (จัดการทีม + ลูกค้า + งาน)",
-  pm: "PM — จัดการลูกค้า งาน ใบแจ้งหนี้ เทมเพลต (ไม่มีจัดการทีม)",
+  admin: "แอดมิน — สิทธิ์ครบ รวมจัดการทีม ลูกค้า และงาน",
+  pm: "PM — จัดการลูกค้า งาน ใบแจ้งหนี้ เทมเพลต",
   backend: "Backend — รับงาน dev/API ที่มอบหมาย",
   design: "Design/Frontend — รับงาน UI/UX ที่มอบหมาย",
-  guest: "Guest — ดูได้อย่างเดียว + แชท (แก้ไข/ลบ/สร้างไม่ได้ · ไม่เห็นการเงินทีม)",
+  sale: "Sale — ลีด ดีล ใบเสนอราคา และลูกค้า",
+  guest: "Guest — ดูได้อย่างเดียว + แชท ไม่เห็นการเงินทีม",
 };
 
 /** Role ที่ admin กำหนดให้สมาชิกได้ */
@@ -47,6 +53,7 @@ export const ASSIGNABLE_ROLES: TeamRole[] = [
   "pm",
   "backend",
   "design",
+  "sale",
   "guest",
 ];
 

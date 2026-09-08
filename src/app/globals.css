@@ -1,16 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: #050a14;
-  --foreground: #ffffff;
-  --card: #0a1628;
-  --card-hover: #0f1f38;
-  --border: #1a3050;
-  --accent: #00a3ff;
-  --accent-dim: #0088dd;
-  --accent-glow: rgba(0, 163, 255, 0.15);
-  --muted: #8bb4d9;
-  --sidebar: #060d18;
+  --background: #071018;
+  --foreground: #eef5fb;
+  --card: #0d1a28;
+  --card-hover: #132233;
+  --border: #24384c;
+  --accent: #2f9ed8;
+  --accent-dim: #1f7fb3;
+  --accent-glow: rgba(47, 158, 216, 0.12);
+  --muted: #9eb6c9;
+  --sidebar: #08131d;
+  --sale: #3dba9a;
+  --ink-soft: rgba(238, 245, 251, 0.06);
 }
 
 @theme inline {
@@ -23,6 +25,7 @@
   --color-accent-dim: var(--accent-dim);
   --color-muted: var(--muted);
   --color-sidebar: var(--sidebar);
+  --color-sale: var(--sale);
   --font-sans: var(--font-ibm-plex);
 }
 
@@ -34,6 +37,8 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-ibm-plex), system-ui, sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.55;
   -webkit-tap-highlight-color: transparent;
   overflow-x: hidden;
   overscroll-behavior-y: none;
@@ -70,17 +75,51 @@ html {
 
 .bg-brand-mesh {
   background:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 163, 255, 0.12), transparent),
-    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(0, 100, 200, 0.06), transparent),
+    radial-gradient(ellipse 70% 42% at 8% -10%, rgba(47, 158, 216, 0.14), transparent 58%),
+    radial-gradient(ellipse 50% 36% at 96% 108%, rgba(61, 186, 154, 0.08), transparent 55%),
     var(--background);
 }
 
 .border-brand {
-  border-color: rgba(0, 163, 255, 0.25);
+  border-color: color-mix(in oklab, var(--accent) 28%, var(--border));
 }
 
 .shadow-brand {
-  box-shadow: 0 0 40px rgba(0, 163, 255, 0.08), 0 4px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+}
+
+.ticket-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ticket-kicker::before {
+  content: "";
+  width: 1.35rem;
+  height: 1px;
+  background: color-mix(in oklab, var(--accent) 70%, white);
+}
+
+.ticket-rule {
+  height: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--border) 88%, white) 0 7px,
+    transparent 7px 12px
+  );
+}
+
+.ticket-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 1.15rem;
+  box-shadow: inset 0 1px 0 var(--ink-soft);
 }
 
 ::-webkit-scrollbar {
@@ -93,12 +132,12 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1a3050;
+  background: #2a4258;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #00a3ff44;
+  background: color-mix(in oklab, var(--accent) 40%, #2a4258);
 }
 
 input, select, textarea {
@@ -106,30 +145,30 @@ input, select, textarea {
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-fade-in {
-  animation: fade-in 0.3s ease-out;
+  animation: fade-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(16px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-slide-up {
-  animation: slide-up 0.4s ease-out;
+  animation: slide-up 0.32s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 20px rgba(0, 163, 255, 0.1); }
-  50% { box-shadow: 0 0 40px rgba(0, 163, 255, 0.2); }
+  0%, 100% { box-shadow: 0 0 16px rgba(47, 158, 216, 0.08); }
+  50% { box-shadow: 0 0 28px rgba(47, 158, 216, 0.14); }
 }
 
 .animate-pulse-glow {
-  animation: pulse-glow 3s ease-in-out infinite;
+  animation: pulse-glow 4s ease-in-out infinite;
 }
 
 @keyframes toast-in {
@@ -162,6 +201,16 @@ input, select, textarea {
   animation: toast-out 0.28s ease-in forwards;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-pulse-glow,
+  .animate-toast-in,
+  .animate-toast-out {
+    animation: none;
+  }
+}
+
 @media print {
   body * {
     visibility: hidden !important;
@@ -180,22 +229,23 @@ input, select, textarea {
   }
 }
 
-/* Light theme */
 [data-theme="light"] {
-  --background: #f0f4f8;
-  --foreground: #0a1628;
+  --background: #f3f6f8;
+  --foreground: #13202c;
   --card: #ffffff;
-  --card-hover: #e8eef4;
-  --border: #c5d5e8;
-  --accent: #0077cc;
-  --accent-dim: #005fa3;
-  --accent-glow: rgba(0, 119, 204, 0.12);
-  --muted: #5a7a9a;
-  --sidebar: #e8eef4;
+  --card-hover: #eaf0f4;
+  --border: #d3dee7;
+  --accent: #1b7eb3;
+  --accent-dim: #15658f;
+  --accent-glow: rgba(27, 126, 179, 0.1);
+  --muted: #5d7386;
+  --sidebar: #e7eef3;
+  --sale: #1f8f73;
+  --ink-soft: rgba(19, 32, 44, 0.04);
 }
 
 [data-theme="light"] .bg-brand-mesh {
   background:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 119, 204, 0.08), transparent),
+    radial-gradient(ellipse 70% 42% at 8% -10%, rgba(27, 126, 179, 0.08), transparent 58%),
     var(--background);
 }

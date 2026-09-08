@@ -32,75 +32,92 @@ export default function LoginPage() {
     setError("");
     setSuccess("");
 
-    const supabase = createClient();
-
-    if (mode === "login") {
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (authError) {
-        setError(getAuthErrorMessage(authError));
-        setLoading(false);
-        return;
-      }
-    } else {
-      const username = email.split("@")[0].toLowerCase();
-      const teamMember = TEAM.members.find((m) => m.username === username);
-      const { data, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: getAuthCallbackUrl(),
-          data: {
-            username,
-            display_name: teamMember?.displayName ?? username,
-            ...(teamMember ? { role: teamMember.role } : {}),
-          },
-        },
-      });
-
-      if (authError) {
-        setError(getAuthErrorMessage(authError));
-        setLoading(false);
-        return;
-      }
-
-      // ต้องยืนยันอีเมลก่อน (Supabase เปิด email confirm)
-      if (data.user && !data.session) {
-        setSuccess(
-          "สมัครสำเร็จ! กรุณาเช็คอีเมลเพื่อยืนยันบัญชี แล้วค่อยเข้าสู่ระบบ"
-        );
-        setLoading(false);
-        return;
-      }
+    let supabase;
+    try {
+      supabase = createClient();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "ยังไม่ได้ตั้งค่า Supabase"
+      );
+      setLoading(false);
+      return;
     }
 
-    router.push("/dashboard");
-    router.refresh();
+    try {
+      if (mode === "login") {
+        const { error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (authError) {
+          setError(getAuthErrorMessage(authError));
+          setLoading(false);
+          return;
+        }
+      } else {
+        const username = email.split("@")[0].toLowerCase();
+        const teamMember = TEAM.members.find((m) => m.username === username);
+        const { data, error: authError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: getAuthCallbackUrl(),
+            data: {
+              username,
+              display_name: teamMember?.displayName ?? username,
+              ...(teamMember ? { role: teamMember.role } : {}),
+            },
+          },
+        });
+
+        if (authError) {
+          setError(getAuthErrorMessage(authError));
+          setLoading(false);
+          return;
+        }
+
+        // ต้องยืนยันอีเมลก่อน (Supabase เปิด email confirm)
+        if (data.user && !data.session) {
+          setSuccess(
+            "สมัครสำเร็จ! กรุณาเช็คอีเมลเพื่อยืนยันบัญชี แล้วค่อยเข้าสู่ระบบ"
+          );
+          setLoading(false);
+          return;
+        }
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to fetch";
+      setError(
+        getAuthErrorMessage({
+          name: "AuthRetryableFetchError",
+          message,
+        })
+      );
+      setLoading(false);
+    }
   }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden bg-brand-mesh">
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl animate-pulse-glow" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#004080]/10 rounded-full blur-3xl" />
-
-      <div className="relative w-full max-w-md animate-fade-in">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center mb-4 animate-pulse-glow rounded-full">
-            <Logo size="xl" />
-          </div>
-          <p className="text-muted mt-1 text-sm tracking-wide">{TEAM.tagline}</p>
+      <div className="relative w-full max-w-[26rem] animate-fade-in">
+        <div className="mb-7">
+          <Logo size="lg" />
+          <p className="ticket-kicker mt-5">Limit Code Studio</p>
+          <h1 className="text-[1.7rem] font-semibold tracking-tight mt-2">
+            {mode === "login" ? "เข้าสู่ระบบ" : "สมัครสมาชิก"}
+          </h1>
+          <p className="text-muted text-sm mt-1.5">{TEAM.tagline}</p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="bg-card border border-brand rounded-2xl p-6 space-y-4 shadow-brand"
+          className="ticket-card p-6 space-y-4"
         >
-          <h2 className="text-lg font-semibold text-center">
-            {mode === "login" ? "เข้าสู่ระบบ" : "สมัครสมาชิก"}
-          </h2>
-
           {!supabaseConfigured && (
             <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm space-y-1">
               <p>

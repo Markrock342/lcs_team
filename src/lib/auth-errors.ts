@@ -10,14 +10,29 @@ const ERROR_MAP: Record<string, string> = {
     "รหัสผ่านไม่ถูกต้อง (อย่างน้อย 6 ตัวอักษร)",
 };
 
-export function getAuthErrorMessage(error: AuthError | null): string {
+type AuthLikeError = {
+  name?: string;
+  message?: string;
+  code?: string;
+  msg?: string;
+};
+
+function isNetworkFailure(raw: string, error: AuthLikeError) {
+  const blob = `${raw} ${error.name ?? ""} ${error.code ?? ""}`.toLowerCase();
+  return (
+    blob.includes("failed to fetch") ||
+    blob.includes("networkerror") ||
+    blob.includes("load failed") ||
+    blob.includes("fetch failed") ||
+    blob.includes("authretryablefetcherror")
+  );
+}
+
+export function getAuthErrorMessage(error: AuthError | AuthLikeError | null): string {
   if (!error) return "เกิดข้อผิดพลาด กรุณาลองใหม่";
 
-  const raw =
-    error.message ||
-    (error as AuthError & { msg?: string }).msg ||
-    error.code ||
-    "";
+  const like = error as AuthLikeError;
+  const raw = like.message || like.msg || like.code || "";
 
   if (ERROR_MAP[raw]) return ERROR_MAP[raw];
 
@@ -27,6 +42,10 @@ export function getAuthErrorMessage(error: AuthError | null): string {
 
   if (raw.includes("Database error")) {
     return ERROR_MAP["Database error saving new user"];
+  }
+
+  if (isNetworkFailure(raw, error)) {
+    return "ต่อกับฐานข้อมูลไม่ได้ — โปรเจกต์ Supabase ถูกหยุดหรือโดนลบ ไปที่ supabase.com/dashboard แล้วกด Restore";
   }
 
   return raw || "เกิดข้อผิดพลาด กรุณาลองใหม่";

@@ -1,6 +1,7 @@
 import type {
   ClientStatus,
   ProjectType,
+  SalesStage,
   TaskPriority,
   TaskStatus,
   TeamRole,
@@ -14,6 +15,7 @@ export const TEAM = {
     { username: "mark", displayName: "Mark", role: "pm" as TeamRole, title: "Project Manager" },
     { username: "knott", displayName: "Knott", role: "backend" as TeamRole, title: "Backend Developer" },
     { username: "bank", displayName: "Bank", role: "design" as TeamRole, title: "UX/UI & Frontend" },
+    { username: "sale", displayName: "Sale", role: "sale" as TeamRole, title: "Sales" },
   ],
 };
 
@@ -63,16 +65,42 @@ export const ROLE_LABELS: Record<TeamRole, string> = {
   pm: "PM",
   backend: "Backend",
   design: "Design/Frontend",
+  sale: "Sale",
   guest: "Guest",
 };
 
 export const ROLE_COLORS: Record<TeamRole, string> = {
   admin: "bg-red-500/20 text-red-300",
   pm: "bg-orange-500/20 text-orange-300",
-  backend: "bg-[#00a3ff]/20 text-[#00a3ff]",
+  backend: "bg-sky-500/20 text-sky-300",
   design: "bg-pink-500/20 text-pink-300",
+  sale: "bg-emerald-500/20 text-emerald-300",
   guest: "bg-zinc-500/20 text-zinc-300",
 };
+
+export const SALES_STAGE_LABELS: Record<SalesStage, string> = {
+  lead: "ลีดใหม่",
+  talking: "กำลังคุย",
+  quoted: "เสนอราคา",
+  won: "ปิดได้",
+  lost: "หลุด",
+};
+
+export const SALES_STAGE_COLORS: Record<SalesStage, string> = {
+  lead: "bg-sky-500/15 text-sky-200 border-sky-500/30",
+  talking: "bg-amber-500/15 text-amber-200 border-amber-500/30",
+  quoted: "bg-violet-500/15 text-violet-200 border-violet-500/30",
+  won: "bg-emerald-500/15 text-emerald-200 border-emerald-500/30",
+  lost: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30",
+};
+
+export const SALES_STAGES: SalesStage[] = [
+  "lead",
+  "talking",
+  "quoted",
+  "won",
+  "lost",
+];
 
 export const CLIENT_LINK_FIELDS = [
   { key: "repo_url", label: "Git Repo", placeholder: "https://github.com/..." },

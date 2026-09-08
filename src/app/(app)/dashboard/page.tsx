@@ -15,13 +15,14 @@ import {
   Calendar,
   PiggyBank,
   Wallet,
+  Handshake,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/RoleProvider";
 import { StatusBadge, Avatar, ProfileRoleBadges } from "@/components/ui";
 import { TaskCountdown } from "@/components/TaskCountdown";
-import { QuickActionGrid } from "@/components/mobile-ui";
-import { TEAM } from "@/lib/constants";
+import { PageHeader, QuickActionGrid } from "@/components/mobile-ui";
+import { TEAM, SALES_STAGE_LABELS } from "@/lib/constants";
 import { CLIENT_STATUS_LABELS } from "@/lib/constants";
 import {
   accountingTransactionToEntry,
@@ -30,7 +31,7 @@ import {
   summarizeAccounting,
 } from "@/lib/finance";
 import type { AccountingTransaction } from "@/lib/extras-types";
-import type { Task, Client, Profile } from "@/lib/types";
+import type { Task, Client, Profile, SalesStage } from "@/lib/types";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
 
@@ -48,20 +49,26 @@ export default function DashboardPage() {
       payments?: { amount: number }[] | null;
     }>
   >([]);
+  const [deals, setDeals] = useState<
+    Array<{
+      id: string;
+      title: string;
+      value: number | null;
+      stage: SalesStage;
+      next_follow_up: string | null;
+      client: { name: string } | null;
+    }>
+  >([]);
   const [loading, setLoading] = useState(true);
 
   function money(value: number) {
     return `฿${value.toLocaleString()}`;
   }
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
   async function loadData() {
     const supabase = createClient();
 
-    const [tasksRes, clientsRes, profilesRes, ledgerRes, invoicesRes] =
+    const [tasksRes, clientsRes, profilesRes, ledgerRes, invoicesRes, dealsRes] =
       await Promise.all([
       supabase
         .from("tasks")
@@ -80,6 +87,10 @@ export default function DashboardPage() {
       supabase
         .from("invoices")
         .select("status, total_amount, document_type, payments:invoice_payments(amount)"),
+      supabase
+        .from("sales_deals")
+        .select("id, title, value, stage, next_follow_up, client:clients(name)")
+        .order("updated_at", { ascending: false }),
     ]);
 
     setTasks(tasksRes.data ?? []);
@@ -87,8 +98,24 @@ export default function DashboardPage() {
     setProfiles(profilesRes.data ?? []);
     setTransactions((ledgerRes.data ?? []) as AccountingTransaction[]);
     setInvoices(invoicesRes.data ?? []);
+    setDeals(
+      (dealsRes.data ?? []).map((row) => ({
+        id: row.id,
+        title: row.title,
+        value: row.value,
+        stage: row.stage as SalesStage,
+        next_follow_up: row.next_follow_up,
+        client: Array.isArray(row.client) ? row.client[0] ?? null : row.client,
+      }))
+    );
     setLoading(false);
   }
+
+  useEffect(() => {
+    // Updates happen only after the remote requests resolve.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadData();
+  }, []);
 
   const pending = tasks.filter((t) => t.status === "pending");
   const waiting = tasks.filter((t) => t.status === "waiting");
@@ -109,42 +136,44 @@ export default function DashboardPage() {
       value: activeClients.length,
       href: "/clients",
       icon: Users,
-      card: "bg-gradient-to-br from-[#00a3ff]/20 via-[#00a3ff]/8 to-transparent border-[#00a3ff]/35",
-      iconBg: "bg-[#00a3ff]/25",
-      iconColor: "text-[#7dd3ff]",
-      valueColor: "text-[#7dd3ff]",
+      card: "ticket-card hover:border-accent/35",
+      iconBg: "bg-accent/15",
+      iconColor: "text-accent",
+      valueColor: "text-foreground",
     },
     {
       label: "งานกำลังทำ",
       value: inProgress.length,
       href: "/tasks?status=in_progress",
       icon: TrendingUp,
-      card: "bg-gradient-to-br from-emerald-500/20 via-emerald-500/8 to-transparent border-emerald-500/35",
-      iconBg: "bg-emerald-500/25",
+      card: "ticket-card hover:border-emerald-500/30",
+      iconBg: "bg-emerald-500/15",
       iconColor: "text-emerald-300",
-      valueColor: "text-emerald-300",
+      valueColor: "text-foreground",
     },
     {
       label: "รอดำเนินการ",
       value: waiting.length,
       href: "/tasks?status=waiting",
       icon: Clock,
-      card: "bg-gradient-to-br from-amber-500/20 via-amber-500/8 to-transparent border-amber-500/35",
-      iconBg: "bg-amber-500/25",
+      card: "ticket-card hover:border-amber-500/30",
+      iconBg: "bg-amber-500/15",
       iconColor: "text-amber-300",
-      valueColor: "text-amber-300",
+      valueColor: "text-foreground",
     },
     {
       label: "ยังไม่เริ่ม",
       value: pending.length,
       href: "/tasks?status=pending",
       icon: AlertTriangle,
-      card: "bg-gradient-to-br from-rose-500/20 via-rose-500/8 to-transparent border-rose-500/35",
-      iconBg: "bg-rose-500/25",
+      card: "ticket-card hover:border-rose-500/30",
+      iconBg: "bg-rose-500/15",
       iconColor: "text-rose-300",
-      valueColor: "text-rose-300",
+      valueColor: "text-foreground",
     },
   ];
+
+  const openDeals = deals.filter((d) => d.stage !== "won" && d.stage !== "lost");
 
   if (loading) {
     return (
@@ -156,10 +185,10 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 animate-fade-in max-w-lg mx-auto lg:max-w-4xl">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold">สวัสดี, ทีม {TEAM.shortName} 👋</h1>
-        <p className="text-muted mt-1 text-sm">กดทำสิ่งที่ต้องการได้เลย</p>
-      </div>
+      <PageHeader
+        title={`สวัสดี ทีม ${TEAM.shortName}`}
+        description="เลือกงานจากใบสั่งด้านล่าง — ขาย งาน และการเงินอยู่ที่เดียวกัน"
+      />
 
       <QuickActionGrid
         actions={[
@@ -167,25 +196,25 @@ export default function DashboardPage() {
             href: "/tasks",
             label: "ดูงาน",
             icon: <CheckSquare size={26} className="text-accent" />,
-            className: "border-accent/40 bg-accent/10 hover:bg-accent/15",
+            className: "border-accent/35 bg-card hover:bg-card-hover",
+          },
+          {
+            href: "/sales",
+            label: "งานขาย",
+            icon: <Handshake size={26} className="text-emerald-300" />,
+            className: "border-emerald-500/35 bg-card hover:bg-card-hover",
           },
           {
             href: "/finance?income=1",
             label: "รับเงิน",
-            icon: <ArrowDownLeft size={26} className="text-emerald-300" />,
-            className: "border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/15",
-          },
-          {
-            href: "/finance?pay=1",
-            label: "จ่ายเพื่อน",
-            icon: <ArrowUpRight size={26} className="text-rose-300" />,
-            className: "border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/15",
+            icon: <ArrowDownLeft size={26} className="text-sky-300" />,
+            className: "border-sky-500/35 bg-card hover:bg-card-hover",
           },
           {
             href: "/clients",
             label: "ลูกค้า",
-            icon: <Users size={26} className="text-[#7dd3ff]" />,
-            className: "border-[#00a3ff]/35 bg-[#00a3ff]/10 hover:bg-[#00a3ff]/15",
+            icon: <Users size={26} className="text-muted" />,
+            className: "border-border bg-card hover:bg-card-hover",
           },
         ]}
       />
@@ -195,7 +224,7 @@ export default function DashboardPage() {
           <Link
             key={s.label}
             href={s.href}
-            className={`border rounded-2xl p-4 transition-all active:scale-[0.98] touch-manipulation ${s.card}`}
+            className={`rounded-2xl p-4 transition-colors active:scale-[0.98] touch-manipulation ${s.card}`}
           >
             <div className={`w-10 h-10 rounded-xl ${s.iconBg} flex items-center justify-center mb-3`}>
               <s.icon className={s.iconColor} size={20} />
@@ -207,8 +236,8 @@ export default function DashboardPage() {
       </div>
 
       {canViewFinance && (
-      <section className="bg-card border border-amber-500/25 rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-amber-500/15 bg-amber-500/5">
+      <section className="ticket-card overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h2 className="font-semibold text-sm flex items-center gap-2">
             <Wallet size={16} className="text-amber-300" />
             บัญชี {monthLabel}
@@ -272,8 +301,48 @@ export default function DashboardPage() {
       </section>
       )}
 
-      <section className="bg-card border border-[#00a3ff]/25 rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#00a3ff]/15 bg-[#00a3ff]/5">
+      <section className="ticket-card overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h2 className="font-semibold text-sm flex items-center gap-2">
+            <Handshake size={16} className="text-emerald-300" />
+            งานขายที่ต้องตาม
+          </h2>
+          <Link href="/sales" className="text-xs text-accent flex items-center gap-1 touch-manipulation">
+            ดูท่อขาย <ArrowRight size={12} />
+          </Link>
+        </div>
+        <div className="divide-y divide-border">
+          {openDeals.slice(0, 4).map((deal) => (
+            <Link
+              key={deal.id}
+              href="/sales"
+              className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-card-hover touch-manipulation"
+            >
+              <div className="min-w-0">
+                <p className="font-medium text-sm truncate">{deal.title}</p>
+                <p className="text-xs text-muted truncate">
+                  {deal.client?.name ?? "ยังไม่ผูกลูกค้า"}
+                  {deal.next_follow_up ? ` · นัด ${deal.next_follow_up}` : ""}
+                </p>
+              </div>
+              <span className="text-[11px] px-2 py-0.5 rounded-full border border-border text-muted shrink-0">
+                {SALES_STAGE_LABELS[deal.stage]}
+              </span>
+            </Link>
+          ))}
+          {openDeals.length === 0 && (
+            <div className="px-4 py-8 text-center space-y-3">
+              <p className="text-sm text-muted">ยังไม่มีดีลที่กำลังคุย</p>
+              <Link href="/sales" className="inline-flex items-center gap-1 text-sm text-accent">
+                <Plus size={14} /> เพิ่มดีล
+              </Link>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="ticket-card overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h2 className="font-semibold text-sm flex items-center gap-2">
             <CheckSquare size={16} className="text-accent" />
             งานที่ต้องทำ
@@ -323,8 +392,8 @@ export default function DashboardPage() {
       </section>
 
       <div className="grid lg:grid-cols-2 gap-4">
-        <section className="bg-card border border-violet-500/25 rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-violet-500/15 bg-violet-500/5">
+        <section className="ticket-card overflow-hidden">
+          <div className="px-4 py-3 border-b border-border">
             <h2 className="font-semibold text-sm flex items-center gap-2">
               <Users size={16} className="text-violet-400" />
               ทีมงาน
@@ -365,8 +434,8 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="bg-card border border-emerald-500/25 rounded-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-emerald-500/15 bg-emerald-500/5">
+        <section className="ticket-card overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <h2 className="font-semibold text-sm">ลูกค้าล่าสุด</h2>
             <Link href="/clients" className="text-xs text-accent flex items-center gap-1">
               ดูทั้งหมด <ArrowRight size={12} />
@@ -404,7 +473,7 @@ export default function DashboardPage() {
 
       <Link
         href="/schedule"
-        className="flex items-center justify-between p-4 rounded-2xl border border-border bg-card hover:border-accent/30 active:bg-card-hover touch-manipulation"
+        className="flex items-center justify-between p-4 rounded-2xl ticket-card hover:border-accent/30 active:bg-card-hover touch-manipulation"
       >
         <div className="flex items-center gap-3">
           <Calendar size={20} className="text-accent" />

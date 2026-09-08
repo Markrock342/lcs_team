@@ -30,7 +30,7 @@ export default function MorePage() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex items-center gap-4 p-4 bg-card border border-border rounded-2xl hover:border-accent/30 active:bg-card-hover transition-all touch-manipulation"
+                className="flex items-center gap-4 p-4 ticket-card hover:border-accent/30 active:bg-card-hover transition-colors touch-manipulation"
               >
                 <div
                   className={`w-10 h-10 rounded-xl bg-background border border-border flex items-center justify-center ${item.color ?? "text-accent"}`}

@@ -1,4 +1,6 @@
-export type TeamRole = "admin" | "pm" | "backend" | "design" | "guest";
+export type TeamRole = "admin" | "pm" | "backend" | "design" | "sale" | "guest";
+
+export type SalesStage = "lead" | "talking" | "quoted" | "won" | "lost";
 
 export type TaskStatus =
   | "pending"
@@ -37,6 +39,26 @@ export interface Profile {
   bank_account_number?: string | null;
   bank_account_name?: string | null;
   created_at: string;
+}
+
+export interface SalesDeal {
+  id: string;
+  title: string;
+  client_id: string | null;
+  company: string | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  value: number | null;
+  stage: SalesStage;
+  owner_id: string | null;
+  notes: string | null;
+  next_follow_up: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  client?: Client | null;
+  owner?: Profile | null;
 }
 
 export interface Client {

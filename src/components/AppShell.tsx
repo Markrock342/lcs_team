@@ -17,6 +17,36 @@ import { RoleProvider } from "./RoleProvider";
 import { canViewFinance } from "@/lib/permissions";
 import type { Profile } from "@/lib/types";
 
+function NavLinks({
+  items,
+  pathname,
+}: {
+  items: typeof MAIN_NAV;
+  pathname: string;
+}) {
+  return (
+    <>
+      {items.map(({ href, label, icon: Icon }) => {
+        const active = isNavActive(pathname, href);
+        return (
+          <Link
+            key={href}
+            href={href}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+              active
+                ? "bg-accent/10 text-foreground border-l-2 border-accent pl-[10px]"
+                : "text-muted hover:text-foreground hover:bg-card-hover border-l-2 border-transparent pl-[10px]"
+            }`}
+          >
+            <Icon size={20} />
+            {label}
+          </Link>
+        );
+      })}
+    </>
+  );
+}
+
 export function AppShell({
   profile,
   children,
@@ -66,28 +96,6 @@ export function AppShell({
     router.refresh();
   }
 
-  const NavLinks = ({ items }: { items: typeof MAIN_NAV }) => (
-    <>
-      {items.map(({ href, label, icon: Icon }) => {
-        const active = isNavActive(pathname, href);
-        return (
-          <Link
-            key={href}
-            href={href}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-              active
-                ? "bg-accent/15 text-accent"
-                : "text-zinc-400 hover:text-foreground hover:bg-card-hover"
-            }`}
-          >
-            <Icon size={20} />
-            {label}
-          </Link>
-        );
-      })}
-    </>
-  );
-
   return (
     <RoleProvider profile={profile}>
     <div className="flex min-h-screen min-h-[100dvh]">
@@ -97,17 +105,22 @@ export function AppShell({
         </Suspense>
       )}
       <aside className="hidden lg:flex flex-col w-64 bg-sidebar border-r border-brand fixed inset-y-0 left-0 overflow-y-auto">
-        <div className="p-5 border-b border-brand">
-          <div className="flex flex-col items-center gap-2 py-2">
-            <Logo size="md" />
-            <p className="text-[10px] text-muted tracking-widest uppercase">Team Workspace</p>
+        <div className="p-5 border-b border-border">
+          <div className="flex items-center gap-3">
+            <Logo size="sm" />
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                LCS Studio
+              </p>
+              <p className="text-sm font-semibold tracking-tight">Team Workspace</p>
+            </div>
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1">
-          <NavLinks items={mainNav} />
+          <NavLinks items={mainNav} pathname={pathname} />
           <div className="pt-3 mt-3 border-t border-border">
-            <p className="px-3 py-1 text-[10px] text-muted uppercase tracking-wider">เพิ่มเติม</p>
-            <NavLinks items={extraNav} />
+            <p className="px-3 py-1 text-[10px] text-muted uppercase tracking-[0.16em] font-semibold">เพิ่มเติม</p>
+            <NavLinks items={extraNav} pathname={pathname} />
           </div>
         </nav>
         {profile && (
@@ -129,7 +142,7 @@ export function AppShell({
         )}
       </aside>
 
-      <header className="lg:hidden fixed top-0 inset-x-0 z-40 bg-sidebar/95 backdrop-blur-md border-b border-brand pt-safe">
+      <header className="lg:hidden fixed top-0 inset-x-0 z-40 bg-sidebar/95 backdrop-blur-md border-b border-border pt-safe">
         <div className="flex items-center justify-between gap-2 px-3 h-14 max-w-[100vw]">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <Logo size="xs" />
@@ -180,7 +193,7 @@ export function AppShell({
             : "overflow-x-hidden"
         }`}
       >
-        <div className="hidden lg:flex shrink-0 items-center justify-end gap-2 px-6 py-3 border-b border-border">
+        <div className="hidden lg:flex shrink-0 items-center justify-end gap-2 px-6 py-3 border-b border-border bg-sidebar/40">
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
@@ -213,7 +226,7 @@ export function AppShell({
         </div>
       </main>
 
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-sidebar/95 backdrop-blur-md border-t border-brand pb-safe">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-sidebar/95 backdrop-blur-md border-t border-border pb-safe">
         <div className="flex items-stretch justify-around min-h-16 px-1">
           {mobileNav.map(({ href, label, icon: Icon }) => {
             const active = isNavActive(pathname, href);

@@ -15,6 +15,7 @@ import {
   Bell,
   Clock,
   Search,
+  Handshake,
 } from "lucide-react";
 
 export type NavItem = {
@@ -31,6 +32,7 @@ export const MAIN_NAV: NavItem[] = [
   { href: "/dashboard", label: "ภาพรวม", icon: LayoutDashboard },
   { href: "/tasks", label: "งาน", icon: CheckSquare, desc: "งานใหญ่ · งานย่อย · Kanban" },
   { href: "/clients", label: "ลูกค้า", icon: Users, desc: "ข้อมูลลูกค้า · Portal" },
+  { href: "/sales", label: "ขาย", icon: Handshake, desc: "ลีด · ดีล · ปิดการขาย", color: "text-emerald-400" },
   { href: "/finance", label: "การเงิน", icon: CircleDollarSign, desc: "รับเงิน · จ่ายทีม · สรุป", color: "text-sky-400" },
   { href: "/chat", label: "แชททีม", icon: MessageCircle, desc: "แชทกลุ่มทีม" },
 ];
@@ -59,6 +61,10 @@ export const MOBILE_NAV: NavItem[] = [
 
 /** กลุ่มเมนูในหน้า More */
 export const MORE_SECTIONS: { title: string; items: NavItem[] }[] = [
+  {
+    title: "ขาย",
+    items: MAIN_NAV.filter((n) => ["/clients", "/sales"].includes(n.href)),
+  },
   {
     title: "งาน",
     items: EXTRA_NAV.filter((n) =>

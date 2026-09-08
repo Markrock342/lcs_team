@@ -167,11 +167,11 @@ export function Input({
   return (
     <div className="space-y-1.5">
       {label && (
-        <label className="block text-sm font-medium text-zinc-300">{label}</label>
+        <label className="block text-sm font-medium text-muted">{label}</label>
       )}
       <input
         {...props}
-        className={`w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all ${props.className ?? ""}`}
+        className={`w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm placeholder:text-muted/70 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors ${props.className ?? ""}`}
       />
     </div>
   );
@@ -185,7 +185,7 @@ export function Select({
   return (
     <div className="space-y-1.5">
       {label && (
-        <label className="block text-sm font-medium text-zinc-300">{label}</label>
+        <label className="block text-sm font-medium text-muted">{label}</label>
       )}
       <select
         {...props}
@@ -204,7 +204,7 @@ export function Textarea({
   return (
     <div className="space-y-1.5">
       {label && (
-        <label className="block text-sm font-medium text-zinc-300">{label}</label>
+        <label className="block text-sm font-medium text-muted">{label}</label>
       )}
       <textarea
         {...props}
@@ -225,7 +225,7 @@ export function Button({
 }) {
   const variants = {
     primary:
-      "bg-accent hover:bg-accent-dim text-white font-semibold shadow-lg shadow-accent/25",
+      "bg-accent hover:bg-accent-dim text-white font-semibold shadow-sm",
     secondary:
       "bg-card hover:bg-card-hover border border-border text-foreground",
     danger: "bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30",

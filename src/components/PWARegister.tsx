@@ -40,10 +40,6 @@ export function PWARegister() {
       }
     }
 
-    if (process.env.NODE_ENV === "production") {
-      fetch("/api/cron/reminders").catch(() => {});
-    }
-
     navigator.serviceWorker?.addEventListener("message", (event) => {
       if (event.data?.link) router.push(event.data.link);
     });

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 import { ALL_APP_PATHS } from "@/lib/nav";
 
@@ -76,16 +77,52 @@ interface PageHeaderProps {
   title: string;
   description?: string;
   action?: React.ReactNode;
+  kicker?: string;
 }
 
-/** หัวหน้าเพจ — ปุ่มเต็มความกว้างบนมือถือ */
-export function PageHeader({ title, description, action }: PageHeaderProps) {
+const PAGE_KICKERS: { match: string; kicker: string }[] = [
+  { match: "/sales", kicker: "แผนกขาย · Pipeline" },
+  { match: "/clients", kicker: "ลูกค้า · Accounts" },
+  { match: "/tasks", kicker: "งาน · Board" },
+  { match: "/finance", kicker: "การเงิน · Ledger" },
+  { match: "/chat", kicker: "ทีม · Chat" },
+  { match: "/schedule", kicker: "ตาราง · Calendar" },
+  { match: "/time-reports", kicker: "เวลา · Hours" },
+  { match: "/search", kicker: "ค้นหา · Index" },
+  { match: "/invoices", kicker: "เอกสาร · Docs" },
+  { match: "/payouts", kicker: "บัญชีทีม · Pay" },
+  { match: "/templates", kicker: "เทมเพลต · Kit" },
+  { match: "/notifications", kicker: "แจ้งเตือน · Inbox" },
+  { match: "/activity", kicker: "ประวัติ · Log" },
+  { match: "/settings", kicker: "ตั้งค่า · System" },
+  { match: "/more", kicker: "เมนู · More" },
+  { match: "/dashboard", kicker: "โต๊ะงาน · Desk" },
+];
+
+function kickerForPath(pathname: string) {
+  const found = PAGE_KICKERS.find(
+    (item) => pathname === item.match || pathname.startsWith(item.match + "/")
+  );
+  return found?.kicker ?? "LCS · Workspace";
+}
+
+/** หัวหน้าเพจแบบใบงาน — อ่านง่าย ปุ่มเต็มความกว้างบนมือถือ */
+export function PageHeader({ title, description, action, kicker }: PageHeaderProps) {
+  const pathname = usePathname();
+  const stamp = kicker ?? kickerForPath(pathname);
+
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold">{title}</h1>
+        <p className="ticket-kicker">{stamp}</p>
+        <div className="ticket-rule mt-2 mb-3" />
+        <h1 className="text-[1.65rem] sm:text-[1.85rem] font-semibold tracking-tight leading-tight">
+          {title}
+        </h1>
         {description && (
-          <p className="text-muted mt-1 text-sm">{description}</p>
+          <p className="text-muted mt-1.5 text-sm leading-relaxed max-w-2xl">
+            {description}
+          </p>
         )}
       </div>
       {action && (
