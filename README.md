@@ -147,6 +147,14 @@ npm run dev
 
 เปิด [http://localhost:3000](http://localhost:3000)
 
+### 8. ตรวจโค้ดก่อน Deploy
+
+```bash
+npm run validate
+```
+
+Vercel ใช้ `npm run validate && npm run build` เป็น Build Command ดังนั้นทุก Preview และ Production deployment ต้องผ่าน Unit Test, TypeScript และ ESLint ก่อน Build จึงไม่พึ่ง GitHub Actions สำหรับการตรวจโค้ดพื้นฐาน
+
 ## Tech Stack
 
 - **Next.js 16** (App Router)

@@ -11,6 +11,7 @@
     "postbuild": "node scripts/migrate-team-engineering.mjs",
     "start": "next start",
     "test": "node --experimental-strip-types --test scripts/tests/*.test.ts",
+    "validate": "npm test && npx tsc --noEmit && npm run lint",
     "prelint": "npm run clean:appledouble",
     "lint": "eslint"
   },

@@ -30,7 +30,7 @@ LCS_MCP_ROLE_GUARD_VERIFIED=true
 2. ยืนยันว่าการสมัครใหม่ผ่าน `src/app/auth/callback/route.ts` สร้าง Role เป็น `guest` และผู้ใช้แก้ Role ตัวเองผ่าน API ไม่ได้
 3. ทดสอบด้วยข้อมูลสังเคราะห์: admin/pm สร้างได้, Role อื่นสร้างไม่ได้, Project/Assignee ปลอมถูกปฏิเสธ
 4. ตรวจ Audit log และยืนยันว่าไม่มีรายละเอียดงานหรือ Secret ถูกคัดลอกเกินจำเป็น
-5. รัน `npm test`, `npx tsc --noEmit`, `npm run lint` และ `npm run build`
+5. ตรวจว่า Vercel Preview ผ่าน `npm run validate && npm run build` และมีสถานะ Ready
 6. Review และอนุมัติการเปิดเขียนแยกจากการอนุมัติ Merge จากนั้นจึงตั้ง Flag บน Vercel Production และ Redeploy
 7. เปิดหน้า OAuth consent อีกครั้งและปรับข้อความสิทธิ์ให้ตรงกับเครื่องมือเขียนก่อนให้สมาชิกเชื่อมใหม่
 
