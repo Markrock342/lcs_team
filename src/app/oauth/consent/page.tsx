@@ -117,7 +117,7 @@ export default function OAuthConsentPage() {
                     { icon: FolderKanban, text: "อ่านโปรเจกต์และงานที่เกี่ยวข้องกับบัญชีคุณ" },
                     { icon: MessageSquareText, text: "อ่านข้อความในช่องทีมที่คุณมีสิทธิ์เข้าถึง" },
                     { icon: Code2, text: "อ่าน source code จาก repository ที่ LCS อนุญาต" },
-                    { icon: ShieldCheck, text: "ใช้งานแบบ read-only พร้อมบันทึก audit log" },
+                    { icon: ShieldCheck, text: "Admin/PM สร้างงานได้หลังยืนยันงานนั้นโดยชัดเจน พร้อมบันทึก audit log" },
                   ].map(({ icon: Icon, text }) => (
                     <div key={text} className="flex min-h-14 items-center gap-3 py-3">
                       <Icon size={18} className="shrink-0 text-accent" />
@@ -140,7 +140,7 @@ export default function OAuthConsentPage() {
               </div>
 
               <div className="rounded-xl bg-(--status-amber-bg) p-4 text-sm leading-relaxed text-(--status-amber-fg)">
-                Connector นี้ไม่มีเครื่องมือแก้โค้ด ส่งข้อความ merge หรือ deploy คุณยกเลิกสิทธิ์ภายหลังได้จาก Supabase Auth grants
+                Connector นี้ไม่มีเครื่องมือแก้หรือลบงาน ส่งข้อความ แก้โค้ด merge หรือ deploy คุณยกเลิกสิทธิ์ภายหลังได้จาก Supabase Auth grants
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
