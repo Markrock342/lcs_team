@@ -27,3 +27,7 @@ Test 401 missing/invalid/expired/wrong-client token, 403 non-admin, correct RLS,
 pagination limits, zero mutations, invalid JSON, no sensitive output, valid initialize,
 tools/list and tools/call. Do not connect tests to production.
 A GitHub branch push may trigger Vercel Preview deployment if auto-deploy is enabled.
+
+## Additive write proposal (NOT enabled)
+See [MCP_CREATE_TASK.md](./MCP_CREATE_TASK.md) for the stacked create_task Draft PR.
+Production task writes are disabled by default, even for admin/PM. Phase 1 security and OAuth blockers remain open.
