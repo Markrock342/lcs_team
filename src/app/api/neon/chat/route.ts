@@ -79,6 +79,29 @@ export async function GET(request: Request) {
       );
       return NextResponse.json({ channels: rows });
     }
+    if (mode === "sidebar") {
+      const [channels, unread] = await Promise.all([
+        queryNeon(
+          `SELECT c.* FROM public.channels c WHERE ${ACCESS_SQL} ORDER BY c.created_at`,
+          [userId],
+        ),
+        queryNeon<{ channel_id: string; count: number }>(
+          `SELECT c.id AS channel_id, count(m.id)::int AS count
+           FROM public.channels c
+           LEFT JOIN public.channel_reads cr ON cr.channel_id = c.id AND cr.user_id = $1
+           LEFT JOIN public.messages m ON m.channel_id = c.id AND m.sender_id <> $1
+             AND m.deleted_at IS NULL AND m.thread_id IS NULL
+             AND (cr.last_read_at IS NULL OR m.created_at > cr.last_read_at)
+           WHERE ${ACCESS_SQL}
+           GROUP BY c.id`,
+          [userId],
+        ),
+      ]);
+      return NextResponse.json({
+        channels: channels.rows,
+        counts: Object.fromEntries(unread.rows.map((row) => [row.channel_id, row.count])),
+      });
+    }
     if (mode === "messages") {
       const channelId = uuid(url.searchParams.get("channelId"));
       if (!channelId) return NextResponse.json({ error: "รหัสช่องไม่ถูกต้อง" }, { status: 400 });

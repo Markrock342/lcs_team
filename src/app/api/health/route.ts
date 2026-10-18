@@ -4,6 +4,7 @@ import { getGeminiKey } from "@/lib/gemini";
 import { getSupabaseEnv } from "@/lib/env";
 import { getVapidKeys } from "@/lib/push-server";
 import { getNeonHealthSnapshot, isNeonConfigured, queryNeon } from "@/lib/neon/server";
+import { getOpenAIConfig } from "@/lib/openai";
 
 type Check = {
   id: string;
@@ -74,6 +75,9 @@ export async function GET() {
     ["time_entries", "เวลาทำงาน", "ตรวจ schema ใน Neon"],
     ["task_templates", "เทมเพลตงาน", "ตรวจ schema ใน Neon"],
     ["push_subscriptions", "Push subscriptions", "ตรวจ schema ใน Neon"],
+    ["ai_conversations", "ประวัติ LCS Assistant", "รัน scripts/neon-team-engineering-workspace.sql บน Neon"],
+    ["ai_messages", "ข้อความ LCS Assistant", "รัน scripts/neon-team-engineering-workspace.sql บน Neon"],
+    ["mcp_audit_logs", "ChatGPT connector audit log", "รัน scripts/neon-team-engineering-workspace.sql บน Neon"],
   ] as const;
 
   for (const [table, label, fix] of tables) {
@@ -107,6 +111,24 @@ export async function GET() {
     ok: Boolean(getGeminiKey()),
     detail: getGeminiKey() ? "พบ GEMINI_API_KEY" : "ยังไม่มีคีย์ Google AI Studio",
     fix: "ใส่ GEMINI_API_KEY ใน environment ของเซิร์ฟเวอร์ อย่าใส่ใน NEXT_PUBLIC_",
+  });
+
+  const openai = getOpenAIConfig();
+  checks.push({
+    id: "openai",
+    label: "LCS Assistant (OpenAI)",
+    ok: Boolean(openai.key),
+    detail: openai.key ? `พร้อมใช้โมเดล ${openai.model}` : "ยังไม่มี OPENAI_API_KEY",
+    fix: "ใส่ OPENAI_API_KEY ใน environment ของเซิร์ฟเวอร์ อย่าใส่ใน NEXT_PUBLIC_",
+  });
+
+  const githubReadToken = process.env.GITHUB_READ_TOKEN?.trim() || process.env.GITHUB_TOKEN?.trim();
+  checks.push({
+    id: "github-code",
+    label: "GitHub Code Workspace",
+    ok: Boolean(githubReadToken),
+    detail: githubReadToken ? "พบ token สำหรับอ่าน repository" : "ยังไม่มี GitHub read token (public repository ยังเปิดได้)",
+    fix: "สร้าง fine-grained token เฉพาะ repository โดยให้ Contents: Read-only แล้วตั้ง GITHUB_READ_TOKEN",
   });
 
   const gmail = Boolean(

@@ -7,10 +7,10 @@ import { MORE_SECTIONS, filterNavByAccess } from "@/lib/nav";
 import { useRole } from "@/components/RoleProvider";
 
 export default function MorePage() {
-  const { canViewFinance } = useRole();
+  const { canViewFinance, isGuest } = useRole();
   const sections = MORE_SECTIONS.map((section) => ({
     ...section,
-    items: filterNavByAccess(section.items, { canViewFinance }),
+    items: filterNavByAccess(section.items, { canViewFinance, isGuest }),
   })).filter((section) => section.items.length > 0);
 
   return (

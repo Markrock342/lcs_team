@@ -1,49 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { neonRequest } from "@/lib/neon/client";
-import type { Channel } from "@/lib/types";
-import {
-  CHAT_UNREAD_EVENT,
-  fetchUnreadCounts,
-} from "@/lib/chat-workspace";
+import { CHAT_UNREAD_EVENT } from "@/lib/chat-workspace";
+import { useVisiblePolling } from "@/hooks/useVisiblePolling";
 
 export function useChatUnreadTotal() {
   const pathname = usePathname();
   const [total, setTotal] = useState(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    const supabase = createClient();
+  const isChatPage = pathname === "/chat";
 
-    async function refresh() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-      const { channels } = await neonRequest<{ channels: Channel[] }>("/api/neon/chat?mode=channels", { cache: "no-store" });
-      const ids = channels.map((row) => row.id);
-      const counts = await fetchUnreadCounts(supabase, user.id, ids);
-      if (!cancelled) {
-        setTotal(Object.values(counts).reduce((sum, n) => sum + n, 0));
-      }
+  const refresh = useCallback(async () => {
+    if (isChatPage) return;
+    try {
+      const { counts } = await neonRequest<{ counts: Record<string, number> }>(
+        "/api/neon/chat?mode=sidebar",
+        { cache: "no-store" },
+      );
+      setTotal(Object.values(counts).reduce((sum, n) => sum + n, 0));
+    } catch {
+      // Keep the last known badge count during transient network failures.
     }
+  }, [isChatPage]);
 
-    void refresh();
+  useVisiblePolling(refresh, 30_000, { enabled: !isChatPage });
+
+  useEffect(() => {
+    if (isChatPage) return;
     function onLocal() {
       void refresh();
     }
     window.addEventListener(CHAT_UNREAD_EVENT, onLocal);
-    const tick = window.setInterval(() => void refresh(), 10_000);
-
     return () => {
-      cancelled = true;
       window.removeEventListener(CHAT_UNREAD_EVENT, onLocal);
-      window.clearInterval(tick);
     };
-  }, [pathname]);
+  }, [isChatPage, refresh]);
 
   return total;
 }

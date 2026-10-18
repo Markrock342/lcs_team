@@ -221,19 +221,19 @@ export async function parseSpreadsheet(
   file: File
 ): Promise<{ headers: string[]; rows: string[][]; sheetName: string; headerRow: number }> {
   const name = file.name.toLowerCase();
-  if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
-    const XLSX = await import("xlsx");
-    const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: "array" });
-    const sheetName = pickSheetName(workbook.SheetNames);
-    const sheet = workbook.Sheets[sheetName];
-    const matrix = asMatrix(
-      XLSX.utils.sheet_to_json<string[]>(sheet, {
-        header: 1,
-        raw: false,
-        defval: "",
-      })
-    );
+  if (name.endsWith(".xls")) {
+    throw new Error("ไฟล์ .xls รุ่นเก่าไม่รองรับแล้ว กรุณา Save As เป็น .xlsx หรือ .csv ก่อนนำเข้า");
+  }
+  if (name.endsWith(".xlsx")) {
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error("ไฟล์ Excel ต้องมีขนาดไม่เกิน 10 MB");
+    }
+    const { default: readExcelFile } = await import("read-excel-file/browser");
+    const sheets = await readExcelFile(file);
+    const sheetName = pickSheetName(sheets.map((item) => item.sheet));
+    const sheet = sheets.find((item) => item.sheet === sheetName) ?? sheets[0];
+    if (!sheet) throw new Error("ไม่พบชีตในไฟล์ Excel");
+    const matrix = asMatrix(sheet.data);
     const table = tableFromMatrix(matrix);
     return { ...table, sheetName, headerRow: table.headerIndex + 1 };
   }

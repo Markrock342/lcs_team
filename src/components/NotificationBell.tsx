@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AtSign, Bell, CheckSquare, Handshake, MessageCircle, Receipt } from "lucide-react";
 import { neonRequest } from "@/lib/neon/client";
+import { useVisiblePolling } from "@/hooks/useVisiblePolling";
 import { getChatChannelIdFromLink } from "@/lib/channels";
 import {
   inferNotificationKind,
@@ -48,15 +49,7 @@ export function NotificationBell() {
     }
   }, []);
 
-  useEffect(() => {
-    // Initial state is populated after the asynchronous API request resolves.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
-    const interval = setInterval(load, 10_000);
-    return () => {
-      clearInterval(interval);
-    };
-  }, [load]);
+  useVisiblePolling(load, 30_000);
 
   useEffect(() => {
     if (!activeChatChannelId) return;

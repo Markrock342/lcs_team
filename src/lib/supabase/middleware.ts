@@ -12,6 +12,8 @@ const PROTECTED_PREFIXES = [
   "/tasks",
   "/schedule",
   "/chat",
+  "/code",
+  "/assistant",
   "/finance",
   "/invoices",
   "/payouts",
@@ -21,6 +23,7 @@ const PROTECTED_PREFIXES = [
   "/team",
   "/templates",
   "/more",
+  "/oauth/consent",
 ];
 
 const PUBLIC_PREFIXES = ["/login", "/portal", "/auth", "/sw.js", "/manifest.json", "/clear-sw.html"];
@@ -109,7 +112,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (pathname === "/") {
-    return redirectTo(request, user ? "/dashboard" : "/login");
+    return redirectTo(request, user ? "/today" : "/login");
   }
 
   return supabaseResponse;

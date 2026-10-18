@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { AtSign, Bell, CheckSquare, Handshake, MessageCircle, Receipt } from "lucide-react";
 import { neonRequest } from "@/lib/neon/client";
@@ -16,6 +16,7 @@ import {
   StatusStamp,
 } from "@/components/ui";
 import { inferNotificationKind, type NotificationKind } from "@/lib/notifications";
+import { useVisiblePolling } from "@/hooks/useVisiblePolling";
 import { inboxActionsFor } from "@/lib/inbox-actions";
 import type { AppNotification } from "@/lib/extras-types";
 import { formatDistanceToNow } from "date-fns";
@@ -62,11 +63,7 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void load();
-    const interval = setInterval(load, 10_000);
-    return () => clearInterval(interval);
-  }, []);
+  useVisiblePolling(load, 30_000);
 
   async function load() {
     setError(null);

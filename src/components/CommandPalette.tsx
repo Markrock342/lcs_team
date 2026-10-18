@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  Bot,
   CheckSquare,
   CircleDollarSign,
+  Code2,
   Handshake,
   MessageCircle,
   Plus,
@@ -32,6 +34,8 @@ const ICONS = {
 };
 
 const QUICK_CREATE = [
+  { href: "/assistant", label: "ถาม LCS Assistant", icon: Bot },
+  { href: "/code", label: "เปิด Code Workspace", icon: Code2 },
   { href: "/tasks?create=1", label: "สร้างงาน", icon: CheckSquare },
   { href: "/clients?create=1", label: "เพิ่มลูกค้า", icon: Users },
   { href: "/sales", label: "ไปแผนกขาย", icon: Handshake },

@@ -16,6 +16,10 @@
   --sidebar: oklch(0.18 0.02 245);
   --sale: oklch(0.72 0.13 165);
   --ink-soft: oklch(0.96 0.012 235 / 0.06);
+  --code-surface: oklch(0.145 0.014 245);
+  --code-gutter: oklch(0.165 0.016 245);
+  --code-foreground: oklch(0.9 0.025 225);
+  --code-line-number: oklch(0.56 0.025 235);
 
   --status-slate-bg: oklch(0.34 0.018 245 / 0.55);
   --status-slate-fg: oklch(0.87 0.02 245);
@@ -227,6 +231,49 @@ button:disabled,
   gap: var(--space-lg);
 }
 
+.code-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.code-reader {
+  overscroll-behavior: contain;
+  font-variant-ligatures: none;
+}
+
+.code-line:hover {
+  background: color-mix(in oklab, var(--accent) 7%, transparent);
+}
+
+.assistant-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.assistant-message pre {
+  overflow-x: auto;
+  border-radius: var(--radius-control);
+  background: var(--code-surface);
+  padding: 0.875rem 1rem;
+  color: var(--code-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.65;
+}
+
+.assistant-message code {
+  font-variant-ligatures: none;
+}
+
+@media (min-width: 64rem) {
+  .code-workspace-grid {
+    grid-template-columns: 14rem 19rem minmax(0, 1fr);
+  }
+
+  .assistant-grid {
+    grid-template-columns: 18rem minmax(0, 1fr);
+  }
+}
+
 .scrollbar-none {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -422,6 +469,10 @@ input, select, textarea {
   --sidebar: oklch(0.94 0.015 235);
   --sale: oklch(0.5 0.12 165);
   --ink-soft: oklch(0.25 0.025 245 / 0.04);
+  --code-surface: oklch(0.955 0.01 235);
+  --code-gutter: oklch(0.925 0.015 235);
+  --code-foreground: oklch(0.25 0.035 245);
+  --code-line-number: oklch(0.56 0.035 235);
 
   --status-slate-bg: oklch(0.91 0.015 245);
   --status-slate-fg: oklch(0.39 0.025 245);
