@@ -1045,7 +1045,7 @@ function ChatPageContent() {
                   <Hash size={16} className="shrink-0 opacity-60" />
                   <span className="truncate">{ch.name}</span>
                   {!!unread[ch.id] && (
-                    <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-white">
+                    <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-on-accent">
                       {unread[ch.id] > 99 ? "99+" : unread[ch.id]}
                     </span>
                   )}
@@ -1079,7 +1079,7 @@ function ChatPageContent() {
                     {channelTitle(ch, profiles, currentUser?.id)}
                   </span>
                   {!!unread[ch.id] && (
-                    <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-white">
+                    <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-on-accent">
                       {unread[ch.id] > 99 ? "99+" : unread[ch.id]}
                     </span>
                   )}
@@ -1535,7 +1535,7 @@ function ChatPageContent() {
                   className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${
                     sending
                       ? "bg-(--status-red-bg) text-(--status-red-fg)"
-                      : "bg-accent hover:bg-accent-dim text-white disabled:opacity-40"
+                      : "bg-accent hover:bg-accent-dim text-on-accent disabled:opacity-40"
                   }`}
                   aria-label={sending ? "ยกเลิกการส่ง" : "ส่งข้อความ"}
                 >

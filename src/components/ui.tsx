@@ -459,7 +459,7 @@ export function Button({
 }) {
   const variants = {
     primary:
-      "bg-accent hover:bg-accent-dim text-white font-semibold shadow-sm",
+      "bg-accent hover:bg-accent-dim text-on-accent font-semibold shadow-sm",
     secondary:
       "bg-card hover:bg-card-hover border border-border text-foreground",
     danger: "bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30",

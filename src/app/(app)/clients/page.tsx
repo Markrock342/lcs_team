@@ -665,7 +665,7 @@ export default function ClientsPage() {
               </div>
 
               <div>
-                <p className="block text-sm font-medium text-zinc-300 mb-1.5">
+                <p className="mb-1.5 block text-sm font-medium text-foreground">
                   ภาพปกลูกค้า
                 </p>
                 <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-accent/40 touch-manipulation">
@@ -701,7 +701,7 @@ export default function ClientsPage() {
                 <>
                   <div className="pt-2 border-t border-border">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+                      <p className="flex items-center gap-2 text-sm font-medium text-foreground">
                         <Share2 size={16} className="text-accent" /> พอร์ทัลลูกค้า
                       </p>
                       <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -733,7 +733,7 @@ export default function ClientsPage() {
                   </div>
 
                   <div className="pt-2 border-t border-border">
-                    <p className="text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2">
+                    <p className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
                       <FileUp size={16} className="text-accent" /> ไฟล์ลูกค้า / ใบสัญญา
                     </p>
                     <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-accent/40 touch-manipulation mb-3">

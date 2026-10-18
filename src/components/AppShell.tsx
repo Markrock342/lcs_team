@@ -47,7 +47,7 @@ function NavLinks({
             <Icon size={20} />
             <span className="flex-1 truncate">{label}</span>
             {showUnread && (
-              <span className="min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-white">
+              <span className="min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-on-accent">
                 {chatUnread > 99 ? "99+" : chatUnread}
               </span>
             )}
@@ -124,7 +124,7 @@ export function AppShell({
     <div className="flex min-h-dvh">
       <a
         href="#main-content"
-        className="fixed left-3 top-3 z-50 -translate-y-20 rounded-xl bg-accent px-4 py-2 font-semibold text-white transition-transform focus-visible:translate-y-0"
+        className="fixed left-3 top-3 z-50 -translate-y-20 rounded-xl bg-accent px-4 py-2 font-semibold text-on-accent transition-transform focus-visible:translate-y-0"
       >
         ข้ามไปเนื้อหา
       </a>
@@ -287,7 +287,7 @@ export function AppShell({
                 <span className="relative">
                   <Icon size={22} strokeWidth={active ? 2.5 : 2} />
                   {showUnread && (
-                    <span className="absolute -right-2.5 -top-1 min-w-4 rounded-full bg-accent px-1 text-center text-[9px] font-semibold leading-4 text-white">
+                    <span className="absolute -right-2.5 -top-1 min-w-4 rounded-full bg-accent px-1 text-center text-[9px] font-semibold leading-4 text-on-accent">
                       {chatUnread > 99 ? "99+" : chatUnread}
                     </span>
                   )}

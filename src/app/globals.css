@@ -2,18 +2,19 @@
 
 :root {
   --font-ibm-plex: system-ui, "Noto Sans Thai", "Tahoma", sans-serif;
-  --background: oklch(0.17 0.018 245);
-  --foreground: oklch(0.96 0.012 235);
-  --card: oklch(0.22 0.025 245);
-  --card-hover: oklch(0.27 0.028 245);
-  --surface-raised: oklch(0.255 0.027 245);
-  --surface-soft: oklch(0.195 0.02 245);
-  --border: oklch(0.36 0.035 245);
-  --accent: oklch(0.72 0.13 230);
-  --accent-dim: oklch(0.62 0.13 230);
+  --background: oklch(0.145 0.014 245);
+  --foreground: oklch(0.96 0.01 235);
+  --card: oklch(0.235 0.024 245);
+  --card-hover: oklch(0.295 0.03 245);
+  --surface-raised: oklch(0.285 0.03 245);
+  --surface-soft: oklch(0.205 0.02 245);
+  --border: oklch(0.43 0.035 245);
+  --accent: oklch(0.76 0.135 225);
+  --accent-dim: oklch(0.67 0.13 225);
+  --on-accent: oklch(0.16 0.025 245);
   --accent-glow: oklch(0.72 0.13 230 / 0.12);
-  --muted: oklch(0.78 0.035 235);
-  --sidebar: oklch(0.18 0.02 245);
+  --muted: oklch(0.79 0.03 235);
+  --sidebar: oklch(0.185 0.02 245);
   --sale: oklch(0.72 0.13 165);
   --ink-soft: oklch(0.96 0.012 235 / 0.06);
   --code-surface: oklch(0.145 0.014 245);
@@ -33,6 +34,25 @@
   --status-green-fg: oklch(0.88 0.09 165);
   --status-red-bg: oklch(0.42 0.1 25 / 0.42);
   --status-red-fg: oklch(0.88 0.09 25);
+
+  --timeline-blue-bg: oklch(0.39 0.105 230);
+  --timeline-blue-fg: oklch(0.94 0.035 225);
+  --timeline-blue-border: oklch(0.67 0.14 225);
+  --timeline-green-bg: oklch(0.37 0.09 160);
+  --timeline-green-fg: oklch(0.94 0.045 155);
+  --timeline-green-border: oklch(0.66 0.13 160);
+  --timeline-violet-bg: oklch(0.39 0.105 292);
+  --timeline-violet-fg: oklch(0.95 0.035 292);
+  --timeline-violet-border: oklch(0.68 0.13 292);
+  --timeline-orange-bg: oklch(0.43 0.1 58);
+  --timeline-orange-fg: oklch(0.96 0.04 72);
+  --timeline-orange-border: oklch(0.72 0.14 65);
+  --timeline-pink-bg: oklch(0.41 0.105 350);
+  --timeline-pink-fg: oklch(0.96 0.035 350);
+  --timeline-pink-border: oklch(0.7 0.13 350);
+  --timeline-amber-bg: oklch(0.43 0.095 88);
+  --timeline-amber-fg: oklch(0.97 0.04 92);
+  --timeline-amber-border: oklch(0.75 0.13 88);
 
   --space-xs: 0.25rem;
   --space-sm: 0.5rem;
@@ -60,6 +80,7 @@
   --color-border: var(--border);
   --color-accent: var(--accent);
   --color-accent-dim: var(--accent-dim);
+  --color-on-accent: var(--on-accent);
   --color-muted: var(--muted);
   --color-sidebar: var(--sidebar);
   --color-sale: var(--sale);
@@ -171,6 +192,7 @@ button:disabled,
 
 .ticket-card {
   background: var(--card);
+  border: 1px solid var(--border);
   border-radius: var(--radius-section);
   box-shadow: var(--shadow-card), inset 0 1px 0 var(--ink-soft);
 }
@@ -179,6 +201,7 @@ button:disabled,
   position: relative;
   overflow: clip;
   background: var(--card);
+  border: 1px solid var(--border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card), inset 0 1px 0 var(--ink-soft);
   transition:
@@ -464,6 +487,7 @@ input, select, textarea {
   --border: oklch(0.84 0.025 235);
   --accent: oklch(0.53 0.13 230);
   --accent-dim: oklch(0.45 0.12 230);
+  --on-accent: oklch(0.985 0.005 235);
   --accent-glow: oklch(0.53 0.13 230 / 0.1);
   --muted: oklch(0.48 0.04 235);
   --sidebar: oklch(0.94 0.015 235);
@@ -486,6 +510,25 @@ input, select, textarea {
   --status-green-fg: oklch(0.4 0.11 165);
   --status-red-bg: oklch(0.92 0.045 25);
   --status-red-fg: oklch(0.43 0.13 25);
+
+  --timeline-blue-bg: oklch(0.91 0.05 230);
+  --timeline-blue-fg: oklch(0.34 0.12 230);
+  --timeline-blue-border: oklch(0.66 0.12 230);
+  --timeline-green-bg: oklch(0.91 0.05 160);
+  --timeline-green-fg: oklch(0.33 0.1 160);
+  --timeline-green-border: oklch(0.65 0.11 160);
+  --timeline-violet-bg: oklch(0.92 0.045 292);
+  --timeline-violet-fg: oklch(0.35 0.11 292);
+  --timeline-violet-border: oklch(0.68 0.11 292);
+  --timeline-orange-bg: oklch(0.93 0.055 72);
+  --timeline-orange-fg: oklch(0.36 0.105 55);
+  --timeline-orange-border: oklch(0.7 0.12 65);
+  --timeline-pink-bg: oklch(0.93 0.045 350);
+  --timeline-pink-fg: oklch(0.36 0.11 350);
+  --timeline-pink-border: oklch(0.7 0.11 350);
+  --timeline-amber-bg: oklch(0.94 0.06 92);
+  --timeline-amber-fg: oklch(0.36 0.1 72);
+  --timeline-amber-border: oklch(0.72 0.12 85);
   --shadow-card: 0 8px 24px oklch(0.38 0.025 245 / 0.1);
   --shadow-float: 0 24px 64px oklch(0.38 0.025 245 / 0.18);
 }
