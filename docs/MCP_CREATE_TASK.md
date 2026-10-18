@@ -6,12 +6,12 @@ The existing read tools remain available when task creation is disabled.
 
 ## Tool and write boundaries
 
-- New tool: create_task. One task per explicitly approved request; requires \`confirm: true\`.
+- New tool: create_task. One task per explicitly approved request; requires `confirm: true`.
   This parameter is an intent signal from the caller, **not** proof of independent human approval:
   the MCP client/agent must ask for user confirmation for each task.
-- Fields: required \`title\` (trimmed, 1–160 chars), optional \`description\` (max 2,000),
-  \`client_id\` (existing accessible UUID), \`assigned_to\` (existing accessible UUID),
-  \`priority\` (low/medium/high/urgent, defaults medium), and \`due_date\` (YYYY-MM-DD).
+- Fields: required `title` (trimmed, 1–160 chars), optional `description` (max 2,000),
+  `client_id` (existing accessible UUID), `assigned_to` (existing accessible UUID),
+  `priority` (low/medium/high/urgent, defaults medium), and `due_date` (YYYY-MM-DD).
   A missing client_id creates an **unlinked** task. The tool does not create clients/projects.
 - Rejects unknown keys (including status, progress, created_by), invalid UUIDs/dates,
   missing confirmation, out-of-range text and unknown priority.
@@ -22,7 +22,7 @@ The existing read tools remain available when task creation is disabled.
   admin or pm can access the MCP route; *display_roles are not authorization*.
   The create_task tool is hidden and rejected at invocation unless both server-side
   gates are set to the exact string true:
-  \`LCS_MCP_ENABLE_TASK_CREATION=true\` AND \`LCS_MCP_ROLE_GUARD_VERIFIED=true\`.
+  `LCS_MCP_ENABLE_TASK_CREATION=true` AND `LCS_MCP_ROLE_GUARD_VERIFIED=true`.
   Both are absent by default. Other tools remain read-only. No separate write token.
 
 ## BLOCKERS BEFORE enabling either production write flag
@@ -34,7 +34,7 @@ The existing read tools remain available when task creation is disabled.
    display_roles in DB (including INSERT, UPDATE, triggers, signup defaults, RPC paths),
    validate only trusted admin provisioning, and add adversarial tests for self-promotion.
    The existence of historical fix-*.sql files does NOT prove that production applied them.
-   \`LCS_MCP_ROLE_GUARD_VERIFIED\` is a manual release attestation **only after** that review.
+   `LCS_MCP_ROLE_GUARD_VERIFIED` is a manual release attestation **only after** that review.
 2. **Verify task INSERT RLS** for authorized admin/pm and denial of unauthorized identities;
    existing broad Team INSERT policies are not a substitute for role validation.
 3. Phase 1 PR #1 is still BLOCKED: complete OAuth protected-resource metadata, discovery,
@@ -47,12 +47,12 @@ The existing read tools remain available when task creation is disabled.
 
 ## Manual validation (disposable test environment ONLY)
 
-\`\`\`sh
+```sh
 node --test scripts/tests/mcp.test.mjs
 npx tsc --noEmit
 npm run lint
 npm run build
-\`\`\`
+```
 
 Test missing/invalid token, wrong OAuth client, revoked user, forged role metadata, guest/backend,
 admin and pm, role self-promotion, INSERT RLS, invalid client_id/assigned_to, invalid JSON-RPC,
@@ -62,10 +62,14 @@ Preview depending on repository settings; do not promote previews to production.
 
 ## Example payload (illustrative only; do not run on real data)
 
-\`\`\`json
+```json
 {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"create_task","arguments":{"title":"Synthetic test task","priority":"medium","confirm":true}}}
-\`\`\`
+```
 
 The example creates an unlinked task only **after** write gates, authentication and RLS pass.
 For CHJ, identify/create the actual CHJ project by an independently approved workflow before
 linking its ID; do not guess a client UUID or create real CHJ data as part of this test.
+
+## Current connected app
+
+Editing this GitHub repository does **not** update the currently installed `LCS Team Workspace` connector/tool catalog. It remains read-only until the approved implementation is integrated into the actual connector service, security-reviewed, separately released, and reconnected as necessary. This PR itself performs none of those actions.
