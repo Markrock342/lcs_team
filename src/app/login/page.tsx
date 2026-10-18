@@ -87,7 +87,12 @@ export default function LoginPage() {
         }
       }
 
-      router.push("/dashboard");
+      const authorizationId = new URLSearchParams(window.location.search).get("authorization_id");
+      router.push(
+        authorizationId
+          ? `/oauth/consent?authorization_id=${encodeURIComponent(authorizationId)}`
+          : "/today",
+      );
       router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to fetch";

@@ -1348,10 +1348,10 @@ function ChatPageContent() {
 
             {typingUsers.length > 0 && (
               <div className="mx-4 mb-1 flex items-center gap-2 text-xs text-muted">
-                <span className="flex gap-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce [animation-delay:-0.3s]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce [animation-delay:-0.15s]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce" />
+                <span className="brief-dots" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
                 </span>
                 {typingUsers.length === 1
                   ? `${typingUsers[0].display_name} กำลังพิมพ์...`

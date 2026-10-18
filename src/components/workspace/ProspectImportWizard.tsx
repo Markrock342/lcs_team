@@ -104,7 +104,7 @@ export function ProspectImportWizard({
         </p>
         <input
           type="file"
-          accept=".xlsx,.xls,.csv,text/csv"
+          accept=".xlsx,.csv,text/csv"
           className="block w-full text-sm"
           onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
         />

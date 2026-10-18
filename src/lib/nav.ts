@@ -18,6 +18,8 @@ import {
   Handshake,
   Sun,
   UserRound,
+  Bot,
+  Code2,
 } from "lucide-react";
 
 export type NavItem = {
@@ -27,21 +29,24 @@ export type NavItem = {
   /** คำอธิบายสั้นๆ สำหรับหน้า More */
   desc?: string;
   color?: string;
+  teamOnly?: boolean;
 };
 
 /** เมนูหลัก — sidebar desktop + ใช้บ่อย */
 export const MAIN_NAV: NavItem[] = [
   { href: "/today", label: "วันนี้", icon: Sun, desc: "คิวงาน นัดขาย และข้อความ", color: "text-amber-400" },
-  { href: "/dashboard", label: "ภาพรวม", icon: LayoutDashboard },
   { href: "/tasks", label: "งาน", icon: CheckSquare, desc: "งานใหญ่ · งานย่อย · กระดาน" },
-  { href: "/clients", label: "ลูกค้า", icon: Users, desc: "ข้อมูลลูกค้า · พอร์ทัล" },
-  { href: "/sales", label: "แผนกขาย", icon: Handshake, desc: "รายชื่อเป้าหมาย · ติดตาม · ท่อขาย · ร่างข้อความ", color: "text-emerald-400" },
-  { href: "/finance", label: "การเงิน", icon: CircleDollarSign, desc: "สลิป · ยอดเงิน · กองกลาง — แอดมินและบัญชี", color: "text-sky-400" },
+  { href: "/clients", label: "โปรเจกต์", icon: Users, desc: "ลูกค้า · ลิงก์งาน · พอร์ทัล" },
+  { href: "/code", label: "โค้ด", icon: Code2, desc: "Repository · ไฟล์ · Commit · PR", color: "text-cyan-400", teamOnly: true },
   { href: "/chat", label: "แชททีม", icon: MessageCircle, desc: "ช่อง · ข้อความส่วนตัว · เธรด", color: "text-sky-400" },
+  { href: "/assistant", label: "LCS Assistant", icon: Bot, desc: "ถามงานและอ่านโค้ดต่อจากมือถือ", color: "text-violet-400", teamOnly: true },
 ];
 
 /** เมนูรอง — sidebar + More */
 export const EXTRA_NAV: NavItem[] = [
+  { href: "/dashboard", label: "ภาพรวมธุรกิจ", icon: LayoutDashboard, desc: "งาน ลูกค้า การขาย และการเงิน" },
+  { href: "/sales", label: "แผนกขาย", icon: Handshake, desc: "เป้าหมาย · ติดตาม · ท่อขาย", color: "text-emerald-400" },
+  { href: "/finance", label: "การเงิน", icon: CircleDollarSign, desc: "สลิป · ยอดเงิน · กองกลาง", color: "text-sky-400" },
   { href: "/schedule", label: "ตารางงาน", icon: Calendar, desc: "ปฏิทิน · Gantt · ทีม", color: "text-accent" },
   { href: "/time-reports", label: "รายงานเวลา", icon: Clock, desc: "สรุปชั่วโมงทำงาน", color: "text-cyan-400" },
   { href: "/team", label: "สมาชิกทีม", icon: UserRound, desc: "แผนก ป้ายหน้าที่ และสถานะออนไลน์", color: "text-violet-400" },
@@ -54,31 +59,37 @@ export const EXTRA_NAV: NavItem[] = [
   { href: "/settings", label: "ตั้งค่า", icon: Settings, desc: "โปรไฟล์ · ธีม · สุขภาพระบบ", color: "text-zinc-400" },
 ];
 
+export const DESKTOP_SECONDARY_NAV: NavItem[] = [
+  ...EXTRA_NAV.filter((item) => ["/dashboard", "/sales", "/finance", "/schedule"].includes(item.href)),
+  { href: "/more", label: "เครื่องมือทั้งหมด", icon: MoreHorizontal, desc: "รายงาน เอกสาร ระบบ และตั้งค่า" },
+];
+
 /** Bottom tab มือถือ — 5 ช่อง */
 export const MOBILE_NAV: NavItem[] = [
   { href: "/today", label: "วันนี้", icon: Sun },
   { href: "/tasks", label: "งาน", icon: CheckSquare },
-  { href: "/sales", label: "แผนกขาย", icon: Handshake },
+  { href: "/code", label: "โค้ด", icon: Code2, teamOnly: true },
   { href: "/chat", label: "แชท", icon: MessageCircle },
-  { href: "/more", label: "อื่นๆ", icon: MoreHorizontal },
+  { href: "/assistant", label: "AI", icon: Bot, teamOnly: true },
 ];
 
 /** กลุ่มเมนูในหน้า More */
 export const MORE_SECTIONS: { title: string; items: NavItem[] }[] = [
   {
-    title: "แผนกขาย",
-    items: MAIN_NAV.filter((n) => ["/clients", "/sales"].includes(n.href)),
+    title: "โปรเจกต์และงาน",
+    items: [
+      ...MAIN_NAV.filter((n) => ["/clients", "/code"].includes(n.href)),
+      ...EXTRA_NAV.filter((n) => ["/dashboard", "/schedule", "/templates", "/time-reports", "/team", "/search"].includes(n.href)),
+    ],
   },
   {
-    title: "งาน",
-    items: EXTRA_NAV.filter((n) =>
-      ["/schedule", "/templates", "/time-reports", "/team", "/search"].includes(n.href)
-    ),
+    title: "การขาย",
+    items: EXTRA_NAV.filter((n) => n.href === "/sales"),
   },
   {
     title: "การเงิน",
     items: [
-      ...MAIN_NAV.filter((n) => n.href === "/finance"),
+      ...EXTRA_NAV.filter((n) => n.href === "/finance"),
       ...EXTRA_NAV.filter((n) => ["/invoices", "/payouts"].includes(n.href)),
     ],
   },
@@ -102,9 +113,12 @@ export function isFinancePath(href: string): boolean {
 /** กรองเมนูตามสิทธิ์ — ซ่อนการเงินทีมถ้าไม่มีสิทธิ์ */
 export function filterNavByAccess<T extends { href: string }>(
   items: T[],
-  opts: { canViewFinance: boolean }
+  opts: { canViewFinance: boolean; isGuest?: boolean }
 ): T[] {
-  return items.filter((n) => opts.canViewFinance || !isFinancePath(n.href));
+  return items.filter((n) =>
+    (opts.canViewFinance || !isFinancePath(n.href)) &&
+    !(opts.isGuest && "teamOnly" in n && n.teamOnly === true)
+  );
 }
 
 export function isMoreSectionPath(pathname: string): boolean {

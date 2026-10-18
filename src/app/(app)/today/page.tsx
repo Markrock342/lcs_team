@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, CalendarClock, CheckSquare, Receipt, MessageCircle } from "lucide-react";
+import { Bot, CalendarClock, CheckSquare, Code2, MessageCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { neonRequest } from "@/lib/neon/client";
 import { useRole } from "@/components/RoleProvider";
@@ -207,12 +207,12 @@ export default function TodayPage() {
           </div>
         )}
       </Card>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <Link className="job-jacket flex min-h-16 items-center gap-2 p-4" href="/tasks"><CheckSquare size={18} /> งาน</Link>
-        <Link className="job-jacket flex min-h-16 items-center gap-2 p-4" href="/sales?view=today"><CalendarClock size={18} /> แผนกขาย</Link>
-        <Link className="job-jacket flex min-h-16 items-center gap-2 p-4" href="/invoices"><Receipt size={18} /> เอกสาร</Link>
-        <Link className="job-jacket flex min-h-16 items-center gap-2 p-4" href="/notifications"><Bell size={18} /> กล่องงาน</Link>
+        <Link className="job-jacket flex min-h-16 items-center gap-2 p-4" href="/code"><Code2 size={18} /> โค้ด</Link>
+        <Link className="job-jacket flex min-h-16 items-center gap-2 p-4" href="/assistant"><Bot size={18} /> AI</Link>
         <Link className="job-jacket flex min-h-16 items-center gap-2 p-4" href="/chat"><MessageCircle size={18} /> แชท</Link>
+        <Link className="job-jacket flex min-h-16 items-center gap-2 p-4" href="/sales?view=today"><CalendarClock size={18} /> แผนกขาย</Link>
       </div>
     </PageShell>
   );

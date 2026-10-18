@@ -14,7 +14,7 @@ import { NotificationBell } from "./NotificationBell";
 import { getPageTitle } from "./mobile-ui";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 import { useChatUnreadTotal } from "@/hooks/useChatUnread";
-import { MAIN_NAV, EXTRA_NAV, MOBILE_NAV, isNavActive, filterNavByAccess } from "@/lib/nav";
+import { MAIN_NAV, DESKTOP_SECONDARY_NAV, MOBILE_NAV, isNavActive, filterNavByAccess } from "@/lib/nav";
 import { RoleProvider } from "./RoleProvider";
 import { canViewFinance } from "@/lib/permissions";
 import type { Profile } from "@/lib/types";
@@ -70,12 +70,13 @@ export function AppShell({
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const isChat = pathname === "/chat" || pathname.startsWith("/chat/");
+  const isConversation = pathname === "/chat" || pathname.startsWith("/chat/") || pathname === "/assistant";
 
   const financeAccess = canViewFinance(profile);
-  const mainNav = filterNavByAccess(MAIN_NAV, { canViewFinance: financeAccess });
-  const extraNav = filterNavByAccess(EXTRA_NAV, { canViewFinance: financeAccess });
-  const mobileNav = filterNavByAccess(MOBILE_NAV, { canViewFinance: financeAccess });
+  const access = { canViewFinance: financeAccess, isGuest: profile?.role === "guest" };
+  const mainNav = filterNavByAccess(MAIN_NAV, access);
+  const extraNav = filterNavByAccess(DESKTOP_SECONDARY_NAV, access);
+  const mobileNav = filterNavByAccess(MOBILE_NAV, access);
   const chatUnread = useChatUnreadTotal();
 
   useEffect(() => {
@@ -214,6 +215,7 @@ export function AppShell({
                       </div>
                     </div>
                     <Link href="/settings" onClick={() => setProfileOpen(false)} className="block px-4 py-2.5 text-sm hover:bg-card-hover">ตั้งค่า</Link>
+                    <Link href="/more" onClick={() => setProfileOpen(false)} className="block px-4 py-2.5 text-sm hover:bg-card-hover">เครื่องมือทั้งหมด</Link>
                     <button onClick={handleLogout} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-400 hover:bg-card-hover">
                       <LogOut size={16} /> ออกจากระบบ
                     </button>
@@ -229,7 +231,7 @@ export function AppShell({
         id="main-content"
         tabIndex={-1}
         className={`flex-1 lg:ml-64 w-full min-w-0 ${
-          isChat
+          isConversation
             ? "flex flex-col h-dvh max-h-dvh overflow-hidden"
             : "overflow-x-hidden"
         }`}
@@ -250,14 +252,14 @@ export function AppShell({
         </div>
         <div
           className={
-            isChat
+            isConversation
               ? "flex-1 min-h-0 overflow-hidden flex flex-col pt-[calc(3.5rem+env(safe-area-inset-top))] lg:pt-0 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0"
               : "pt-[calc(3.5rem+env(safe-area-inset-top))] lg:pt-0 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-6"
           }
         >
           <div
             className={`max-w-7xl mx-auto w-full ${
-              isChat
+              isConversation
                 ? "flex-1 min-h-0 flex flex-col px-2 sm:px-6 py-2 lg:py-3"
                 : "px-4 sm:px-6 py-4 sm:py-6"
             }`}

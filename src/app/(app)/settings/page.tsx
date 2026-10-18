@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Moon, Sun, Bell, Download, Smartphone, Shield, User, Camera, Wallet, PenLine } from "lucide-react";
+import { Bot, Check, Copy, Moon, Sun, Bell, Download, Smartphone, Shield, User, Camera, Wallet, PenLine, Plug } from "lucide-react";
 import { PageHeader, PageShell } from "@/components/mobile-ui";
 import { Button, Input, Select, Avatar, ProfileRoleBadges, PageLoader, ErrorState } from "@/components/ui";
 import { SystemHealthPanel } from "@/components/workspace/SystemHealthPanel";
@@ -61,6 +61,8 @@ export default function SettingsPage() {
   });
   const [bankSaving, setBankSaving] = useState(false);
   const [bankSaved, setBankSaved] = useState(false);
+  const [mcpEndpoint, setMcpEndpoint] = useState("/api/mcp");
+  const [mcpCopied, setMcpCopied] = useState(false);
   const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
@@ -72,6 +74,7 @@ export default function SettingsPage() {
           (navigator as Navigator & { standalone?: boolean }).standalone === true
       );
       setIsIos(/iphone|ipad|ipod/i.test(navigator.userAgent));
+      setMcpEndpoint(`${window.location.origin}/api/mcp`);
     }
 
     function handleBeforeInstallPrompt(event: Event) {
@@ -356,11 +359,50 @@ export default function SettingsPage() {
     }
   }
 
+  async function copyMcpEndpoint() {
+    await navigator.clipboard.writeText(mcpEndpoint);
+    setMcpCopied(true);
+    window.setTimeout(() => setMcpCopied(false), 1800);
+  }
+
   return (
     <PageShell width="compact">
       <PageHeader title="ตั้งค่า" description="จัดการโปรไฟล์ การแจ้งเตือน แอป และสุขภาพระบบ" />
 
       <SystemHealthPanel />
+
+      <section className="ticket-card overflow-hidden">
+        <div className="flex items-center gap-3 border-b border-border px-5 py-4">
+          <Bot size={20} className="text-accent" />
+          <div className="min-w-0">
+            <h2 className="font-semibold">LCS Assistant และ ChatGPT</h2>
+            <p className="text-sm text-muted">ถามงาน อ่านโค้ด และเปิดข้อมูลทีมจากมือถือหรือ ChatGPT</p>
+          </div>
+        </div>
+        <div className="space-y-4 p-5">
+          <div className="flex flex-col gap-3 rounded-xl bg-surface-soft p-4 sm:flex-row sm:items-center">
+            <Plug size={18} className="shrink-0 text-accent" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">ChatGPT MCP endpoint</p>
+              <code className="mt-1 block overflow-x-auto whitespace-nowrap text-xs text-muted">{mcpEndpoint}</code>
+            </div>
+            <Button variant="secondary" onClick={() => void copyMcpEndpoint()} className="shrink-0">
+              {mcpCopied ? <Check size={16} /> : <Copy size={16} />}
+              {mcpCopied ? "คัดลอกแล้ว" : "คัดลอก"}
+            </Button>
+          </div>
+          <p className="text-sm leading-relaxed text-muted">
+            Connector นี้เป็นแบบอ่านอย่างเดียวและใช้บัญชีทีมยืนยันผ่าน Supabase OAuth จึงไม่ต้องส่ง token, password หรือ GitHub key ให้ ChatGPT
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/assistant"><Button>เปิด LCS Assistant</Button></Link>
+            <Link href="/code"><Button variant="secondary">เปิด Code Workspace</Button></Link>
+          </div>
+          <p className="text-xs leading-relaxed text-muted">
+            ก่อนเชื่อมครั้งแรก ผู้ดูแลต้องเปิด OAuth Server, Dynamic Client Registration และตั้ง Consent path เป็น <code>/oauth/consent</code> ใน Supabase ตาม README
+          </p>
+        </div>
+      </section>
 
       <section className="ticket-card overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
