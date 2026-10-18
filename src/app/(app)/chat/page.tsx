@@ -36,6 +36,7 @@ import {
 } from "@/lib/notifications";
 import { isOnline, formatPresenceStatus } from "@/lib/presence";
 import { useOnlinePresence, useTypingIndicator } from "@/hooks/usePresence";
+import { useVisiblePolling } from "@/hooks/useVisiblePolling";
 import {
   fetchChannelMessages,
   fetchMessageById,
@@ -45,7 +46,6 @@ import {
 } from "@/lib/chat-messages";
 import {
   channelTitle,
-  fetchUnreadCounts,
   isDmChannel,
   markChannelRead,
   openDirectMessage,
@@ -54,6 +54,11 @@ import { runSlashCommand } from "@/lib/chat-slash";
 import type { Channel, Message, Profile, MessageReaction, Task } from "@/lib/types";
 import { format, isToday, isYesterday } from "date-fns";
 import { th } from "date-fns/locale";
+
+const CHAT_MESSAGE_POLL_MS = 5_000;
+const CHAT_SIDEBAR_POLL_MS = 30_000;
+const THREAD_COUNTS_REFRESH_MS = 30_000;
+const LINKED_TASKS_REFRESH_MS = 60_000;
 
 function formatMsgTime(date: string) {
   const d = new Date(date);
@@ -130,6 +135,16 @@ function ChatPageContent() {
   const sendAbortRef = useRef<AbortController | null>(null);
   const mentionInputRef = useRef<ChatMentionInputHandle>(null);
   const threadRootRef = useRef<Message | null>(null);
+  const readStateRef = useRef(new Map<string, string>());
+  const linkedTasksCacheRef = useRef<{
+    key: string;
+    fetchedAt: number;
+    tasks: Map<string, Task>;
+  }>({ key: "", fetchedAt: 0, tasks: new Map() });
+  const threadCountsCacheRef = useRef<{
+    key: string;
+    fetchedAt: number;
+  }>({ key: "", fetchedAt: 0 });
 
   useEffect(() => {
     threadRootRef.current = threadRoot;
@@ -149,25 +164,49 @@ function ChatPageContent() {
   const loadMessages = useCallback(async (channelId: string) => {
     const supabase = createClient();
     const { data, error } = await fetchChannelMessages(supabase, channelId);
-    setMessages(data);
     if (error) setChatError(error);
     else setChatError("");
 
     if (data.length) {
       const ids = data.map((m) => m.id);
-      const taskIds = data
+      const taskIds = [...new Set(data
         .map((m) => m.linked_task_id)
-        .filter((id): id is string => !!id);
+        .filter((id): id is string => !!id))].sort();
+      const now = Date.now();
+      const taskKey = `${channelId}:${taskIds.join(",")}`;
+      const shouldRefreshTasks = taskIds.length > 0 && (
+        linkedTasksCacheRef.current.key !== taskKey ||
+        now - linkedTasksCacheRef.current.fetchedAt >= LINKED_TASKS_REFRESH_MS
+      );
+      const messageKey = `${channelId}:${ids.join(",")}`;
+      const shouldRefreshThreadCounts =
+        threadCountsCacheRef.current.key !== messageKey ||
+        now - threadCountsCacheRef.current.fetchedAt >= THREAD_COUNTS_REFRESH_MS;
 
-      const taskData = await (
-        taskIds.length
+      const [taskData, nextThreadCounts] = await Promise.all([
+        shouldRefreshTasks
           ? neonRequest<{ tasks: Task[] }>("/api/neon/tasks", { cache: "no-store" })
-          : Promise.resolve({ tasks: [] as Task[] })
-      );
+          : Promise.resolve(null),
+        shouldRefreshThreadCounts
+          ? fetchThreadCounts(supabase, ids)
+          : Promise.resolve(null),
+      ]);
 
-      const taskMap = new Map(
-        taskData.tasks.filter((task) => taskIds.includes(task.id)).map((t) => [t.id, t])
-      );
+      if (taskData) {
+        linkedTasksCacheRef.current = {
+          key: taskKey,
+          fetchedAt: now,
+          tasks: new Map(
+            taskData.tasks
+              .filter((task) => taskIds.includes(task.id))
+              .map((task) => [task.id, task]),
+          ),
+        };
+      } else if (!taskIds.length) {
+        linkedTasksCacheRef.current = { key: taskKey, fetchedAt: now, tasks: new Map() };
+      }
+
+      const taskMap = linkedTasksCacheRef.current.tasks;
       setMessages(
         data.map((m) => ({
           ...m,
@@ -185,8 +224,12 @@ function ChatPageContent() {
         }
       }
       setReactionsMap(grouped);
-      setThreadCounts(await fetchThreadCounts(supabase, ids));
+      if (nextThreadCounts) {
+        threadCountsCacheRef.current = { key: messageKey, fetchedAt: now };
+        setThreadCounts(nextThreadCounts);
+      }
     } else {
+      setMessages([]);
       setReactionsMap({});
       setThreadCounts({});
     }
@@ -197,7 +240,12 @@ function ChatPageContent() {
   const markMessagesAsRead = useCallback(
     async (msgs: Message[], userId: string) => {
       const ids = msgs
-        .filter((m) => m.sender_id !== userId && !m.deleted_at)
+        .filter(
+          (m) =>
+            m.sender_id !== userId &&
+            !m.deleted_at &&
+            !(m.reads ?? []).some((read) => read.user_id === userId),
+        )
         .map((m) => m.id);
       await markMessagesAsReadSafe(createClient(), ids, userId);
     },
@@ -212,13 +260,14 @@ function ChatPageContent() {
       } = await supabase.auth.getUser();
 
       const [channelData, profileData, taskData] = await Promise.all([
-        neonRequest<{ channels: Channel[] }>("/api/neon/chat?mode=channels", { cache: "no-store" }),
+        neonRequest<{ channels: Channel[]; counts: Record<string, number> }>("/api/neon/chat?mode=sidebar", { cache: "no-store" }),
         neonRequest<{ profiles: Profile[] }>("/api/neon/profiles", { cache: "no-store" }),
         neonRequest<{ tasks: Task[] }>("/api/neon/tasks", { cache: "no-store" }),
       ]);
 
       const channelList = channelData.channels ?? [];
       setChannels(channelList);
+      setUnread(channelData.counts ?? {});
       setProfiles(profileData.profiles ?? []);
       setOpenTasks(taskData.tasks.filter((task) => task.status !== "done" && !task.parent_id).slice(0, 50));
 
@@ -255,18 +304,6 @@ function ChatPageContent() {
         if (channelParam !== first.id) {
           router.replace(chatChannelHref(first.id), { scroll: false });
         }
-        const msgs = await loadMessages(first.id);
-        if (user) {
-          await markMessagesAsRead(msgs, user.id);
-          await markChannelRead(createClient(), first.id, user.id);
-          const counts = await fetchUnreadCounts(
-            supabase,
-            user.id,
-            channelList.map((c) => c.id)
-          );
-          counts[first.id] = 0;
-          setUnread(counts);
-        }
         setShowMobileChannels(false);
       }
 
@@ -276,7 +313,7 @@ function ChatPageContent() {
     void init();
     // Initial channel resolution intentionally uses the first URL snapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadMessages, markMessagesAsRead]);
+  }, []);
 
   useEffect(() => {
     if (loading || !channels.length || !channelParam) return;
@@ -298,71 +335,100 @@ function ChatPageContent() {
     pendingScrollBottomRef.current = true;
     let cancelled = false;
     let firstRun = true;
+    let running = false;
 
     async function sync() {
+      if (running || document.visibilityState !== "visible") return;
+      running = true;
       const channel = activeChannel!;
       const user = currentUser!;
-      const msgs = await loadMessages(channel.id);
-      if (cancelled) return;
-      await markMessagesAsRead(msgs, user.id);
-      await markChannelRead(createClient(), channel.id, user.id);
-      setUnread((prev) => ({ ...prev, [channel.id]: 0 }));
-      markChatChannelNotificationsRead(channel.id);
+      try {
+        const msgs = await loadMessages(channel.id);
+        if (cancelled) return;
 
-      const root = threadRootRef.current;
-      if (root) {
-        const threaded = await fetchChannelMessages(createClient(), root.channel_id, { threadId: root.id });
-        if (!cancelled) setThreadMessages(threaded.data);
-      }
-
-      if (firstRun && msgParam) {
-        firstRun = false;
-        pendingScrollBottomRef.current = false;
-        isNearBottomRef.current = false;
-        const inList = msgs.find((m) => m.id === msgParam);
-        if (inList) setHighlightMsgId(msgParam);
-        else {
-          const full = await fetchMessageById(createClient(), msgParam);
-          if (full) {
-            setHighlightMsgId(msgParam);
-            const rootId = full.thread_id ?? full.id;
-            const nextRoot = msgs.find((m) => m.id === rootId) ?? full;
-            setThreadRoot(nextRoot);
-          }
+        const unreadIds = msgs
+          .filter(
+            (message) =>
+              message.sender_id !== user.id &&
+              !message.deleted_at &&
+              !(message.reads ?? []).some((read) => read.user_id === user.id),
+          )
+          .map((message) => message.id);
+        const readState = `${msgs.at(-1)?.id ?? "empty"}:${unreadIds.join(",")}`;
+        if (readStateRef.current.get(channel.id) !== readState) {
+          await Promise.all([
+            markMessagesAsRead(msgs, user.id),
+            markChannelRead(createClient(), channel.id, user.id),
+            markChatChannelNotificationsRead(channel.id),
+          ]);
+          readStateRef.current.set(channel.id, readState);
+          if (!cancelled) setUnread((prev) => ({ ...prev, [channel.id]: 0 }));
         }
-      } else if (firstRun) {
-        firstRun = false;
-        setHighlightMsgId(null);
+
+        const root = threadRootRef.current;
+        if (root) {
+          const threaded = await fetchChannelMessages(createClient(), root.channel_id, { threadId: root.id });
+          if (!cancelled) setThreadMessages(threaded.data);
+        }
+
+        if (firstRun && msgParam) {
+          firstRun = false;
+          pendingScrollBottomRef.current = false;
+          isNearBottomRef.current = false;
+          const inList = msgs.find((m) => m.id === msgParam);
+          if (inList) setHighlightMsgId(msgParam);
+          else {
+            const full = await fetchMessageById(createClient(), msgParam);
+            if (full) {
+              setHighlightMsgId(msgParam);
+              const rootId = full.thread_id ?? full.id;
+              const nextRoot = msgs.find((m) => m.id === rootId) ?? full;
+              setThreadRoot(nextRoot);
+            }
+          }
+        } else if (firstRun) {
+          firstRun = false;
+          setHighlightMsgId(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setChatError(error instanceof Error ? error.message : "ซิงก์ข้อความไม่สำเร็จ");
+        }
+      } finally {
+        running = false;
       }
     }
 
     void sync();
-    const interval = window.setInterval(() => void sync(), 4_000);
+    const interval = window.setInterval(() => void sync(), CHAT_MESSAGE_POLL_MS);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void sync();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [activeChannel, loadMessages, markMessagesAsRead, currentUser, msgParam]);
 
-  useEffect(() => {
+  const refreshSidebar = useCallback(async () => {
     if (!currentUser) return;
-    let cancelled = false;
-    async function refreshChannels() {
-      const { channels: latest } = await neonRequest<{ channels: Channel[] }>(
-        "/api/neon/chat?mode=channels", { cache: "no-store" }
-      );
-      if (cancelled) return;
-      setChannels(latest);
-      const counts = await fetchUnreadCounts(createClient(), currentUser!.id, latest.map((channel) => channel.id));
-      if (activeChannel?.id) counts[activeChannel.id] = 0;
-      if (!cancelled) setUnread(counts);
-    }
-    const interval = window.setInterval(() => void refreshChannels(), 8_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [currentUser, activeChannel?.id]);
+    const { channels: latest, counts } = await neonRequest<{
+      channels: Channel[];
+      counts: Record<string, number>;
+    }>(
+      "/api/neon/chat?mode=sidebar", { cache: "no-store" }
+    );
+    setChannels(latest);
+    if (activeChannel?.id) counts[activeChannel.id] = 0;
+    setUnread(counts);
+  }, [currentUser, activeChannel]);
+
+  useVisiblePolling(refreshSidebar, CHAT_SIDEBAR_POLL_MS, {
+    enabled: Boolean(currentUser),
+    runImmediately: false,
+  });
 
   useEffect(() => {
     const id = setInterval(() => setPresenceTick((t) => t + 1), 30_000);
