@@ -392,7 +392,7 @@ export default function SettingsPage() {
             </Button>
           </div>
           <p className="text-sm leading-relaxed text-muted">
-            Connector นี้เป็นแบบอ่านอย่างเดียวและใช้บัญชีทีมยืนยันผ่าน Supabase OAuth จึงไม่ต้องส่ง token, password หรือ GitHub key ให้ ChatGPT
+            Connector อ่านข้อมูลงานและโค้ดได้ตามสิทธิ์ของบัญชี ส่วน Admin และ PM สร้างงานใหม่ได้เมื่อยืนยันงานนั้นอย่างชัดเจน ระบบไม่อนุญาตให้ ChatGPT แก้หรือลบงาน ส่งข้อความ แก้โค้ด merge หรือ deploy และไม่ต้องส่ง token, password หรือ GitHub key ให้ ChatGPT
           </p>
           <div className="flex flex-wrap gap-2">
             <Link href="/assistant"><Button>เปิด LCS Assistant</Button></Link>
