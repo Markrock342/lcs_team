@@ -29,3 +29,39 @@ export function readOperations(db: SupabaseClient) {
     },
   };
 }
+
+
+/** The authenticated user's JWT is forwarded by auth.ts: no Service Role or bypass-RLS client. */
+export function taskWriteOperations(db: SupabaseClient, actorId: string) {
+  return {
+    async create_task({
+      title, description, priority, client_id, assigned_to, due_date,
+    }: {
+      title: string;
+      description?: string;
+      priority: "low" | "medium" | "high" | "urgent";
+      client_id?: string;
+      assigned_to?: string;
+      due_date?: string;
+    }) {
+      // Validate referenced rows using the caller's RLS-scoped client.
+      if (client_id) {
+        const { data, error } = await db.from("clients").select("id").eq("id", client_id).maybeSingle();
+        if (error || !data) throw Error("Client not accessible");
+      }
+      if (assigned_to) {
+        const { data, error } = await db.from("profiles").select("id").eq("id", assigned_to).maybeSingle();
+        if (error || !data) throw Error("Assignee not accessible");
+      }
+      // Only allowlisted fields; status/progress and authorship are server-controlled.
+      const { data, error } = await db.from("tasks").insert({
+        title, description: description || null, priority,
+        client_id: client_id ?? null, assigned_to: assigned_to ?? null,
+        due_date: due_date ?? null, created_by: actorId,
+        status: "pending", progress: 0,
+      }).select("id, title, status, priority, client_id, assigned_to, due_date, created_by").single();
+      if (error || !data) throw Error("Insert failed");
+      return { task: data };
+    },
+  };
+}

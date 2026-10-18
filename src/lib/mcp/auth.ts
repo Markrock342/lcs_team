@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseEnv } from "@/lib/env";
 import { validateMcpClaims } from "./claims.mjs";
 
-type AuthResult = { ok: true; db: SupabaseClient } | { ok: false; response: Response };
+type AuthResult = { ok: true; db: SupabaseClient; userId: string; role: "admin" | "pm" } | { ok: false; response: Response };
 function deny(status: number, message: string): AuthResult {
   const headers = new Headers({ "Cache-Control": "no-store" });
   if (status === 401) headers.set("WWW-Authenticate", 'Bearer realm="LCS Team MCP"');
@@ -37,6 +37,6 @@ export async function authenticateMcp(request: Request): Promise<AuthResult> {
     clientId, userId,
   })) return deny(401, "Token is not authorized for MCP");
   const { data: profile, error } = await db.from("profiles").select("id, role").eq("id", userId).single();
-  if (error || !profile || profile.role !== "admin") return deny(403, "MCP access denied");
-  return { ok: true, db };
+  if (error || !profile || (profile.role !== "admin" && profile.role !== "pm")) return deny(403, "MCP access denied");
+  return { ok: true, db, userId, role: profile.role };
 }
