@@ -26,7 +26,7 @@ BEGIN
 
   assigned_role := CASE
     WHEN lower(NEW.email) = 'markrock342@gmail.com' THEN 'admin'
-    ELSE COALESCE(NEW.raw_user_meta_data->>'role', 'pm')
+    ELSE 'guest'
   END;
 
   INSERT INTO public.profiles (id, username, display_name, role)
@@ -57,7 +57,7 @@ DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
 CREATE POLICY "Users can insert own profile"
   ON profiles FOR INSERT
   TO authenticated
-  WITH CHECK (auth.uid() = id);
+  WITH CHECK (auth.uid() = id AND role = 'guest');
 
 -- 4. ให้ trigger bypass RLS ได้
 GRANT USAGE ON SCHEMA public TO postgres, supabase_auth_admin;

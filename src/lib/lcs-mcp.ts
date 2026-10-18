@@ -1,12 +1,19 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { queryNeon } from "@/lib/neon/server";
+import { queryNeon, withNeonTransaction } from "@/lib/neon/server";
 import {
   getRepositoryFile,
   getRepositoryWorkspace,
   listWorkspaceRepositories,
 } from "@/lib/github";
 import type { McpIdentity } from "@/lib/mcp-auth";
+import {
+  createTaskAuditSummary,
+  createTaskGateFromEnvironment,
+  createTaskInputSchema,
+  taskInsertFromMcp,
+  type CreateTaskInput,
+} from "@/lib/mcp-create-task";
 
 let auditSchemaPromise: Promise<void> | null = null;
 
@@ -54,8 +61,11 @@ function toolResult(data: unknown, summary?: string) {
   };
 }
 
-function toolError(error: unknown) {
-  const message = error instanceof Error ? error.message : "LCS tool failed";
+class SafeMcpError extends Error {}
+
+function toolError(error: unknown, fallback = "LCS tool failed") {
+  console.error("[lcs-mcp]", error);
+  const message = error instanceof SafeMcpError ? error.message : fallback;
   return { isError: true, content: [{ type: "text" as const, text: message }] };
 }
 
@@ -65,12 +75,90 @@ const readOnlyAnnotations = {
   openWorldHint: false,
 } as const;
 
+type CreatedTask = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: "pending";
+  priority: "low" | "medium" | "high" | "urgent";
+  progress: 0;
+  client_id: string | null;
+  assigned_to: string | null;
+  due_date: string | null;
+  created_by: string;
+  created_at: string;
+};
+
+async function createTask(identity: McpIdentity, input: CreateTaskInput) {
+  await ensureAuditSchema();
+  const taskInput = taskInsertFromMcp(input, identity.userId);
+
+  return withNeonTransaction(async (client) => {
+    // Re-check the authoritative Neon role inside the write transaction. The
+    // role captured during authentication is only used to advertise the tool.
+    const actor = await client.query<{ role: string }>(
+      `SELECT role FROM public.profiles
+       WHERE id = $1 AND role IN ('admin', 'pm')
+       FOR SHARE`,
+      [identity.userId],
+    );
+    if (!actor.rows[0]) {
+      throw new SafeMcpError("สิทธิ์สร้างงานถูกเปลี่ยน กรุณาเชื่อมต่อใหม่");
+    }
+
+    if (input.client_id) {
+      const project = await client.query(
+        `SELECT id FROM public.clients WHERE id = $1 LIMIT 1`,
+        [input.client_id],
+      );
+      if (!project.rows[0]) throw new SafeMcpError("ไม่พบโปรเจกต์ที่ระบุ");
+    }
+
+    if (input.assigned_to) {
+      const assignee = await client.query(
+        `SELECT id FROM public.profiles WHERE id = $1 AND role <> 'guest' LIMIT 1`,
+        [input.assigned_to],
+      );
+      if (!assignee.rows[0]) throw new SafeMcpError("ไม่พบสมาชิกทีมที่มอบหมายได้");
+    }
+
+    const { rows } = await client.query<CreatedTask>(
+      `INSERT INTO public.tasks
+         (title, description, client_id, assigned_to, priority, due_date, status, progress, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending', 0, $7)
+       RETURNING id, title, description, status, priority, progress,
+                 client_id, assigned_to, due_date, created_by, created_at`,
+      [
+        taskInput.title,
+        taskInput.description,
+        taskInput.client_id,
+        taskInput.assigned_to,
+        taskInput.priority,
+        taskInput.due_date,
+        taskInput.created_by,
+      ],
+    );
+    const task = rows[0];
+    if (!task) throw new Error("Task insert returned no row");
+
+    await client.query(
+      `INSERT INTO public.mcp_audit_logs (user_id, tool_name, input_summary)
+       VALUES ($1, 'create_task', $2::jsonb)`,
+      [identity.userId, JSON.stringify(createTaskAuditSummary(input))],
+    );
+
+    return task;
+  });
+}
+
 export function createLcsMcpServer(identity: McpIdentity) {
+  const taskCreationEnabled = createTaskGateFromEnvironment(identity.profile.role);
   const server = new McpServer(
-    { name: "lcs-team-workspace", version: "1.0.0" },
+    { name: "lcs-team-workspace", version: "1.1.0" },
     {
-      instructions:
-        "LCS is a private team workspace. Use read-only tools to answer about the signed-in member's work, projects, team chat, and approved GitHub repositories. Never claim to modify, merge, deploy, or send messages. Never reveal credentials or infer missing data.",
+      instructions: taskCreationEnabled
+        ? "LCS is a private team workspace. All tools are read-only except create_task. Use create_task only after the user explicitly approves that exact task; never infer approval. Never claim to modify anything else, merge, deploy, or send messages. Never reveal credentials or infer missing data."
+        : "LCS is a private team workspace. Use read-only tools to answer about the signed-in member's work, projects, team chat, and approved GitHub repositories. Never claim to modify, merge, deploy, or send messages. Never reveal credentials or infer missing data.",
       maxToolInputElements: 100,
     },
   );
@@ -324,6 +412,28 @@ export function createLcsMcpServer(identity: McpIdentity) {
       return toolError(error);
     }
   });
+
+  if (taskCreationEnabled) {
+    server.registerTool("create_task", {
+      title: "Create one LCS task",
+      description:
+        "Create exactly one LCS task after the user explicitly confirms this exact task. The server controls author, initial status, and progress.",
+      inputSchema: createTaskInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    }, async (input) => {
+      try {
+        const task = await createTask(identity, input);
+        return toolResult({ task }, `สร้างงาน “${task.title}” สำเร็จ`);
+      } catch (error) {
+        return toolError(error, "สร้างงานไม่สำเร็จ กรุณาลองใหม่หรือตรวจสิทธิ์สมาชิก");
+      }
+    });
+  }
 
   return server;
 }

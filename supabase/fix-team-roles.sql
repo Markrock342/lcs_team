@@ -49,10 +49,7 @@ BEGIN
 
   assigned_role := CASE
     WHEN lower(NEW.email) = 'markrock342@gmail.com' THEN 'admin'
-    WHEN base_username IN ('mark', 'markrock342', 'markrock') THEN 'admin'
-    WHEN base_username IN ('knott') OR base_username LIKE 'knott%' THEN 'backend'
-    WHEN base_username IN ('bank') OR base_username LIKE 'bank%' THEN 'design'
-    ELSE COALESCE(NEW.raw_user_meta_data->>'role', 'pm')
+    ELSE 'guest'
   END;
 
   INSERT INTO public.profiles (id, username, display_name, role, display_roles)

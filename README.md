@@ -124,7 +124,7 @@ psql "$DATABASE_URL" -f scripts/neon-team-engineering-workspace.sql
 https://YOUR-DOMAIN/api/mcp
 ```
 
-Connector เป็น **read-only** และตรวจผู้ใช้ด้วย Supabase Auth ก่อนอ่านข้อมูลทุกครั้ง ตั้งค่า Supabase หนึ่งครั้งดังนี้:
+Connector เป็น **read-only โดยค่าเริ่มต้น** และตรวจผู้ใช้ด้วย Supabase Auth ก่อนอ่านข้อมูลทุกครั้ง ตั้งค่า Supabase หนึ่งครั้งดังนี้:
 
 1. ไปที่ **Authentication → OAuth Server** แล้วเปิด OAuth 2.1 Server
 2. เปิด **Dynamic Client Registration** สำหรับ ChatGPT
@@ -135,7 +135,9 @@ Connector เป็น **read-only** และตรวจผู้ใช้ด�
 7. ใน ChatGPT ไปที่ **Settings → Connectors → Add custom connector** แล้ววาง MCP endpoint ด้านบน
 8. Login ด้วยบัญชี LCS และกดยอมรับสิทธิ์อ่านข้อมูล
 
-เครื่องมือที่ ChatGPT เรียกได้: โปรไฟล์ของฉัน, โปรเจกต์, งานของฉัน, คิววันนี้, แชทที่ผู้ใช้มีสิทธิ์, ค้นหาพื้นที่ทำงาน, รายการ repository, activity, tree และ source file ที่ปลอดภัย ไม่มีเครื่องมือเขียน แก้ ลบ merge หรือ deploy
+เครื่องมือที่ ChatGPT เรียกได้: โปรไฟล์ของฉัน, โปรเจกต์, งานของฉัน, คิววันนี้, แชทที่ผู้ใช้มีสิทธิ์, ค้นหาพื้นที่ทำงาน, รายการ repository, activity, tree และ source file ที่ปลอดภัย
+
+`create_task` เป็นเครื่องมือเขียนแบบ opt-in สำหรับ `admin` และ `pm` เท่านั้น เครื่องมือจะไม่ปรากฏจนกว่าเซิร์ฟเวอร์จะตั้ง Flag ทั้งสองค่าเป็น `true` หลังผ่านรายการตรวจสอบใน `docs/MCP_CREATE_TASK.md` การ Merge โค้ดอย่างเดียวไม่เปิดใช้เครื่องมือนี้ และ MCP ไม่มีเครื่องมือแก้/ลบงาน ส่งข้อความ แก้โค้ด merge หรือ deploy
 
 ### 7. รัน dev server
 
