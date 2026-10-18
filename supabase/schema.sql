@@ -8,7 +8,7 @@
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     username TEXT UNIQUE NOT NULL,
     display_name TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'pm',
+    role TEXT NOT NULL DEFAULT 'guest',
     avatar_url TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
   );
@@ -70,7 +70,7 @@
   -- ========== SYNC COLUMNS (กรณีรัน schema เก่าไปแล้ว) ==========
   ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
   ALTER TABLE profiles ADD CONSTRAINT profiles_role_check
-    CHECK (role IN ('admin', 'pm', 'backend', 'design'));
+    CHECK (role IN ('admin', 'pm', 'accounting', 'backend', 'frontend', 'design', 'sale', 'guest'));
 
   ALTER TABLE clients ADD COLUMN IF NOT EXISTS repo_url TEXT;
   ALTER TABLE clients ADD COLUMN IF NOT EXISTS supabase_url TEXT;
@@ -143,7 +143,7 @@
 
     assigned_role := CASE
       WHEN lower(NEW.email) = 'markrock342@gmail.com' THEN 'admin'
-      ELSE COALESCE(NEW.raw_user_meta_data->>'role', 'pm')
+      ELSE 'guest'
     END;
 
     INSERT INTO public.profiles (id, username, display_name, role)
@@ -163,6 +163,44 @@
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
+  -- ห้ามผู้ใช้ยกระดับ role / display_roles ของตัวเองผ่าน Supabase client
+  CREATE OR REPLACE FUNCTION public.protect_profile_role()
+  RETURNS TRIGGER
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public
+  AS $$
+  DECLARE
+    actor_is_admin BOOLEAN;
+    badges_changed BOOLEAN;
+  BEGIN
+    IF auth.uid() IS NULL THEN
+      RETURN NEW;
+    END IF;
+
+    actor_is_admin := EXISTS (
+      SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
+    );
+    badges_changed := (to_jsonb(OLD)->'display_roles')
+      IS DISTINCT FROM (to_jsonb(NEW)->'display_roles');
+
+    IF OLD.role IS DISTINCT FROM NEW.role OR badges_changed THEN
+      IF OLD.id = auth.uid() THEN
+        RAISE EXCEPTION 'Cannot change your own role or role badges';
+      END IF;
+      IF NOT actor_is_admin THEN
+        RAISE EXCEPTION 'Only admin can change roles or role badges';
+      END IF;
+    END IF;
+    RETURN NEW;
+  END;
+  $$;
+
+  DROP TRIGGER IF EXISTS protect_profile_role_before_update ON profiles;
+  CREATE TRIGGER protect_profile_role_before_update
+    BEFORE UPDATE ON profiles
+    FOR EACH ROW EXECUTE FUNCTION public.protect_profile_role();
+
   -- ========== RLS ==========
   ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
   ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
@@ -173,7 +211,8 @@
   DROP POLICY IF EXISTS "Team can view profiles" ON profiles;
   CREATE POLICY "Team can view profiles" ON profiles FOR SELECT TO authenticated USING (true);
   DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
-  CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
+  CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT TO authenticated
+    WITH CHECK (auth.uid() = id AND role = 'guest');
   DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
   CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE TO authenticated USING (auth.uid() = id);
 

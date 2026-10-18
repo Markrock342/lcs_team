@@ -30,7 +30,7 @@ BEGIN
 
   assigned_role := CASE
     WHEN lower(NEW.email) = 'markrock342@gmail.com' THEN 'admin'
-    ELSE COALESCE(NEW.raw_user_meta_data->>'role', 'pm')
+    ELSE 'guest'
   END;
 
   INSERT INTO public.profiles (id, username, display_name, role)
