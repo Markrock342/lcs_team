@@ -1,5 +1,6 @@
 import { authenticateMcp } from "@/lib/mcp/auth";
-import { readOperations } from "@/lib/mcp/operations";
+import { readOperations, taskWriteOperations } from "@/lib/mcp/operations";
+import { canCreateTask } from "@/lib/mcp/write-gate.mjs";
 import { MCP_VERSION, processMcpMessage } from "@/lib/mcp/protocol.mjs";
 
 export const runtime = "nodejs";
@@ -27,7 +28,15 @@ async function handle(request: Request): Promise<Response> {
     message = JSON.parse(body);
   } catch { return Response.json({ error: "Invalid JSON" }, { status: 400, headers: noStore }); }
   if (Array.isArray(message)) return Response.json({ error: "Batch requests not supported" }, { status: 400, headers: noStore });
-  const result = await processMcpMessage(message, readOperations(auth.db));
+  const allowWrites = canCreateTask(auth.role, {
+    enabled: process.env.LCS_MCP_ENABLE_TASK_CREATION,
+    roleGuardVerified: process.env.LCS_MCP_ROLE_GUARD_VERIFIED,
+  });
+  const operations = {
+    ...readOperations(auth.db),
+    ...(allowWrites ? taskWriteOperations(auth.db, auth.userId) : {}),
+  };
+  const result = await processMcpMessage(message, operations, { allowWrites });
   if (result.body === null) return new Response(null, { status: result.status, headers: noStore });
   return Response.json(result.body, { status: result.status, headers: noStore });
 }
