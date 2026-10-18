@@ -9,6 +9,7 @@ import { SystemHealthPanel } from "@/components/workspace/SystemHealthPanel";
 import { useTheme } from "@/components/ThemeProvider";
 import { subscribeToPush, unsubscribeFromPush, sendTestPush, getPushBlockers } from "@/components/PWARegister";
 import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { uploadFile, isImageFile } from "@/lib/upload";
 import { exportToCSV } from "@/lib/activity";
 import { ROLE_ASSIGN_LABELS, ROLE_LABELS } from "@/lib/constants";
@@ -21,7 +22,7 @@ import {
 import { getProfileDisplayRoles } from "@/lib/profile-display";
 import { DEFAULT_TEAM_BANKS } from "@/lib/team-banks";
 import type { NotificationPrefs } from "@/lib/notifications";
-import type { Profile, TeamRole } from "@/lib/types";
+import type { Client, Profile, Task, TeamRole } from "@/lib/types";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -100,13 +101,15 @@ export default function SettingsPage() {
       return;
     }
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-    if (error) {
-      setProfileError(error.message);
+    let data: Profile;
+    try {
+      const response = await neonRequest<{ profile: Profile }>(
+        "/api/neon/profiles?me=1",
+        { cache: "no-store" },
+      );
+      data = response.profile;
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "โหลดโปรไฟล์ไม่สำเร็จ");
       setProfileLoading(false);
       return;
     }
@@ -137,11 +140,11 @@ export default function SettingsPage() {
     }
 
     if (data && hasPermission(data.role, "manage_team")) {
-      const { data: members } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("display_name");
-      setTeam(members ?? []);
+      const { profiles } = await neonRequest<{ profiles: Profile[] }>(
+        "/api/neon/profiles",
+        { cache: "no-store" },
+      );
+      setTeam(profiles);
     }
     setProfileLoading(false);
   }
@@ -160,17 +163,16 @@ export default function SettingsPage() {
       return;
     }
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role })
-      .eq("id", memberId);
-
-    if (error) {
-      setRoleError(error.message);
-    } else {
+    try {
+      await neonRequest("/api/neon/profiles", {
+        method: "PATCH",
+        body: JSON.stringify({ id: memberId, data: { role } }),
+      });
       setTeam((prev) =>
         prev.map((m) => (m.id === memberId ? { ...m, role } : m))
       );
+    } catch (error) {
+      setRoleError(error instanceof Error ? error.message : "เปลี่ยนสิทธิ์ไม่สำเร็จ");
     }
     setRoleSaving(null);
   }
@@ -188,21 +190,19 @@ export default function SettingsPage() {
       : [...current, role];
     if (next.length === 0) next = [member.role];
 
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("profiles")
-      .update({ display_roles: next })
-      .eq("id", memberId);
-
-    if (error) {
-      setRoleError(error.message);
-    } else {
+    try {
+      await neonRequest("/api/neon/profiles", {
+        method: "PATCH",
+        body: JSON.stringify({ id: memberId, data: { display_roles: next } }),
+      });
       setTeam((prev) =>
         prev.map((m) => (m.id === memberId ? { ...m, display_roles: next } : m))
       );
       if (memberId === profile.id) {
         setProfile({ ...profile, display_roles: next });
       }
+    } catch (error) {
+      setRoleError(error instanceof Error ? error.message : "แก้ป้ายหน้าที่ไม่สำเร็จ");
     }
     setDisplaySaving(null);
   }
@@ -231,18 +231,14 @@ export default function SettingsPage() {
       return;
     }
 
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("profiles")
-      .update({ avatar_url: uploaded.url })
-      .eq("id", profile.id)
-      .select()
-      .single();
-
-    if (error) {
-      setRoleError(error.message);
-    } else if (data) {
-      setProfile(data);
+    try {
+      const { profile: updated } = await neonRequest<{ profile: Profile }>(
+        "/api/neon/profiles",
+        { method: "PATCH", body: JSON.stringify({ data: { avatar_url: uploaded.url } }) },
+      );
+      setProfile(updated);
+    } catch (error) {
+      setRoleError(error instanceof Error ? error.message : "บันทึกรูปโปรไฟล์ไม่สำเร็จ");
     }
 
     setAvatarUploading(false);
@@ -255,16 +251,15 @@ export default function SettingsPage() {
     const next = { ...notifyPrefs, [key]: value };
     setNotifyPrefs(next);
 
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("profiles")
-      .update({ [key]: value })
-      .eq("id", profile.id);
-
-    setNotifySaving(false);
-    if (error) {
+    try {
+      await neonRequest("/api/neon/profiles", {
+        method: "PATCH",
+        body: JSON.stringify({ data: { [key]: value } }),
+      });
+    } catch {
       setNotifyPrefs(notifyPrefs);
     }
+    setNotifySaving(false);
   }
 
   async function checkPush() {
@@ -306,21 +301,20 @@ export default function SettingsPage() {
   }
 
   async function exportAll() {
-    const supabase = createClient();
-    const [clients, tasks] = await Promise.all([
-      supabase.from("clients").select("*"),
-      supabase.from("tasks").select("*, client:clients(name)"),
+    const [{ clients }, { tasks }] = await Promise.all([
+      neonRequest<{ clients: Client[] }>("/api/neon/clients", { cache: "no-store" }),
+      neonRequest<{ tasks: Task[] }>("/api/neon/tasks", { cache: "no-store" }),
     ]);
     exportToCSV(
       "clients.csv",
       ["ชื่อ", "บริษัท", "สถานะ", "ประเภท"],
-      (clients.data ?? []).map((c) => [c.name, c.company ?? "", c.status, c.project_type])
+      clients.map((c) => [c.name, c.company ?? "", c.status, c.project_type])
     );
     setTimeout(() => {
       exportToCSV(
         "tasks.csv",
         ["งาน", "ลูกค้า", "สถานะ", "เริ่ม", "ครบ"],
-        (tasks.data ?? []).map((t) => [
+        tasks.map((t) => [
           t.title,
           t.client?.name ?? "",
           t.status,
@@ -336,20 +330,21 @@ export default function SettingsPage() {
     if (!profile) return;
     setBankSaving(true);
     setBankSaved(false);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        bank_name: bankForm.bank_name.trim() || null,
-        bank_account_number: bankForm.bank_account_number.trim() || null,
-        bank_account_name: bankForm.bank_account_name.trim() || null,
-      })
-      .eq("id", profile.id);
-    setBankSaving(false);
-    if (!error) {
+    try {
+      await neonRequest("/api/neon/profiles", {
+        method: "PATCH",
+        body: JSON.stringify({ data: {
+          bank_name: bankForm.bank_name.trim() || null,
+          bank_account_number: bankForm.bank_account_number.trim() || null,
+          bank_account_name: bankForm.bank_account_name.trim() || null,
+        } }),
+      });
       setBankSaved(true);
       setProfile({ ...profile, ...bankForm });
+    } catch (error) {
+      setRoleError(error instanceof Error ? error.message : "บันทึกบัญชีไม่สำเร็จ");
     }
+    setBankSaving(false);
   }
 
   async function installApp() {

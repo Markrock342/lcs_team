@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Play, Square, Clock } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { useRole } from "@/components/RoleProvider";
+import { neonRequest } from "@/lib/neon/client";
 import { logActivity } from "@/lib/activity";
 import type { TimeEntry } from "@/lib/extras-types";
 
@@ -13,12 +14,15 @@ export function TimeTracker({
   taskId: string;
   taskTitle: string;
 }) {
+  const { profile } = useRole();
   const [active, setActive] = useState<TimeEntry | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
 
   useEffect(() => {
-    loadEntries();
+    void loadEntries();
+    // Reload only when switching tasks; the profile is server-populated before render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
 
   useEffect(() => {
@@ -33,16 +37,12 @@ export function TimeTracker({
 
   async function loadEntries() {
     try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data } = await supabase
-        .from("time_entries")
-        .select("*")
-        .eq("task_id", taskId)
-        .order("started_at", { ascending: false })
-        .limit(5);
-      setEntries(data ?? []);
-      const running = data?.find((e) => !e.ended_at && e.user_id === user?.id);
+      const { entries: data } = await neonRequest<{ entries: TimeEntry[] }>(
+        `/api/neon/time-entries?taskId=${encodeURIComponent(taskId)}`,
+        { cache: "no-store" },
+      );
+      setEntries(data);
+      const running = data.find((e) => !e.ended_at && e.user_id === profile?.id);
       if (running) {
         setActive(running);
         setElapsed(
@@ -55,30 +55,26 @@ export function TimeTracker({
   }
 
   async function start() {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data } = await supabase
-      .from("time_entries")
-      .insert({ task_id: taskId, user_id: user.id, started_at: new Date().toISOString() })
-      .select()
-      .single();
-    if (data) {
-      setActive(data);
+    if (!profile) return;
+    const { entry } = await neonRequest<{ entry: TimeEntry }>("/api/neon/time-entries", {
+      method: "POST",
+      body: JSON.stringify({ task_id: taskId, started_at: new Date().toISOString() }),
+    });
+    if (entry) {
+      setActive(entry);
       setElapsed(0);
-      await logActivity("create", "time_entry", data.id, taskTitle);
+      await logActivity("create", "time_entry", entry.id, taskTitle);
     }
   }
 
   async function stop() {
     if (!active) return;
-    const supabase = createClient();
     const ended = new Date().toISOString();
     const mins = Math.round(elapsed / 60);
-    await supabase
-      .from("time_entries")
-      .update({ ended_at: ended, duration_minutes: mins })
-      .eq("id", active.id);
+    await neonRequest("/api/neon/time-entries", {
+      method: "PATCH",
+      body: JSON.stringify({ id: active.id, ended_at: ended, duration_minutes: mins }),
+    });
     setActive(null);
     setElapsed(0);
     loadEntries();

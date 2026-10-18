@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { Button, Input } from "@/components/ui";
 import { syncInvoicePaymentToLedger } from "@/lib/accounting";
 import type { Invoice } from "@/lib/extras-types";
@@ -23,23 +23,31 @@ export function QuickIncomeForm({ onDone }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    load();
-  }, []);
-
   async function load() {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("invoices")
-      .select("*, client:clients(*), payments:invoice_payments(*)")
-      .neq("status", "paid")
-      .order("created_at", { ascending: false });
-    const list = (data ?? []).filter(
-      (i) => (i.document_type ?? "invoice") !== "proposal" && (i.document_type ?? "invoice") !== "quotation" && (i.document_type ?? "invoice") !== "agreement"
-    );
-    setInvoices(list);
-    setLoading(false);
+    try {
+      const { invoices: data } = await neonRequest<{
+        invoices: (Invoice & { client?: Client })[];
+      }>("/api/neon/invoices", { cache: "no-store" });
+      const list = (data ?? []).filter(
+        (i) =>
+          i.status !== "paid" &&
+          (i.document_type ?? "invoice") !== "proposal" &&
+          (i.document_type ?? "invoice") !== "quotation" &&
+          (i.document_type ?? "invoice") !== "agreement"
+      );
+      setInvoices(list);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "โหลดใบแจ้งหนี้ไม่สำเร็จ");
+    } finally {
+      setLoading(false);
+    }
   }
+
+  useEffect(() => {
+    // Data is loaded once when the quick form opens.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, []);
 
   function selectInvoice(inv: Invoice & { client?: Client }) {
     setSelected(inv);
@@ -52,40 +60,30 @@ export function QuickIncomeForm({ onDone }: Props) {
     if (!selected || saving) return;
     setSaving(true);
     setError("");
-    const supabase = createClient();
     const payAmount = parseFloat(amount);
     const paidAt = new Date().toISOString().slice(0, 10);
-
-    const { data: payment, error: payError } = await supabase
-      .from("invoice_payments")
-      .insert({
-        invoice_id: selected.id,
-        amount: payAmount,
-        paid_at: paidAt,
-      })
-      .select("id")
-      .single();
-    if (payError) {
+    let payment: { id: string };
+    try {
+      const result = await neonRequest<{ payment: { id: string } }>(
+        "/api/neon/invoices/payments",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            invoice_id: selected.id,
+            amount: payAmount,
+            paid_at: paidAt,
+          }),
+        }
+      );
+      payment = result.payment;
+    } catch (saveError) {
       setSaving(false);
-      setError(payError.message);
+      setError(saveError instanceof Error ? saveError.message : "บันทึกรายรับไม่สำเร็จ");
       return;
     }
     if (!payment?.id) {
       setSaving(false);
       setError("บันทึกรายรับแล้ว แต่ไม่พบเลขอ้างอิงรายการ");
-      return;
-    }
-
-    const paid =
-      (selected.payments?.reduce((s, p) => s + p.amount, 0) ?? 0) + payAmount;
-    const newStatus = paid >= selected.total_amount ? "paid" : "partial";
-    const { error: statusError } = await supabase
-      .from("invoices")
-      .update({ status: newStatus })
-      .eq("id", selected.id);
-    if (statusError) {
-      setSaving(false);
-      setError(statusError.message);
       return;
     }
 

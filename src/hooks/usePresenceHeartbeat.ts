@@ -1,43 +1,36 @@
 "use client";
 
 import { useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 
 const HEARTBEAT_MS = 60_000;
 
-/** อัปเดต last_seen_at ตอนเปิดแอพ + ทุก 1 นาที + ตอนกลับมา tab */
+/** อัปเดต last_seen_at ใน Neon ตอนเปิดแอป ทุกหนึ่งนาที และเมื่อกลับมาที่แท็บ */
 export function usePresenceHeartbeat() {
   useEffect(() => {
-    const supabase = createClient();
     let interval: ReturnType<typeof setInterval> | null = null;
 
     async function touch() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      await supabase
-        .from("profiles")
-        .update({ last_seen_at: new Date().toISOString() })
-        .eq("id", user.id);
+      await neonRequest("/api/neon/profiles", {
+        method: "PATCH",
+        body: JSON.stringify({ data: { last_seen_at: new Date().toISOString() } }),
+      }).catch(() => undefined);
     }
 
-    touch();
+    void touch();
     interval = setInterval(touch, HEARTBEAT_MS);
 
     function onVisible() {
-      if (document.visibilityState === "visible") touch();
+      if (document.visibilityState === "visible") void touch();
     }
 
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", touch);
-
     return () => {
       if (interval) clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", touch);
-      touch();
+      void touch();
     };
   }, []);
 }

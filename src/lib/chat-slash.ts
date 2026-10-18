@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { neonRequest } from "@/lib/neon/client";
 
 export const SLASH_COMMANDS = [
   { cmd: "/งาน", hint: "สร้างงาน เช่น /งาน แก้บั๊กล็อกอิน" },
@@ -49,69 +50,66 @@ export async function runSlashCommand(
   }
 
   if (cmd === "/งาน" || key === "task") {
-    const { data, error } = await supabase
-      .from("tasks")
-      .insert({
+    try {
+      const { task: data } = await neonRequest<{ task: { id: string; title: string } }>("/api/neon/tasks", {
+        method: "POST",
+        body: JSON.stringify({
         title: parsed.title,
         status: "pending",
         priority: "medium",
         duration_days: 1,
         progress: 0,
-        created_by: userId,
-      })
-      .select("id, title")
-      .single();
-    if (error || !data) {
-      return { kind: "error", text: error?.message ?? "สร้างงานไม่สำเร็จ" };
+        }),
+      });
+      return {
+        kind: "ok",
+        content: `สร้างงาน «${data.title}»`,
+        linkedTaskId: data.id,
+        href: `/tasks?open=${data.id}`,
+      };
+    } catch (error) {
+      return { kind: "error", text: error instanceof Error ? error.message : "สร้างงานไม่สำเร็จ" };
     }
-    return {
-      kind: "ok",
-      content: `สร้างงาน «${data.title}»`,
-      linkedTaskId: data.id,
-      href: `/tasks?open=${data.id}`,
-    };
   }
 
   if (cmd === "/ลูกค้า" || key === "client") {
-    const { data, error } = await supabase
-      .from("clients")
-      .insert({
+    try {
+      const { client: data } = await neonRequest<{ client: { id: string; name: string } }>("/api/neon/clients", {
+        method: "POST",
+        body: JSON.stringify({
         name: parsed.title,
         status: "lead",
         project_type: "other",
-        created_by: userId,
-      })
-      .select("id, name")
-      .single();
-    if (error || !data) {
-      return { kind: "error", text: error?.message ?? "เพิ่มลูกค้าไม่สำเร็จ" };
+        }),
+      });
+      return {
+        kind: "ok",
+        content: `เพิ่มลูกค้า «${data.name}»`,
+        href: `/clients/${data.id}`,
+      };
+    } catch (error) {
+      return { kind: "error", text: error instanceof Error ? error.message : "เพิ่มลูกค้าไม่สำเร็จ" };
     }
-    return {
-      kind: "ok",
-      content: `เพิ่มลูกค้า «${data.name}»`,
-      href: `/clients/${data.id}`,
-    };
   }
 
   if (cmd === "/ดีล" || key === "deal") {
-    const { data, error } = await supabase
-      .from("sales_deals")
-      .insert({
+    try {
+      const { row: data } = await neonRequest<{ row: { id: string; title: string } }>("/api/neon/sales", {
+        method: "POST",
+        body: JSON.stringify({ resource: "deal", data: {
         title: parsed.title,
         stage: "lead",
         owner_id: userId,
-        created_by: userId,
-      })
-      .select("id, title")
-      .single();
-    if (error || !data) {
-      return { kind: "error", text: error?.message ?? "เปิดดีลไม่สำเร็จ" };
+        } }),
+      });
+      return {
+        kind: "ok",
+        content: `เปิดดีล «${data.title}»`,
+        href: `/sales?view=pipeline&open=${data.id}`,
+      };
+    } catch (error) {
+      return { kind: "error", text: error instanceof Error ? error.message : "เปิดดีลไม่สำเร็จ" };
     }
-    return {
-      kind: "ok",
-      content: `เปิดดีล «${data.title}»`,
-      href: `/sales?view=pipeline&open=${data.id}`,
-    };
   }
 
   return null;

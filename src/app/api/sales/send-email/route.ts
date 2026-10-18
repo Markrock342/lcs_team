@@ -1,32 +1,15 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getNeonAuthContext } from "@/lib/neon/auth";
 import { canEdit } from "@/lib/permissions";
 import { parseEmailDraft, sendSalesEmail } from "@/lib/sales-mail";
-import type { TeamRole } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  if (!supabase) {
-    return NextResponse.json({ error: "ยังไม่ได้ตั้งค่า Supabase" }, { status: 500 });
-  }
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!canEdit(profile?.role as TeamRole | undefined)) {
+  const auth = await getNeonAuthContext();
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  if (!canEdit(auth.context.profile.role)) {
     return NextResponse.json({ error: "ไม่มีสิทธิ์ส่งเมล" }, { status: 403 });
   }
 

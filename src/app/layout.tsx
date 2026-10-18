@@ -1,14 +1,7 @@
-import { IBM_Plex_Sans_Thai } from "next/font/google";
 import type { Metadata, Viewport } from "next";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { PWARegister } from "@/components/PWARegister";
 import "./globals.css";
-
-const ibmPlex = IBM_Plex_Sans_Thai({
-  variable: "--font-ibm-plex",
-  subsets: ["latin", "thai"],
-  weight: ["300", "400", "500", "600", "700"],
-});
 
 export const metadata: Metadata = {
   title: "Limit Code Studio — พื้นที่ทำงานทีม",
@@ -43,7 +36,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="th" className={`${ibmPlex.variable} h-full`}>
+    <html lang="th" className="h-full">
       <body className="min-h-full antialiased bg-background text-foreground">
         <ThemeProvider>
           {children}

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { getGeminiKey } from "@/lib/gemini";
 import { getSupabaseEnv } from "@/lib/env";
 import { getVapidKeys } from "@/lib/push-server";
+import { getNeonHealthSnapshot, isNeonConfigured, queryNeon } from "@/lib/neon/server";
 
 type Check = {
   id: string;
@@ -35,34 +35,62 @@ export async function GET() {
     fix: "ใส่ค่าใน .env.local ของโปรเจกต์",
   });
 
+  if (!isNeonConfigured()) {
+    checks.push({
+      id: "neon-env",
+      label: "Neon PostgreSQL",
+      ok: false,
+      detail: "ยังไม่มี DATABASE_URL ฝั่ง server",
+      fix: "ตั้ง DATABASE_URL ใน Vercel Production/Preview และ .env.local สำหรับ local",
+    });
+  } else {
+    try {
+      const snapshot = await getNeonHealthSnapshot();
+      checks.push({
+        id: "neon-env",
+        label: "Neon PostgreSQL",
+        ok: true,
+        detail: `เชื่อมต่อได้ (${snapshot.tableCount} ตาราง, ${snapshot.tasks + snapshot.clients + snapshot.messages} แถวในชุดตรวจ)`,
+      });
+    } catch (error) {
+      checks.push({
+        id: "neon-env",
+        label: "Neon PostgreSQL",
+        ok: false,
+        detail: error instanceof Error ? error.message : "เชื่อมต่อ Neon ไม่สำเร็จ",
+        fix: "ตรวจ DATABASE_URL และสิทธิ์ของ role ใน Neon",
+      });
+    }
+  }
+
   const tables = [
     ["sales_deals", "ตารางดีลขาย", "รัน supabase/add-sales-department.sql"],
     ["sales_prospects", "ตารางรายชื่อเป้าหมาย", "รัน supabase/add-sales-productivity.sql"],
     ["sales_interactions", "ประวัติการติดต่อ", "รัน supabase/add-sales-productivity.sql"],
-    ["saved_views", "มุมมองที่บันทึก", "รัน supabase/add-sales-productivity.sql"],
-    ["notifications", "กล่องแจ้งเตือน", "รัน supabase/add-all-features.sql"],
-    ["invoices", "ใบแจ้งหนี้", "รัน supabase/add-all-features.sql"],
+    ["saved_views", "มุมมองที่บันทึก", "ตรวจ schema ใน Neon"],
+    ["notifications", "กล่องแจ้งเตือน", "ตรวจ schema ใน Neon"],
+    ["invoices", "ใบแจ้งหนี้", "ตรวจ schema ใน Neon"],
+    ["profiles", "ข้อมูลสมาชิก", "ตรวจ schema ใน Neon"],
+    ["time_entries", "เวลาทำงาน", "ตรวจ schema ใน Neon"],
+    ["task_templates", "เทมเพลตงาน", "ตรวจ schema ใน Neon"],
+    ["push_subscriptions", "Push subscriptions", "ตรวจ schema ใน Neon"],
   ] as const;
 
   for (const [table, label, fix] of tables) {
-    const { error } = await supabase.from(table).select("id").limit(1);
+    let error: string | null = null;
+    try {
+      await queryNeon(`SELECT id FROM public.${table} LIMIT 1`);
+    } catch (tableError) {
+      error = tableError instanceof Error ? tableError.message : "ตรวจตารางไม่สำเร็จ";
+    }
     checks.push({
       id: table,
       label,
       ok: !error,
-      detail: error ? error.message : "ใช้งานได้",
+      detail: error ?? "ใช้งานได้บน Neon",
       fix: error ? fix : undefined,
     });
   }
-
-  const admin = createAdminClient();
-  checks.push({
-    id: "service-role",
-    label: "Service role (push / cron)",
-    ok: Boolean(admin),
-    detail: admin ? "พร้อมส่งแจ้งเตือนเบื้องหลัง" : "ยังไม่มี SUPABASE_SERVICE_ROLE_KEY",
-    fix: "ใส่ service role key ใน environment ของเซิร์ฟเวอร์เท่านั้น",
-  });
 
   const vapid = getVapidKeys();
   checks.push({

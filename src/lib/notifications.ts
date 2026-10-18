@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { chatChannelHref } from "./channels";
 
 export type NotificationKind = "chat" | "mention" | "task" | "system" | "sales" | "invoice";
@@ -59,19 +59,11 @@ export async function dispatchChatNotifications(messageId: string) {
 
 export async function markChatChannelNotificationsRead(channelId: string) {
   try {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
     const link = chatChannelHref(channelId);
-    await supabase
-      .from("notifications")
-      .update({ read: true })
-      .eq("user_id", user.id)
-      .eq("read", false)
-      .eq("link", link);
+    await neonRequest("/api/neon/notifications", {
+      method: "PATCH",
+      body: JSON.stringify({ link, read: true }),
+    });
   } catch {
     // ignore
   }

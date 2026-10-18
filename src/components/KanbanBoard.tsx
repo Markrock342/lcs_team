@@ -2,7 +2,7 @@
 
 import type { Task, TaskStatus } from "@/lib/types";
 import { TASK_STATUS_LABELS } from "@/lib/constants";
-import { StatusBadge, Avatar } from "@/components/ui";
+import { Avatar } from "@/components/ui";
 import { TaskCountdown } from "@/components/TaskCountdown";
 
 const COLUMNS: TaskStatus[] = ["pending", "waiting", "in_progress", "review", "done"];

@@ -1,6 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { chatMessageHref } from "@/lib/channels";
 import { deliverNotifications } from "@/lib/notification-server";
+import { queryNeon } from "@/lib/neon/server";
 
 type MessageRow = {
   id: string;
@@ -25,42 +25,37 @@ function channelKind(channels: MessageRow["channels"]): string {
 }
 
 export async function processChatMessageNotifications(
-  authDb: SupabaseClient,
   messageId: string
 ) {
-  const adminDb = authDb;
-
-  const { data: msg, error } = await adminDb
-    .from("messages")
-    .select(
-      "id, channel_id, sender_id, content, file_name, deleted_at, mentioned_ids, channels(name, kind)"
-    )
-    .eq("id", messageId)
-    .maybeSingle();
-
-  if (error || !msg || (msg as MessageRow).deleted_at) {
+  const { rows } = await queryNeon<MessageRow>(
+    `SELECT m.id, m.channel_id, m.sender_id, m.content, m.file_name, m.deleted_at, m.mentioned_ids,
+      jsonb_build_object('name', c.name, 'kind', c.kind) AS channels
+     FROM public.messages m JOIN public.channels c ON c.id = m.channel_id WHERE m.id = $1 LIMIT 1`,
+    [messageId]
+  );
+  const msg = rows[0];
+  if (!msg || msg.deleted_at) {
     return { inserted: 0, pushed: 0, skipped: true };
   }
 
-  const message = msg as MessageRow;
+  const message = msg;
 
-  const { data: sender } = await adminDb
-    .from("profiles")
-    .select("display_name")
-    .eq("id", message.sender_id)
-    .maybeSingle();
+  const { rows: senders } = await queryNeon<{ display_name: string }>(
+    `SELECT display_name FROM public.profiles WHERE id=$1 LIMIT 1`,
+    [message.sender_id],
+  );
+  const sender = senders[0];
 
   const kind = channelKind(message.channels);
   let recipientIds: string[] = [];
   if (kind === "dm") {
-    const { data: members } = await adminDb
-      .from("channel_members")
-      .select("user_id")
-      .eq("channel_id", message.channel_id);
-    recipientIds = (members ?? []).map((m) => m.user_id);
+    const { rows: members } = await queryNeon<{ user_id: string }>(
+      `SELECT user_id FROM public.channel_members WHERE channel_id = $1`, [message.channel_id]
+    );
+    recipientIds = members.map((m) => m.user_id);
   } else {
-    const { data: profiles } = await adminDb.from("profiles").select("id");
-    recipientIds = (profiles ?? []).map((p) => p.id);
+    const { rows: profiles } = await queryNeon<{ id: string }>(`SELECT id FROM public.profiles`);
+    recipientIds = profiles.map((profile) => profile.id);
   }
 
   const preview =
@@ -91,7 +86,7 @@ export async function processChatMessageNotifications(
       };
     });
 
-  return deliverNotifications(authDb, items);
+  return deliverNotifications(items);
 }
 
 export function isDispatchAuthorized(request: Request): boolean {

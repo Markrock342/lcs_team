@@ -57,6 +57,7 @@ import { sendNotification } from "@/lib/notifications";
 import { notifyTaskCompleted } from "@/lib/workspace-automation";
 import { useActionFeedback } from "@/components/workspace/ActionFeedback";
 import { SavedViewsBar } from "@/components/workspace/SavedViewsBar";
+import { neonRequest } from "@/lib/neon/client";
 import type { Task, Client, Profile, TaskStatus, TaskPriority } from "@/lib/types";
 
 const emptyTask = {
@@ -372,70 +373,59 @@ export default function TasksPage() {
   }, []);
 
   async function loadCounts() {
-    const supabase = createClient();
-    const [checklistRes, attachRes] = await Promise.all([
-      supabase.from("task_checklist_items").select("task_id, done"),
-      supabase.from("task_attachments").select("task_id"),
+    const [checklistData, attachData] = await Promise.all([
+      neonRequest<{ counts: { task_id: string; total: number; done: number }[] }>("/api/neon/checklist", { cache: "no-store" }),
+      neonRequest<{ counts: { task_id: string; count: number }[] }>("/api/neon/task-attachments", { cache: "no-store" }),
     ]);
 
     const cl: Record<string, { total: number; done: number }> = {};
-    for (const row of (checklistRes.data ?? []) as { task_id: string; done: boolean }[]) {
-      const entry = cl[row.task_id] ?? { total: 0, done: 0 };
-      entry.total += 1;
-      if (row.done) entry.done += 1;
-      cl[row.task_id] = entry;
+    for (const row of checklistData.counts ?? []) {
+      cl[row.task_id] = { total: row.total, done: row.done };
     }
     setChecklistCounts(cl);
 
     const at: Record<string, number> = {};
-    for (const row of (attachRes.data ?? []) as { task_id: string }[]) {
-      at[row.task_id] = (at[row.task_id] ?? 0) + 1;
+    for (const row of attachData.counts ?? []) {
+      at[row.task_id] = row.count;
     }
     setAttachmentCounts(at);
   }
 
   async function loadData() {
-    const supabase = createClient();
     setError(null);
-    const [tasksRes, clientsRes, profilesRes] = await Promise.all([
-      supabase
-        .from("tasks")
-        .select("*, client:clients(*), assignee:profiles!tasks_assigned_to_fkey(*)")
-        .order("created_at", { ascending: false }),
-      supabase.from("clients").select("*").order("name"),
-      supabase.from("profiles").select("*"),
-    ]);
+    try {
+      const { tasks: loadedTasks, clients: loadedClients, profiles: loadedProfiles } =
+        await neonRequest<{ tasks: Task[]; clients: Client[]; profiles: Profile[] }>(
+          "/api/neon/tasks",
+          { cache: "no-store" }
+        );
 
-    const loadError = tasksRes.error ?? clientsRes.error ?? profilesRes.error;
-    if (loadError) {
-      setError(loadError.message);
+      setTasks(loadedTasks ?? []);
+      setClients(loadedClients ?? []);
+      setProfiles(loadedProfiles ?? []);
+      await loadCounts();
+
+      const loaded = loadedTasks ?? [];
+      const withSubs = loaded
+        .filter((t) => t.parent_id)
+        .map((t) => t.parent_id as string);
+      if (withSubs.length) {
+        setExpanded(new Set(withSubs));
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const openId = params.get("open");
+      if (openId) {
+        const found = loaded.find((task) => task.id === openId);
+        if (found) openEdit(found);
+      } else if (params.get("create") === "1") {
+        openCreateParent();
+      }
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "โหลดข้อมูลงานไม่สำเร็จ");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setTasks(tasksRes.data ?? []);
-    setClients(clientsRes.data ?? []);
-    setProfiles(profilesRes.data ?? []);
-    loadCounts();
-
-    const loaded = tasksRes.data ?? [];
-    const withSubs = loaded
-      .filter((t) => t.parent_id)
-      .map((t) => t.parent_id as string);
-    if (withSubs.length) {
-      setExpanded(new Set(withSubs));
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    const openId = params.get("open");
-    if (openId) {
-      const found = loaded.find((task) => task.id === openId);
-      if (found) openEdit(found);
-    } else if (params.get("create") === "1") {
-      openCreateParent();
-    }
-
-    setLoading(false);
   }
 
   const parentTasks = tasks.filter((t) => !t.parent_id);
@@ -567,18 +557,23 @@ export default function TasksPage() {
 
     let taskId = editing?.id ?? null;
 
-    if (editing) {
-      await supabase.from("tasks").update(payload).eq("id", editing.id);
-    } else {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const { data: created } = await supabase
-        .from("tasks")
-        .insert({ ...payload, created_by: user?.id })
-        .select("id")
-        .single();
-      taskId = created?.id ?? null;
+    try {
+      if (editing) {
+        await neonRequest<{ task: Task }>("/api/neon/tasks", {
+          method: "PATCH",
+          body: JSON.stringify({ id: editing.id, ...payload }),
+        });
+      } else {
+        const { task: created } = await neonRequest<{ task: Task }>("/api/neon/tasks", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        taskId = created?.id ?? null;
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "บันทึกงานไม่สำเร็จ");
+      setSaving(false);
+      return;
     }
 
     if (pastedImages.length && taskId) {
@@ -608,7 +603,10 @@ export default function TasksPage() {
         }
       }
       if (rows.length) {
-        await supabase.from("task_attachments").insert(rows);
+        await Promise.all(rows.map((row) => neonRequest("/api/neon/task-attachments", {
+          method: "POST",
+          body: JSON.stringify(row),
+        })));
       }
     }
 
@@ -646,11 +644,20 @@ export default function TasksPage() {
     });
     if (!ok) return;
     const snapshot = tasks.find((task) => task.id === id);
-    const supabase = createClient();
-    await supabase.from("tasks").delete().eq("id", id);
+    try {
+      await neonRequest<{ ok: true }>("/api/neon/tasks", {
+        method: "DELETE",
+        body: JSON.stringify({ id }),
+      });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "ลบงานไม่สำเร็จ");
+      return;
+    }
     toast("ลบงานแล้ว", async () => {
       if (!snapshot) return;
-      await supabase.from("tasks").insert({
+      await neonRequest<{ task: Task }>("/api/neon/tasks", {
+        method: "POST",
+        body: JSON.stringify({
         id: snapshot.id,
         title: snapshot.title,
         description: snapshot.description,
@@ -662,7 +669,10 @@ export default function TasksPage() {
         start_date: snapshot.start_date,
         due_date: snapshot.due_date,
         duration_days: snapshot.duration_days,
+        progress: snapshot.progress,
+        image_url: snapshot.image_url,
         created_by: snapshot.created_by,
+        }),
       });
       loadData();
     });
@@ -672,14 +682,19 @@ export default function TasksPage() {
   async function quickStatusChange(id: string, status: TaskStatus) {
     const task = tasks.find((item) => item.id === id);
     const previous = task?.status;
-    const supabase = createClient();
-    await supabase.from("tasks").update({ status }).eq("id", id);
+    await neonRequest<{ task: Task }>("/api/neon/tasks", {
+      method: "PATCH",
+      body: JSON.stringify({ id, status }),
+    });
     if (status === "done" && task) {
       await notifyTaskCompleted(task);
     }
     toast(`เปลี่ยนเป็น${TASK_STATUS_LABELS[status]}`, async () => {
       if (!previous) return;
-      await supabase.from("tasks").update({ status: previous }).eq("id", id);
+      await neonRequest<{ task: Task }>("/api/neon/tasks", {
+        method: "PATCH",
+        body: JSON.stringify({ id, status: previous }),
+      });
       loadData();
     });
     loadData();

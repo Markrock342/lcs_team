@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Plus, Phone, Mail, Trash2, Pencil, Users, ExternalLink, Link2, Share2, FileUp, Copy, Check, ChevronDown, CheckSquare, UserRound } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import {
   Button,
   Card,
@@ -29,6 +28,7 @@ import {
 import { CLIENT_LINK_FIELDS } from "@/lib/constants";
 import { uploadFile } from "@/lib/upload";
 import { logActivity } from "@/lib/activity";
+import { neonRequest } from "@/lib/neon/client";
 import type { Client, ProjectType, ClientStatus } from "@/lib/types";
 import type { ClientFile } from "@/lib/extras-types";
 import Image from "next/image";
@@ -103,20 +103,17 @@ export default function ClientsPage() {
   async function loadClients() {
     setLoading(true);
     setLoadError("");
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("clients")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      setLoadError(error.message);
+    try {
+      const { clients: data } = await neonRequest<{ clients: Client[] }>(
+        "/api/neon/clients",
+        { cache: "no-store" }
+      );
+      setClients(data ?? []);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "โหลดข้อมูลลูกค้าไม่สำเร็จ");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setClients(data ?? []);
-    setLoading(false);
   }
 
   function openCreate() {
@@ -158,13 +155,15 @@ export default function ClientsPage() {
   }
 
   async function loadClientFiles(clientId: string) {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("client_files")
-      .select("*")
-      .eq("client_id", clientId)
-      .order("created_at", { ascending: false });
-    setClientFiles(data ?? []);
+    try {
+      const { files } = await neonRequest<{ files: ClientFile[] }>(
+        `/api/neon/client-files?clientId=${encodeURIComponent(clientId)}`,
+        { cache: "no-store" }
+      );
+      setClientFiles(files ?? []);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "โหลดไฟล์ไม่สำเร็จ");
+    }
   }
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -172,7 +171,6 @@ export default function ClientsPage() {
     setFileUploading(true);
     setUploadError("");
     const file = e.target.files[0];
-    const supabase = createClient();
     const uploaded = await uploadFile(file, "client-files");
     if (!uploaded.ok) {
       setUploadError(uploaded.error);
@@ -180,20 +178,21 @@ export default function ClientsPage() {
       e.target.value = "";
       return;
     }
-    const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from("client_files").insert({
-      client_id: editing.id,
-      name: file.name,
-      file_url: uploaded.url,
-      file_type: file.type,
-      file_size: file.size,
-      uploaded_by: user?.id,
-    });
-    if (error) {
-      setUploadError(error.message);
-    } else {
+    try {
+      await neonRequest("/api/neon/client-files", {
+        method: "POST",
+        body: JSON.stringify({
+          client_id: editing.id,
+          name: file.name,
+          file_url: uploaded.url,
+          file_type: file.type,
+          file_size: file.size,
+        }),
+      });
       await logActivity("upload", "client_file", editing.id, file.name);
-      loadClientFiles(editing.id);
+      await loadClientFiles(editing.id);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "บันทึกไฟล์ไม่สำเร็จ");
     }
     setFileUploading(false);
     e.target.value = "";
@@ -208,22 +207,34 @@ export default function ClientsPage() {
       danger: true,
     });
     if (!ok) return;
-    const supabase = createClient();
-    await supabase.from("client_files").delete().eq("id", id);
-    loadClientFiles(editing.id);
+    try {
+      await neonRequest("/api/neon/client-files", {
+        method: "DELETE",
+        body: JSON.stringify({ id }),
+      });
+      await loadClientFiles(editing.id);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "ลบไฟล์ไม่สำเร็จ");
+    }
   }
 
   async function togglePortal(enabled: boolean) {
     if (!editing) return;
     setPortalEnabled(enabled);
-    const supabase = createClient();
-    const updates: { portal_enabled: boolean; portal_token?: string } = { portal_enabled: enabled };
-    if (enabled && !(editing as Client & { portal_token?: string }).portal_token) {
-      updates.portal_token = crypto.randomUUID();
+    try {
+      const { client } = await neonRequest<{ client: Client & { portal_enabled?: boolean; portal_token?: string } }>(
+        "/api/neon/clients",
+        {
+          method: "PATCH",
+          body: JSON.stringify({ id: editing.id, portal_enabled: enabled }),
+        }
+      );
+      setEditing(client as Client);
+      await loadClients();
+    } catch (error) {
+      setPortalEnabled(!enabled);
+      setUploadError(error instanceof Error ? error.message : "อัปเดตพอร์ทัลไม่สำเร็จ");
     }
-    await supabase.from("clients").update(updates).eq("id", editing.id);
-    setEditing({ ...editing, ...updates } as Client);
-    loadClients();
   }
 
   function copyPortalLink(client: Client & { portal_token?: string }) {
@@ -239,7 +250,6 @@ export default function ClientsPage() {
     setSaving(true);
     setUploadError("");
 
-    const supabase = createClient();
     let image_url = editing?.image_url ?? null;
 
     if (imageFile) {
@@ -278,18 +288,27 @@ export default function ClientsPage() {
       drive_url: form.drive_url || null,
     };
 
-    if (editing) {
-      await supabase.from("clients").update(payload).eq("id", editing.id);
-      await logActivity("update", "client", editing.id, form.name);
-    } else {
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from("clients").insert({ ...payload, created_by: user?.id });
-      await logActivity("create", "client", null, form.name);
+    try {
+      if (editing) {
+        await neonRequest<{ client: Client }>("/api/neon/clients", {
+          method: "PATCH",
+          body: JSON.stringify({ id: editing.id, ...payload }),
+        });
+        await logActivity("update", "client", editing.id, form.name);
+      } else {
+        await neonRequest<{ client: Client }>("/api/neon/clients", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        await logActivity("create", "client", null, form.name);
+      }
+      setModalOpen(false);
+      await loadClients();
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "บันทึกลูกค้าไม่สำเร็จ");
+    } finally {
+      setSaving(false);
     }
-
-    setSaving(false);
-    setModalOpen(false);
-    loadClients();
   }
 
   async function handleDelete(id: string) {
@@ -300,9 +319,15 @@ export default function ClientsPage() {
       danger: true,
     });
     if (!ok) return;
-    const supabase = createClient();
-    await supabase.from("clients").delete().eq("id", id);
-    loadClients();
+    try {
+      await neonRequest<{ ok: true }>("/api/neon/clients", {
+        method: "DELETE",
+        body: JSON.stringify({ id }),
+      });
+      await loadClients();
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "ลบลูกค้าไม่สำเร็จ");
+    }
   }
 
   const filtered =

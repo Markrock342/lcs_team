@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AtSign, Bell, CheckSquare, Handshake, MessageCircle, Receipt } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { PageHeader, PageShell } from "@/components/mobile-ui";
 import {
   Button,
@@ -64,97 +64,49 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     void load();
-
-    const supabase = createClient();
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-
-    async function subscribe() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      channel = supabase
-        .channel("notifications-page")
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "notifications",
-            filter: `user_id=eq.${user.id}`,
-          },
-          (payload) => {
-            const n = payload.new as AppNotification;
-            setItems((prev) => {
-              if (prev.some((i) => i.id === n.id)) return prev;
-              return [n, ...prev].slice(0, 50);
-            });
-          }
-        )
-        .subscribe();
-    }
-
-    subscribe();
-
-    return () => {
-      if (channel) supabase.removeChannel(channel);
-    };
+    const interval = setInterval(load, 10_000);
+    return () => clearInterval(interval);
   }, []);
 
   async function load() {
     setError(null);
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setError("ไม่พบข้อมูลผู้ใช้ เข้าสู่ระบบอีกครั้ง");
-      setLoading(false);
-      return;
-    }
-    const { data, error: loadError } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (loadError) {
+    try {
+      const { notifications } = await neonRequest<{ notifications: AppNotification[] }>(
+        "/api/neon/notifications?limit=50",
+        { cache: "no-store" },
+      );
+      setItems(notifications);
+    } catch {
       setError("โหลดการแจ้งเตือนไม่สำเร็จ ลองอีกครั้ง");
       setLoading(false);
       return;
     }
-    setItems(data ?? []);
     setLoading(false);
   }
 
   async function markAllRead() {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase
-      .from("notifications")
-      .update({ read: true })
-      .eq("user_id", user.id);
+    await neonRequest("/api/neon/notifications", {
+      method: "PATCH",
+      body: JSON.stringify({ all: true, read: true }),
+    });
     setItems((prev) => prev.map((n) => ({ ...n, read: true })));
   }
 
   async function markRead(id: string) {
-    const supabase = createClient();
-    await supabase.from("notifications").update({ read: true }).eq("id", id);
+    await neonRequest("/api/neon/notifications", {
+      method: "PATCH",
+      body: JSON.stringify({ id, read: true }),
+    });
     setItems((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
   }
 
   async function markDone(id: string) {
-    const supabase = createClient();
-    await supabase
-      .from("notifications")
-      .update({ read: true, done_at: new Date().toISOString() })
-      .eq("id", id);
+    await neonRequest("/api/neon/notifications", {
+      method: "PATCH",
+      body: JSON.stringify({ id, read: true, done: true }),
+    });
     setItems((prev) =>
       prev.map((n) =>
         n.id === id ? { ...n, read: true, done_at: new Date().toISOString() } : n

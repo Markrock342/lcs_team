@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AtSign, Bell, CheckSquare, Handshake, MessageCircle, Receipt, X } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
+import type { AppNotification } from "@/lib/extras-types";
 import { getChatChannelIdFromLink } from "@/lib/channels";
 import {
   inferNotificationKind,
@@ -47,6 +48,8 @@ export function InAppNotificationToasts({ userId }: { userId: string }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const seenRef = useRef<Set<string>>(new Set());
+  const initializedRef = useRef(false);
 
   const activeChatChannelId =
     pathname === "/chat" ? searchParams.get("channel") : null;
@@ -99,54 +102,56 @@ export function InAppNotificationToasts({ userId }: { userId: string }) {
   const openToast = useCallback(
     async (toast: ToastItem) => {
       removeToast(toast.id);
-      const supabase = createClient();
-      await supabase
-        .from("notifications")
-        .update({ read: true })
-        .eq("id", toast.notificationId);
+      await neonRequest("/api/neon/notifications", {
+        method: "PATCH",
+        body: JSON.stringify({ id: toast.notificationId, read: true }),
+      });
       router.push(toast.link);
     },
     [removeToast, router]
   );
 
   useEffect(() => {
-    const supabase = createClient();
-
-    const channel = supabase
-      .channel(`in-app-toasts:${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          const n = payload.new as {
-            id: string;
-            title: string;
-            body: string | null;
-            link: string | null;
-          };
-
+    let cancelled = false;
+    const timers = timersRef.current;
+    async function poll() {
+      try {
+        const { notifications } = await neonRequest<{ notifications: AppNotification[] }>(
+          "/api/neon/notifications?limit=20",
+          { cache: "no-store" },
+        );
+        if (cancelled) return;
+        if (!initializedRef.current) {
+          for (const notification of notifications) seenRef.current.add(notification.id);
+          initializedRef.current = true;
+          return;
+        }
+        for (const notification of [...notifications].reverse()) {
+          if (seenRef.current.has(notification.id)) continue;
+          seenRef.current.add(notification.id);
           enqueue({
-            notificationId: n.id,
-            title: n.title,
-            body: n.body ?? "",
-            link: n.link ?? "/notifications",
-            kind: inferNotificationKind(n.title, n.link),
+            notificationId: notification.id,
+            title: notification.title,
+            body: notification.body ?? "",
+            link: notification.link ?? "/notifications",
+            kind: inferNotificationKind(notification.title, notification.link),
           });
         }
-      )
-      .subscribe();
+      } catch {
+        // Polling failure must not interrupt the workspace.
+      }
+    }
+
+    void poll();
+    const interval = setInterval(poll, 8_000);
 
     return () => {
-      for (const timer of timersRef.current.values()) {
+      cancelled = true;
+      clearInterval(interval);
+      for (const timer of timers.values()) {
         clearTimeout(timer);
       }
-      timersRef.current.clear();
-      supabase.removeChannel(channel);
+      timers.clear();
     };
   }, [userId, enqueue]);
 

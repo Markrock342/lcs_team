@@ -21,6 +21,7 @@ import {
   SmilePlus,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { Button, EmptyState, Input, Modal, PageLoader, Textarea, ProfileRoleBadges } from "@/components/ui";
 import { useActionFeedback } from "@/components/workspace/ActionFeedback";
 import { ChatMessageItem } from "@/components/ChatMessageItem";
@@ -129,7 +130,10 @@ function ChatPageContent() {
   const sendAbortRef = useRef<AbortController | null>(null);
   const mentionInputRef = useRef<ChatMentionInputHandle>(null);
   const threadRootRef = useRef<Message | null>(null);
-  threadRootRef.current = threadRoot;
+
+  useEffect(() => {
+    threadRootRef.current = threadRoot;
+  }, [threadRoot]);
 
   const filePreviewUrl = useMemo(
     () => (file && isImageFile(file.type) ? URL.createObjectURL(file) : null),
@@ -155,18 +159,14 @@ function ChatPageContent() {
         .map((m) => m.linked_task_id)
         .filter((id): id is string => !!id);
 
-      const [reactionsRes, tasksRes] = await Promise.all([
-        supabase
-          .from("message_reactions")
-          .select("*, user:profiles(id, display_name)")
-          .in("message_id", ids),
+      const taskData = await (
         taskIds.length
-          ? supabase.from("tasks").select("id, title, status").in("id", taskIds)
-          : Promise.resolve({ data: [] as Task[] }),
-      ]);
+          ? neonRequest<{ tasks: Task[] }>("/api/neon/tasks", { cache: "no-store" })
+          : Promise.resolve({ tasks: [] as Task[] })
+      );
 
       const taskMap = new Map(
-        ((tasksRes.data ?? []) as Task[]).map((t) => [t.id, t])
+        taskData.tasks.filter((task) => taskIds.includes(task.id)).map((t) => [t.id, t])
       );
       setMessages(
         data.map((m) => ({
@@ -178,9 +178,11 @@ function ChatPageContent() {
       );
 
       const grouped: Record<string, MessageReaction[]> = {};
-      for (const r of (reactionsRes.data ?? []) as MessageReaction[]) {
-        if (!grouped[r.message_id]) grouped[r.message_id] = [];
-        grouped[r.message_id].push(r);
+      for (const message of data) {
+        for (const reaction of message.reactions ?? []) {
+          if (!grouped[message.id]) grouped[message.id] = [];
+          grouped[message.id].push(reaction);
+        }
       }
       setReactionsMap(grouped);
       setThreadCounts(await fetchThreadCounts(supabase, ids));
@@ -209,25 +211,19 @@ function ChatPageContent() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      const [channelsRes, profilesRes, tasksRes] = await Promise.all([
-        supabase.from("channels").select("*").order("created_at", { ascending: true }),
-        supabase.from("profiles").select("*"),
-        supabase
-          .from("tasks")
-          .select("id, title, status")
-          .neq("status", "done")
-          .is("parent_id", null)
-          .order("title")
-          .limit(50),
+      const [channelData, profileData, taskData] = await Promise.all([
+        neonRequest<{ channels: Channel[] }>("/api/neon/chat?mode=channels", { cache: "no-store" }),
+        neonRequest<{ profiles: Profile[] }>("/api/neon/profiles", { cache: "no-store" }),
+        neonRequest<{ tasks: Task[] }>("/api/neon/tasks", { cache: "no-store" }),
       ]);
 
-      const channelList = channelsRes.data ?? [];
+      const channelList = channelData.channels ?? [];
       setChannels(channelList);
-      setProfiles(profilesRes.data ?? []);
-      setOpenTasks((tasksRes.data ?? []) as Task[]);
+      setProfiles(profileData.profiles ?? []);
+      setOpenTasks(taskData.tasks.filter((task) => task.status !== "done" && !task.parent_id).slice(0, 50));
 
       if (user) {
-        const profile = profilesRes.data?.find((p) => p.id === user.id);
+        const profile = profileData.profiles.find((p) => p.id === user.id);
         setCurrentUser(profile ?? null);
       }
 
@@ -299,261 +295,74 @@ function ChatPageContent() {
 
   useEffect(() => {
     if (!activeChannel || !currentUser) return;
-
     pendingScrollBottomRef.current = true;
     let cancelled = false;
+    let firstRun = true;
 
     async function sync() {
-      const msgs = await loadMessages(activeChannel!.id);
+      const channel = activeChannel!;
+      const user = currentUser!;
+      const msgs = await loadMessages(channel.id);
       if (cancelled) return;
-      await markMessagesAsRead(msgs, currentUser!.id);
-      await markChannelRead(createClient(), activeChannel!.id, currentUser!.id);
-      setUnread((prev) => ({ ...prev, [activeChannel!.id]: 0 }));
+      await markMessagesAsRead(msgs, user.id);
+      await markChannelRead(createClient(), channel.id, user.id);
+      setUnread((prev) => ({ ...prev, [channel.id]: 0 }));
+      markChatChannelNotificationsRead(channel.id);
 
-      if (msgParam) {
+      const root = threadRootRef.current;
+      if (root) {
+        const threaded = await fetchChannelMessages(createClient(), root.channel_id, { threadId: root.id });
+        if (!cancelled) setThreadMessages(threaded.data);
+      }
+
+      if (firstRun && msgParam) {
+        firstRun = false;
         pendingScrollBottomRef.current = false;
         isNearBottomRef.current = false;
         const inList = msgs.find((m) => m.id === msgParam);
-        if (inList) {
-          setHighlightMsgId(msgParam);
-        } else {
+        if (inList) setHighlightMsgId(msgParam);
+        else {
           const full = await fetchMessageById(createClient(), msgParam);
           if (full) {
             setHighlightMsgId(msgParam);
             const rootId = full.thread_id ?? full.id;
-            const root = msgs.find((m) => m.id === rootId) ?? full;
-            setThreadRoot(root);
-            const threaded = await fetchChannelMessages(
-              createClient(),
-              root.channel_id,
-              { threadId: root.id }
-            );
-            setThreadMessages(threaded.data);
+            const nextRoot = msgs.find((m) => m.id === rootId) ?? full;
+            setThreadRoot(nextRoot);
           }
         }
-      } else {
+      } else if (firstRun) {
+        firstRun = false;
         setHighlightMsgId(null);
       }
     }
 
-    sync();
-    markChatChannelNotificationsRead(activeChannel!.id);
-    const supabase = createClient();
-
-    const msgChannel = supabase
-      .channel(`messages:${activeChannel.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `channel_id=eq.${activeChannel.id}`,
-        },
-        async (payload) => {
-          const newMsg = payload.new as Message;
-          const full = await fetchMessageById(supabase, newMsg.id);
-
-          if (!full) return;
-
-          if (full.thread_id) {
-            setThreadCounts((prev) => ({
-              ...prev,
-              [full.thread_id!]: (prev[full.thread_id!] ?? 0) + 1,
-            }));
-            const root = threadRootRef.current;
-            if (root && (root.id === full.thread_id || root.id === full.id)) {
-              setThreadMessages((prev) => {
-                if (prev.some((m) => m.id === full.id)) return prev;
-                return [...prev, full];
-              });
-            }
-            return;
-          }
-
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === full.id)) return prev;
-            return [...prev, full];
-          });
-
-          if (full.sender_id !== currentUser?.id) {
-            await markMessagesAsRead([full], currentUser!.id);
-          }
-          markChatChannelNotificationsRead(activeChannel!.id);
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "messages",
-          filter: `channel_id=eq.${activeChannel.id}`,
-        },
-        async (payload) => {
-          const updated = payload.new as Message;
-          const full = await fetchMessageById(supabase, updated.id);
-          if (!full) return;
-          setMessages((prev) =>
-            prev.map((m) => (m.id === full.id ? full : m))
-          );
-          setThreadMessages((prev) =>
-            prev.map((m) => (m.id === full.id ? full : m))
-          );
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "message_reads" },
-        (payload) => {
-          const read = payload.new as { message_id: string; user_id: string; read_at: string };
-          setMessages((prev) =>
-            prev.map((m) => {
-              if (m.id !== read.message_id) return m;
-              const existing = m.reads ?? [];
-              if (existing.some((r) => r.user_id === read.user_id)) return m;
-              const reader = profiles.find((p) => p.id === read.user_id);
-              return {
-                ...m,
-                reads: [
-                  ...existing,
-                  {
-                    user_id: read.user_id,
-                    read_at: read.read_at,
-                    reader: reader
-                      ? {
-                          id: reader.id,
-                          display_name: reader.display_name,
-                          username: reader.username,
-                        }
-                      : null,
-                  },
-                ],
-              };
-            })
-          );
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "message_reactions" },
-        (payload) => {
-          const row = payload.new as MessageReaction;
-          setReactionsMap((prev) => {
-            const list = prev[row.message_id] ?? [];
-            if (list.some((r) => r.id === row.id)) return prev;
-            if (list.some((r) => r.user_id === row.user_id && r.emoji === row.emoji)) {
-              return prev;
-            }
-            return { ...prev, [row.message_id]: [...list, row] };
-          });
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "message_reactions" },
-        (payload) => {
-          const row = payload.old as { id?: string; message_id?: string };
-          if (!row.id) return;
-          setReactionsMap((prev) => {
-            const next: Record<string, MessageReaction[]> = {};
-            for (const [id, list] of Object.entries(prev)) {
-              next[id] = list.filter((r) => r.id !== row.id);
-            }
-            return next;
-          });
-        }
-      )
-      .subscribe();
-
+    void sync();
+    const interval = window.setInterval(() => void sync(), 4_000);
     return () => {
       cancelled = true;
-      supabase.removeChannel(msgChannel);
+      window.clearInterval(interval);
     };
-  }, [activeChannel, loadMessages, markMessagesAsRead, currentUser, profiles, msgParam]);
-
-  useEffect(() => {
-    const supabase = createClient();
-    const chSub = supabase
-      .channel("channels-list")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "channels" },
-        (payload) => {
-          const ch = payload.new as Channel;
-          setChannels((prev) => {
-            if (prev.some((c) => c.id === ch.id)) return prev;
-            return [...prev, ch];
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(chSub);
-    };
-  }, []);
+  }, [activeChannel, loadMessages, markMessagesAsRead, currentUser, msgParam]);
 
   useEffect(() => {
     if (!currentUser) return;
-    const supabase = createClient();
-    const sub = supabase
-      .channel("chat-unread")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
-        (payload) => {
-          const msg = payload.new as Message;
-          if (msg.sender_id === currentUser.id) return;
-          if (msg.thread_id) return;
-          if (msg.channel_id === activeChannel?.id) return;
-          setUnread((prev) => ({
-            ...prev,
-            [msg.channel_id]: (prev[msg.channel_id] ?? 0) + 1,
-          }));
-          void supabase
-            .from("channels")
-            .select("*")
-            .eq("id", msg.channel_id)
-            .maybeSingle()
-            .then(({ data }) => {
-              if (!data) return;
-              setChannels((prev) =>
-                prev.some((c) => c.id === data.id) ? prev : [...prev, data as Channel]
-              );
-            });
-        }
-      )
-      .subscribe();
+    let cancelled = false;
+    async function refreshChannels() {
+      const { channels: latest } = await neonRequest<{ channels: Channel[] }>(
+        "/api/neon/chat?mode=channels", { cache: "no-store" }
+      );
+      if (cancelled) return;
+      setChannels(latest);
+      const counts = await fetchUnreadCounts(createClient(), currentUser!.id, latest.map((channel) => channel.id));
+      if (activeChannel?.id) counts[activeChannel.id] = 0;
+      if (!cancelled) setUnread(counts);
+    }
+    const interval = window.setInterval(() => void refreshChannels(), 8_000);
     return () => {
-      supabase.removeChannel(sub);
+      cancelled = true;
+      window.clearInterval(interval);
     };
   }, [currentUser, activeChannel?.id]);
-
-  useEffect(() => {
-    const supabase = createClient();
-    const presenceSub = supabase
-      .channel("profiles-presence")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles" },
-        (payload) => {
-          const updated = payload.new as Profile;
-          setProfiles((prev) =>
-            prev.map((p) =>
-              p.id === updated.id
-                ? { ...p, last_seen_at: updated.last_seen_at }
-                : p
-            )
-          );
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(presenceSub);
-    };
-  }, []);
 
   useEffect(() => {
     const id = setInterval(() => setPresenceTick((t) => t + 1), 30_000);
@@ -618,12 +427,14 @@ function ChatPageContent() {
 
   useEffect(() => {
     if (!activeChannel) return;
-    try {
-      setContent(sessionStorage.getItem(`lcs-chat-draft:${activeChannel.id}`) ?? "");
-    } catch {
-      setContent("");
-    }
-  }, [activeChannel?.id]);
+    void Promise.resolve().then(() => {
+      try {
+        setContent(sessionStorage.getItem(`lcs-chat-draft:${activeChannel.id}`) ?? "");
+      } catch {
+        setContent("");
+      }
+    });
+  }, [activeChannel]);
 
   useEffect(() => {
     const scrollEl = messagesScrollRef.current;
@@ -655,42 +466,31 @@ function ChatPageContent() {
 
     setCreating(true);
     setCreateError("");
-    const supabase = createClient();
-
-    const { data, error } = await supabase
-      .from("channels")
-      .insert({
-        name: slug,
-        description: newChannelDesc.trim() || null,
-        created_by: currentUser?.id,
-      })
-      .select()
-      .single();
-
-    setCreating(false);
-
-    if (error) {
-      if (error.message.includes("does not exist")) {
-        setCreateError("รัน supabase/add-channels.sql ใน Supabase ก่อน");
-      } else {
-        setCreateError(error.message);
-      }
+    let data: Channel;
+    try {
+      const result = await neonRequest<{ channel: Channel }>("/api/neon/chat", {
+        method: "POST",
+        body: JSON.stringify({ action: "channel", data: { name: slug, description: newChannelDesc.trim() || null } }),
+      });
+      data = result.channel;
+    } catch (error) {
+      setCreating(false);
+      setCreateError(error instanceof Error ? error.message : "สร้างช่องไม่สำเร็จ");
       return;
     }
+    setCreating(false);
 
-    if (data) {
-      setChannels((prev) => [...prev, data]);
-      setActiveChannel(data);
-      setMessages([]);
-      setShowMobileChannels(false);
-      pendingScrollBottomRef.current = true;
-      router.replace(chatChannelHref(data.id), { scroll: false });
-    }
+    setChannels((prev) => [...prev, data]);
+    setActiveChannel(data);
+    setMessages([]);
+    setShowMobileChannels(false);
+    pendingScrollBottomRef.current = true;
+    router.replace(chatChannelHref(data.id), { scroll: false });
 
     setNewChannelName("");
     setNewChannelDesc("");
     setCreateOpen(false);
-    await logActivity("create", "channel", data?.id ?? null, slug);
+    await logActivity("create", "channel", data.id, slug);
   }
 
   function openEditChannel() {
@@ -708,16 +508,18 @@ function ChatPageContent() {
     if (!slug) return;
 
     setEditingChannel(true);
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("channels")
-      .update({ name: slug, description: editDesc.trim() || null })
-      .eq("id", activeChannel.id)
-      .select()
-      .single();
-
+    let data: Channel;
+    try {
+      const result = await neonRequest<{ channel: Channel }>("/api/neon/chat", {
+        method: "PATCH",
+        body: JSON.stringify({ target: "channel", id: activeChannel.id, data: { name: slug, description: editDesc.trim() || null } }),
+      });
+      data = result.channel;
+    } catch {
+      setEditingChannel(false);
+      return;
+    }
     setEditingChannel(false);
-    if (error || !data) return;
 
     setChannels((prev) => prev.map((c) => (c.id === data.id ? data : c)));
     setActiveChannel(data);
@@ -735,8 +537,10 @@ function ChatPageContent() {
     });
     if (!ok) return;
 
-    const supabase = createClient();
-    await supabase.from("channels").delete().eq("id", activeChannel.id);
+    await neonRequest("/api/neon/chat", {
+      method: "DELETE",
+      body: JSON.stringify({ target: "channel", id: activeChannel.id }),
+    });
     setChannels((prev) => prev.filter((c) => c.id !== activeChannel.id));
     const next = channels.find((c) => c.id !== activeChannel.id) ?? null;
     setActiveChannel(next);
@@ -807,20 +611,19 @@ function ChatPageContent() {
   }
 
   async function togglePin(msg: Message) {
-    const supabase = createClient();
     const pinned = msg.pinned_at
       ? { pinned_at: null, pinned_by: null }
       : {
           pinned_at: new Date().toISOString(),
           pinned_by: currentUser?.id ?? null,
         };
-    const { error } = await supabase.from("messages").update(pinned).eq("id", msg.id);
-    if (error) {
-      setSendError(
-        error.message.toLowerCase().includes("column")
-          ? "รัน supabase/add-chat-workspace.sql ใน Supabase ก่อน"
-          : error.message
-      );
+    try {
+      await neonRequest("/api/neon/chat", {
+        method: "PATCH",
+        body: JSON.stringify({ target: "message", id: msg.id, data: pinned }),
+      });
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : "ปักหมุดไม่สำเร็จ");
       return;
     }
     const next = { ...msg, ...pinned };
@@ -842,20 +645,20 @@ function ChatPageContent() {
       danger: true,
     });
     if (!ok) return;
-    const supabase = createClient();
     const deleted_at = new Date().toISOString();
-    const { error } = await supabase
-      .from("messages")
-      .update({ deleted_at })
-      .eq("id", msg.id);
-
-    if (!error) {
+    try {
+      await neonRequest("/api/neon/chat", {
+        method: "PATCH",
+        body: JSON.stringify({ target: "message", id: msg.id, data: { deleted_at } }),
+      });
       setMessages((prev) =>
         prev.map((m) => (m.id === msg.id ? { ...m, deleted_at } : m))
       );
       setThreadMessages((prev) =>
         prev.map((m) => (m.id === msg.id ? { ...m, deleted_at } : m))
       );
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : "ลบข้อความไม่สำเร็จ");
     }
   }
 
@@ -870,23 +673,22 @@ function ChatPageContent() {
     const existing = reactionsMap[messageId]?.find(
       (r) => r.user_id === currentUser.id && r.emoji === emoji
     );
-    const supabase = createClient();
-
     if (existing) {
       setReactionsMap((prev) => ({
         ...prev,
         [messageId]: (prev[messageId] ?? []).filter((r) => r.id !== existing.id),
       }));
-      const { error } = await supabase
-        .from("message_reactions")
-        .delete()
-        .eq("id", existing.id);
-      if (error) {
+      try {
+        await neonRequest("/api/neon/chat", {
+          method: "DELETE",
+          body: JSON.stringify({ target: "reaction", id: existing.id }),
+        });
+      } catch (error) {
         setReactionsMap((prev) => ({
           ...prev,
           [messageId]: [...(prev[messageId] ?? []), existing],
         }));
-        setSendError(error.message);
+        setSendError(error instanceof Error ? error.message : "ลบรีแอคไม่สำเร็จ");
       }
       return;
     }
@@ -904,23 +706,19 @@ function ChatPageContent() {
       [messageId]: [...(prev[messageId] ?? []), optimistic],
     }));
 
-    const { data, error } = await supabase
-      .from("message_reactions")
-      .insert({ message_id: messageId, user_id: currentUser.id, emoji })
-      .select("*, user:profiles(id, display_name)")
-      .single();
-
-    if (error || !data) {
+    let data: MessageReaction;
+    try {
+      const result = await neonRequest<{ reaction: MessageReaction }>("/api/neon/chat", {
+        method: "POST",
+        body: JSON.stringify({ action: "reaction", data: { message_id: messageId, emoji } }),
+      });
+      data = result.reaction;
+    } catch (error) {
       setReactionsMap((prev) => ({
         ...prev,
         [messageId]: (prev[messageId] ?? []).filter((r) => r.id !== optimistic.id),
       }));
-      setSendError(
-        error?.message?.toLowerCase().includes("relation") ||
-          error?.message?.toLowerCase().includes("schema cache")
-          ? "รีแอคอิโมจิยังไม่พร้อม — รัน supabase/add-chat-workspace.sql ใน Supabase"
-          : error?.message ?? "รีแอคไม่สำเร็จ"
-      );
+      setSendError(error instanceof Error ? error.message : "รีแอคไม่สำเร็จ");
       return;
     }
 
@@ -928,7 +726,7 @@ function ChatPageContent() {
       ...prev,
       [messageId]: [
         ...(prev[messageId] ?? []).filter((r) => r.id !== optimistic.id),
-        data as MessageReaction,
+        data,
       ],
     }));
   }
@@ -948,14 +746,19 @@ function ChatPageContent() {
     if (editingMessage) {
       const edited_at = new Date().toISOString();
       const nextContent = content.trim();
-      const { error } = await supabase
-        .from("messages")
-        .update({ content: nextContent, edited_at })
-        .eq("id", editingMessage.id);
+      let editError = "";
+      try {
+        await neonRequest("/api/neon/chat", {
+          method: "PATCH",
+          body: JSON.stringify({ target: "message", id: editingMessage.id, data: { content: nextContent, edited_at } }),
+        });
+      } catch (error) {
+        editError = error instanceof Error ? error.message : "แก้ข้อความไม่สำเร็จ";
+      }
       setSending(false);
       sendAbortRef.current = null;
-      if (error) {
-        setSendError(error.message);
+      if (editError) {
+        setSendError(editError);
         return;
       }
       const next = { ...editingMessage, content: nextContent, edited_at };
@@ -1040,10 +843,10 @@ function ChatPageContent() {
 
     if (signal.aborted) {
       if (msgData?.id) {
-        await supabase
-          .from("messages")
-          .update({ deleted_at: new Date().toISOString() })
-          .eq("id", msgData.id);
+        await neonRequest("/api/neon/chat", {
+          method: "PATCH",
+          body: JSON.stringify({ target: "message", id: msgData.id, data: { deleted_at: new Date().toISOString() } }),
+        });
       }
       setSending(false);
       sendAbortRef.current = null;

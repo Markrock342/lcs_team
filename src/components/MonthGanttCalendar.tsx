@@ -121,7 +121,7 @@ export function MonthGanttCalendar({
               >
                 {/* Column guides */}
                 <div className="absolute inset-0 grid grid-cols-7 pointer-events-none">
-                  {week.days.map((day, i) => (
+                  {week.days.map((day) => (
                     <div
                       key={`grid-${day.toISOString()}`}
                       className={`border-r border-[#2a5080]/15 last:border-r-0 ${

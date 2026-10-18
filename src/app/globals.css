@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  --font-ibm-plex: system-ui, "Noto Sans Thai", "Tahoma", sans-serif;
   --background: oklch(0.17 0.018 245);
   --foreground: oklch(0.96 0.012 235);
   --card: oklch(0.22 0.025 245);

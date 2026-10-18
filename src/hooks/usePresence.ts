@@ -1,139 +1,107 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 
 type PresenceUser = {
   id: string;
   display_name: string;
 };
 
-/**
- * Supabase Realtime Presence — ออนไลน์แบบเรียลไทม์ (join/leave ทันที)
- * แม่นกว่า last_seen_at heartbeat เพราะ track/untrack ตอนเชื่อม/ตัดการเชื่อมต่อ
- */
+const PRESENCE_POLL_MS = 15_000;
+const TYPING_POLL_MS = 3_000;
+const TYPING_THROTTLE_MS = 2_500;
+
+/** สถานะออนไลน์จาก Neon last_seen_at; heartbeat จะอัปเดตทุกหนึ่งนาที */
 export function useOnlinePresence(user: PresenceUser | null) {
   const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
+  const userId = user?.id;
 
   useEffect(() => {
-    if (!user) return;
-    const supabase = createClient();
-    const channel = supabase.channel("online-users", {
-      config: { presence: { key: user.id } },
-    });
+    if (!userId) return;
+    const stableUserId = userId;
+    let cancelled = false;
 
-    channel
-      .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState();
-        setOnlineIds(new Set(Object.keys(state)));
-      })
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await channel.track({
-            user_id: user.id,
-            display_name: user.display_name,
-            online_at: new Date().toISOString(),
-          });
-        }
-      });
+    async function refresh() {
+      try {
+        const { profiles } = await neonRequest<{ profiles: PresenceUser[] }>(
+          "/api/neon/profiles?presence=1",
+          { cache: "no-store" },
+        );
+        if (!cancelled) setOnlineIds(new Set([stableUserId, ...profiles.map((profile) => profile.id)]));
+      } catch {
+        if (!cancelled) setOnlineIds(new Set([stableUserId]));
+      }
+    }
 
+    void refresh();
+    const interval = setInterval(refresh, PRESENCE_POLL_MS);
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      clearInterval(interval);
     };
-  }, [user?.id, user?.display_name]);
+  }, [userId]);
 
   return onlineIds;
 }
 
-const TYPING_TIMEOUT_MS = 4000;
-const TYPING_THROTTLE_MS = 2500;
-
-/**
- * Typing indicator ผ่าน Realtime broadcast — ไม่แตะ DB
- * notifyTyping() เรียกตอนพิมพ์, typingUsers = คนที่กำลังพิมพ์ (ยกเว้นตัวเอง)
- */
+/** Typing indicator เก็บสถานะหมดอายุสั้น ๆ ใน Neon และ polling เฉพาะช่องที่เปิดอยู่ */
 export function useTypingIndicator(
   channelId: string | null,
-  user: PresenceUser | null
+  user: PresenceUser | null,
 ) {
   const [typingUsers, setTypingUsers] = useState<PresenceUser[]>([]);
-  const channelRef = useRef<RealtimeChannel | null>(null);
   const lastSentRef = useRef(0);
-  const timeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
-    new Map()
-  );
+  const userId = user?.id;
 
   useEffect(() => {
-    if (!channelId || !user) return;
-    const supabase = createClient();
-    const timeouts = timeoutsRef.current;
-    const channel = supabase.channel(`typing:${channelId}`, {
-      config: { broadcast: { self: false } },
-    });
+    if (!channelId || !userId) return;
+    let cancelled = false;
 
-    channel
-      .on("broadcast", { event: "typing" }, ({ payload }) => {
-        const p = payload as PresenceUser;
-        if (p.id === user.id) return;
-
-        setTypingUsers((prev) =>
-          prev.some((u) => u.id === p.id) ? prev : [...prev, p]
+    async function refresh() {
+      try {
+        const { users } = await neonRequest<{ users: PresenceUser[] }>(
+          `/api/neon/chat?mode=typing&channelId=${encodeURIComponent(channelId!)}`,
+          { cache: "no-store" },
         );
+        if (!cancelled) setTypingUsers(users);
+      } catch {
+        if (!cancelled) setTypingUsers([]);
+      }
+    }
 
-        const existing = timeouts.get(p.id);
-        if (existing) clearTimeout(existing);
-        timeouts.set(
-          p.id,
-          setTimeout(() => {
-            setTypingUsers((prev) => prev.filter((u) => u.id !== p.id));
-            timeouts.delete(p.id);
-          }, TYPING_TIMEOUT_MS)
-        );
-      })
-      .on("broadcast", { event: "stop_typing" }, ({ payload }) => {
-        const p = payload as { id: string };
-        setTypingUsers((prev) => prev.filter((u) => u.id !== p.id));
-        const t = timeouts.get(p.id);
-        if (t) {
-          clearTimeout(t);
-          timeouts.delete(p.id);
-        }
-      })
-      .subscribe();
-
-    channelRef.current = channel;
-
+    void refresh();
+    const interval = setInterval(refresh, TYPING_POLL_MS);
     return () => {
-      timeouts.forEach((t) => clearTimeout(t));
-      timeouts.clear();
+      cancelled = true;
+      clearInterval(interval);
       setTypingUsers([]);
-      supabase.removeChannel(channel);
-      channelRef.current = null;
+      void neonRequest("/api/neon/chat", {
+        method: "POST",
+        body: JSON.stringify({ action: "stop-typing", data: { channel_id: channelId } }),
+      }).catch(() => undefined);
     };
-  }, [channelId, user?.id]);
+  }, [channelId, userId]);
 
   const notifyTyping = useCallback(() => {
-    if (!channelRef.current || !user) return;
+    if (!channelId || !userId) return;
     const now = Date.now();
     if (now - lastSentRef.current < TYPING_THROTTLE_MS) return;
     lastSentRef.current = now;
-    channelRef.current.send({
-      type: "broadcast",
-      event: "typing",
-      payload: { id: user.id, display_name: user.display_name },
-    });
-  }, [user?.id, user?.display_name]);
+    void neonRequest("/api/neon/chat", {
+      method: "POST",
+      body: JSON.stringify({ action: "typing", data: { channel_id: channelId } }),
+    }).catch(() => undefined);
+  }, [channelId, userId]);
 
   const stopTyping = useCallback(() => {
-    if (!channelRef.current || !user) return;
+    if (!channelId || !userId) return;
     lastSentRef.current = 0;
-    channelRef.current.send({
-      type: "broadcast",
-      event: "stop_typing",
-      payload: { id: user.id },
-    });
-  }, [user?.id]);
+    void neonRequest("/api/neon/chat", {
+      method: "POST",
+      body: JSON.stringify({ action: "stop-typing", data: { channel_id: channelId } }),
+    }).catch(() => undefined);
+  }, [channelId, userId]);
 
   return { typingUsers, notifyTyping, stopTyping };
 }

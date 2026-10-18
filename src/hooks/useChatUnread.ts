@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
+import type { Channel } from "@/lib/types";
 import {
   CHAT_UNREAD_EVENT,
   fetchUnreadCounts,
@@ -21,8 +23,8 @@ export function useChatUnreadTotal() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: channels } = await supabase.from("channels").select("id");
-      const ids = (channels ?? []).map((row) => row.id);
+      const { channels } = await neonRequest<{ channels: Channel[] }>("/api/neon/chat?mode=channels", { cache: "no-store" });
+      const ids = channels.map((row) => row.id);
       const counts = await fetchUnreadCounts(supabase, user.id, ids);
       if (!cancelled) {
         setTotal(Object.values(counts).reduce((sum, n) => sum + n, 0));
@@ -30,28 +32,16 @@ export function useChatUnreadTotal() {
     }
 
     void refresh();
-    const sub = supabase
-      .channel("nav-chat-unread")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
-        () => {
-          void refresh();
-        }
-      )
-      .subscribe();
-
     function onLocal() {
       void refresh();
     }
     window.addEventListener(CHAT_UNREAD_EVENT, onLocal);
-    const tick = window.setInterval(() => void refresh(), 30_000);
+    const tick = window.setInterval(() => void refresh(), 10_000);
 
     return () => {
       cancelled = true;
       window.removeEventListener(CHAT_UNREAD_EVENT, onLocal);
       window.clearInterval(tick);
-      supabase.removeChannel(sub);
     };
   }, [pathname]);
 

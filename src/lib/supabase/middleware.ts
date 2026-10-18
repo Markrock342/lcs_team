@@ -2,8 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseEnv } from "@/lib/env";
 
-/** ต่ำกว่าเพดาน Vercel middleware — อย่าปล่อย getUser() ค้างจน 504 ทั้งเว็บ */
-const AUTH_FETCH_TIMEOUT_MS = 8000;
+/** ต้องสั้นกว่าเพดานของ Vercel เพื่อให้ fallback ไป login ก่อนเกิด 504 */
+const AUTH_FETCH_TIMEOUT_MS = 2500;
 
 const PROTECTED_PREFIXES = [
   "/dashboard",

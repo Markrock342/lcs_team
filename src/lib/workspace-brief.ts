@@ -1,4 +1,3 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
 import {
@@ -14,6 +13,8 @@ import {
   summarizeAccounting,
 } from "@/lib/finance";
 import type { AccountingTransaction } from "@/lib/extras-types";
+import type { Invoice } from "@/lib/extras-types";
+import { neonRequest } from "@/lib/neon/client";
 import type {
   Client,
   ClientStatus,
@@ -55,7 +56,6 @@ function take<T>(rows: T[], n: number) {
 }
 
 export async function buildWorkspaceBriefPrompt(
-  supabase: SupabaseClient,
   question: string,
   opts: { includeFinance: boolean; asker?: string; userId?: string }
 ) {
@@ -63,63 +63,35 @@ export async function buildWorkspaceBriefPrompt(
   const todayKey = today.toISOString().slice(0, 10);
   const soonKey = new Date(today.getTime() + 3 * 86400000).toISOString().slice(0, 10);
 
-  const [tasksRes, clientsRes, dealsRes, prospectsRes, invoicesRes, notifRes, ledgerRes] =
+  const [taskData, clientData, salesData, invoiceData, notifRes, ledgerRes] =
     await Promise.all([
-      supabase
-        .from("tasks")
-        .select("id, title, status, priority, due_date, client:clients(name)")
-        .order("updated_at", { ascending: false })
-        .limit(120),
-      supabase
-        .from("clients")
-        .select("id, name, status")
-        .order("updated_at", { ascending: false })
-        .limit(80),
-      supabase
-        .from("sales_deals")
-        .select("id, title, stage, value, next_follow_up, client:clients(name)")
-        .order("updated_at", { ascending: false })
-        .limit(80),
-      supabase
-        .from("sales_prospects")
-        .select("id, name, status, next_follow_up")
-        .order("updated_at", { ascending: false })
-        .limit(80),
-      supabase
-        .from("invoices")
-        .select("status, total_amount, document_type, due_date, title, payments:invoice_payments(amount)")
-        .limit(80),
+      neonRequest<{ tasks: Task[] }>("/api/neon/tasks", { cache: "no-store" }),
+      neonRequest<{ clients: Client[] }>("/api/neon/clients", { cache: "no-store" }),
+      neonRequest<{ deals: SalesDeal[]; prospects: SalesProspect[] }>("/api/neon/sales", { cache: "no-store" }),
+      neonRequest<{ invoices: Invoice[] }>("/api/neon/invoices", { cache: "no-store" }),
       opts.userId
-        ? supabase
-            .from("notifications")
-            .select("title")
-            .eq("user_id", opts.userId)
-            .eq("read", false)
-            .order("created_at", { ascending: false })
-            .limit(8)
-        : Promise.resolve({ data: [], error: null }),
+        ? neonRequest<{ notifications: Array<{ title: string }> }>(
+            "/api/neon/notifications?unread=1&limit=8",
+            { cache: "no-store" },
+          )
+        : Promise.resolve({ notifications: [] as Array<{ title: string }> }),
       opts.includeFinance
-        ? supabase
-            .from("accounting_transactions")
-            .select("*, category:accounting_categories(*)")
-            .is("deleted_at", null)
-            .order("transaction_date", { ascending: false })
-            .limit(80)
-        : Promise.resolve({ data: [], error: null }),
+        ? neonRequest<{ transactions: AccountingTransaction[] }>("/api/neon/accounting", { cache: "no-store" })
+        : Promise.resolve({ transactions: [] as AccountingTransaction[] }),
     ]);
 
-  const tasks = (tasksRes.data ?? []) as Array<
+  const tasks = taskData.tasks.slice(0, 120) as Array<
     Pick<Task, "id" | "title" | "status" | "priority" | "due_date"> & {
       client: { name: string } | { name: string }[] | null;
     }
   >;
-  const clients = (clientsRes.data ?? []) as Pick<Client, "id" | "name" | "status">[];
-  const deals = (dealsRes.error ? [] : dealsRes.data ?? []) as Array<
+  const clients = clientData.clients.slice(0, 80) as Pick<Client, "id" | "name" | "status">[];
+  const deals = salesData.deals.slice(0, 80) as Array<
     Pick<SalesDeal, "id" | "title" | "stage" | "value" | "next_follow_up"> & {
       client: { name: string } | { name: string }[] | null;
     }
   >;
-  const prospects = (prospectsRes.error ? [] : prospectsRes.data ?? []) as Pick<
+  const prospects = salesData.prospects.slice(0, 80) as Pick<
     SalesProspect,
     "id" | "name" | "status" | "next_follow_up"
   >[];
@@ -171,24 +143,22 @@ export async function buildWorkspaceBriefPrompt(
       : "ยังไม่มีลูกค้า",
     "",
     "## ขาย",
-    dealsRes.error ? "ตารางดีลยังไม่พร้อมในโปรเจกต์นี้" : `ดีลในชุดข้อมูล ${deals.length} · ยังเปิด ${openDeals.length}`,
-    dealsRes.error ? "" : `ท่อขาย: ${tally(deals.map((deal) => deal.stage as SalesStage), SALES_STAGE_LABELS)}`,
+    `ดีลในชุดข้อมูล ${deals.length} · ยังเปิด ${openDeals.length}`,
+    `ท่อขาย: ${tally(deals.map((deal) => deal.stage as SalesStage), SALES_STAGE_LABELS)}`,
     followDeals.length
       ? `ดีลที่ต้องตามวันนี้: ${take(followDeals, 6).map((deal) => deal.title).join(" · ")}`
       : "ดีลที่ต้องตามวันนี้: ไม่มี",
-    prospectsRes.error
-      ? "ตารางเป้าหมายยังไม่พร้อมในโปรเจกต์นี้"
-      : `เป้าหมาย ${prospects.length} · ${tally(prospects.map((row) => row.status as ProspectStatus), PROSPECT_STATUS_LABELS)}`,
+    `เป้าหมาย ${prospects.length} · ${tally(prospects.map((row) => row.status as ProspectStatus), PROSPECT_STATUS_LABELS)}`,
     followProspects.length
       ? `เป้าหมายที่ต้องตามวันนี้: ${take(followProspects, 6).map((row) => row.name).join(" · ")}`
       : "เป้าหมายที่ต้องตามวันนี้: ไม่มี",
   ];
 
   if (opts.includeFinance) {
-    const invoices = invoicesRes.data ?? [];
+    const invoices = invoiceData.invoices.slice(0, 80);
     const outstanding = computeOutstandingReceivables(invoices);
     const month = summarizeAccounting(
-      filterAccountingByPeriod((ledgerRes.data ?? []) as AccountingTransaction[], "month")
+      filterAccountingByPeriod(ledgerRes.transactions.slice(0, 80), "month")
     );
     const unpaid = invoices.filter(
       (inv) =>
@@ -208,7 +178,7 @@ export async function buildWorkspaceBriefPrompt(
     lines.push("", "## การเงิน", "ผู้ถามไม่มีสิทธิ์ดูการเงินทีม — ห้ามเดายอดเงิน");
   }
 
-  const unread = (notifRes.data ?? []) as Array<{ title: string | null }>;
+  const unread = notifRes.notifications as Array<{ title: string | null }>;
   lines.push(
     "",
     "## กล่องงาน",

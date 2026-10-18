@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Bell, CalendarClock, CheckSquare, Receipt, MessageCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { useRole } from "@/components/RoleProvider";
 import { Button, Card, CardHeader, EmptyState, ErrorState, PageLoader, StatusStamp } from "@/components/ui";
 import { PageHeader, PageShell } from "@/components/mobile-ui";
@@ -40,18 +41,29 @@ export default function TodayPage() {
       return;
     }
 
-    const [tasksRes, dealsRes, prospectsRes, invoicesRes, notifRes, channelsRes, profilesRes] = await Promise.all([
-      supabase.from("tasks").select("id, title, due_date, status, assigned_to").neq("status", "done").order("due_date"),
-      supabase.from("sales_deals").select("id, title, next_follow_up, stage, owner_id").not("next_follow_up", "is", null),
-      supabase.from("sales_prospects").select("id, name, next_follow_up, status, owner_id").not("next_follow_up", "is", null),
-      supabase.from("invoices").select("id, title, due_date, status, total_amount").in("status", ["sent", "partial", "overdue"]),
-      supabase.from("notifications").select("*").eq("user_id", user.id).eq("read", false).order("created_at", { ascending: false }).limit(8),
-      supabase.from("channels").select("*"),
-      supabase.from("profiles").select("id, display_name"),
+    let tasksData: { tasks: Task[] };
+    let invoicesData: { invoices: Invoice[] };
+    let salesData: { deals: SalesDeal[]; prospects: SalesProspect[] };
+    try {
+      [tasksData, invoicesData, salesData] = await Promise.all([
+        neonRequest<{ tasks: Task[] }>("/api/neon/tasks", { cache: "no-store" }),
+        neonRequest<{ invoices: Invoice[] }>("/api/neon/invoices", { cache: "no-store" }),
+        neonRequest<{ deals: SalesDeal[]; prospects: SalesProspect[] }>("/api/neon/sales", { cache: "no-store" }),
+      ]);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "โหลดวันนี้ไม่สำเร็จ");
+      setLoading(false);
+      return;
+    }
+
+    const [notificationData, channelData, profileData] = await Promise.all([
+      neonRequest<{ notifications: AppNotification[] }>("/api/neon/notifications?unread=1&limit=8", { cache: "no-store" }),
+      neonRequest<{ channels: Channel[] }>("/api/neon/chat?mode=channels", { cache: "no-store" }),
+      neonRequest<{ profiles: Profile[] }>("/api/neon/profiles", { cache: "no-store" }),
     ]);
 
     const next: DayItem[] = [];
-    for (const task of (tasksRes.data ?? []) as Task[]) {
+    for (const task of (tasksData.tasks ?? []).filter((item) => item.status !== "done")) {
       if (profile?.id && task.assigned_to && task.assigned_to !== profile.id) continue;
       if (task.due_date && task.due_date <= soon) {
         next.push({
@@ -64,7 +76,7 @@ export default function TodayPage() {
         });
       }
     }
-    for (const deal of (dealsRes.data ?? []) as SalesDeal[]) {
+    for (const deal of salesData.deals) {
       if (deal.next_follow_up && deal.next_follow_up <= today && deal.stage !== "won" && deal.stage !== "lost") {
         next.push({
           id: `deal-${deal.id}`,
@@ -76,7 +88,7 @@ export default function TodayPage() {
         });
       }
     }
-    for (const prospect of (prospectsRes.data ?? []) as SalesProspect[]) {
+    for (const prospect of salesData.prospects) {
       if (
         prospect.next_follow_up &&
         prospect.next_follow_up <= today &&
@@ -93,7 +105,7 @@ export default function TodayPage() {
         });
       }
     }
-    for (const invoice of (invoicesRes.data ?? []) as Invoice[]) {
+    for (const invoice of (invoicesData.invoices ?? []).filter((item) => ["sent", "partial", "overdue"].includes(item.status))) {
       if (invoice.due_date && invoice.due_date <= soon) {
         next.push({
           id: `inv-${invoice.id}`,
@@ -105,7 +117,7 @@ export default function TodayPage() {
         });
       }
     }
-    for (const notif of (notifRes.data ?? []) as AppNotification[]) {
+    for (const notif of notificationData.notifications) {
       next.push({
         id: `n-${notif.id}`,
         title: notif.title,
@@ -116,8 +128,8 @@ export default function TodayPage() {
       });
     }
 
-    const channelList = (channelsRes.data ?? []) as Channel[];
-    const team = (profilesRes.data ?? []) as Profile[];
+    const channelList = channelData.channels ?? [];
+    const team = profileData.profiles;
     const unread = await fetchUnreadCounts(
       supabase,
       user.id,
@@ -141,7 +153,6 @@ export default function TodayPage() {
 
     setItems(next);
     setLoading(false);
-    if (tasksRes.error && dealsRes.error) setError("โหลดวันนี้ไม่สำเร็จ");
   }
 
   useEffect(() => {

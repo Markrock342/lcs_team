@@ -1,40 +1,34 @@
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { sendNotification, sendNotifications } from "@/lib/notifications";
 import { logActivity } from "@/lib/activity";
-import type { Client, SalesDeal, SalesProspect } from "@/lib/types";
+import type { Client, Profile, SalesDeal, SalesProspect } from "@/lib/types";
 
 export async function convertProspectToDeal(prospect: SalesProspect) {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  const { data: deal, error } = await supabase
-    .from("sales_deals")
-    .insert({
+  let deal: SalesDeal;
+  try {
+    const result = await neonRequest<{ row: SalesDeal }>("/api/neon/sales", {
+      method: "POST",
+      body: JSON.stringify({ resource: "deal", data: {
       title: prospect.name,
       company: prospect.company,
       contact_name: prospect.contact_name,
       contact_phone: prospect.contact_phone,
       contact_email: prospect.contact_email,
       stage: "talking",
-      owner_id: prospect.owner_id ?? user?.id ?? null,
+      owner_id: prospect.owner_id,
       notes: prospect.notes,
       next_follow_up: prospect.next_follow_up,
-      created_by: user?.id ?? null,
-    })
-    .select("*")
-    .single();
-
-  if (error || !deal) {
-    return { error: error?.message ?? "สร้างดีลไม่สำเร็จ" };
+      } }),
+    });
+    deal = result.row;
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "สร้างดีลไม่สำเร็จ" };
   }
 
-  await supabase
-    .from("sales_prospects")
-    .update({
-      status: "converted",
-      deal_id: deal.id,
-    })
-    .eq("id", prospect.id);
+  await neonRequest("/api/neon/sales", {
+    method: "PATCH",
+    body: JSON.stringify({ resource: "prospect", id: prospect.id, data: { status: "converted", deal_id: deal.id } }),
+  });
 
   await logActivity("create", "sales_deal", deal.id, prospect.name, {
     from: "prospect",
@@ -46,12 +40,12 @@ export async function convertProspectToDeal(prospect: SalesProspect) {
 
 export async function createClientFromWonDeal(deal: SalesDeal) {
   if (deal.client_id) return { clientId: deal.client_id };
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
 
-  const { data: client, error } = await supabase
-    .from("clients")
-    .insert({
+  let client: Pick<Client, "id" | "name">;
+  try {
+    const result = await neonRequest<{ client: Pick<Client, "id" | "name"> }>("/api/neon/clients", {
+      method: "POST",
+      body: JSON.stringify({
       name: deal.title,
       company: deal.company,
       contact_name: deal.contact_name,
@@ -60,31 +54,30 @@ export async function createClientFromWonDeal(deal: SalesDeal) {
       project_type: "system",
       description: deal.notes,
       status: "lead",
-      created_by: user?.id ?? null,
-    })
-    .select("id, name")
-    .single();
-
-  if (error || !client) {
-    return { error: error?.message ?? "สร้างลูกค้าไม่สำเร็จ" };
+      }),
+    });
+    client = result.client;
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "สร้างลูกค้าไม่สำเร็จ" };
   }
 
-  await supabase.from("sales_deals").update({ client_id: client.id }).eq("id", deal.id);
-  await supabase
-    .from("sales_prospects")
-    .update({ client_id: client.id })
-    .eq("deal_id", deal.id);
+  await neonRequest("/api/neon/sales", {
+    method: "PATCH",
+    body: JSON.stringify({ resource: "deal", id: deal.id, data: { client_id: client.id } }),
+  });
 
-  await supabase.from("tasks").insert({
-    title: `เริ่มโปรเจกต์: ${deal.title}`,
-    description: deal.notes,
-    client_id: client.id,
-    status: "pending",
-    priority: "medium",
-    assigned_to: deal.owner_id,
-    created_by: user?.id ?? null,
-    duration_days: 1,
-    progress: 0,
+  await neonRequest("/api/neon/tasks", {
+    method: "POST",
+    body: JSON.stringify({
+      title: `เริ่มโปรเจกต์: ${deal.title}`,
+      description: deal.notes,
+      client_id: client.id,
+      status: "pending",
+      priority: "medium",
+      assigned_to: deal.owner_id,
+      duration_days: 1,
+      progress: 0,
+    }),
   });
 
   await logActivity("create", "client", client.id, client.name, { from: "won_deal" });
@@ -98,14 +91,14 @@ export async function notifyTaskCompleted(task: {
   created_by?: string | null;
   client_id?: string | null;
 }) {
-  const supabase = createClient();
-  const { data: pms } = await supabase
-    .from("profiles")
-    .select("id, role")
-    .in("role", ["admin", "pm"]);
+  const { profiles } = await neonRequest<{ profiles: Profile[] }>(
+    "/api/neon/profiles",
+    { cache: "no-store" },
+  );
+  const pms = profiles.filter((profile) => profile.role === "admin" || profile.role === "pm");
 
   const recipients = new Set<string>();
-  for (const profile of pms ?? []) recipients.add(profile.id);
+  for (const profile of pms) recipients.add(profile.id);
   if (task.created_by) recipients.add(task.created_by);
   if (task.assigned_to) recipients.delete(task.assigned_to);
 

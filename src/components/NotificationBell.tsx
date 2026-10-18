@@ -1,14 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AtSign, Bell, CheckSquare, Handshake, MessageCircle, Receipt } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { getChatChannelIdFromLink } from "@/lib/channels";
 import {
   inferNotificationKind,
-  type NotificationKind,
 } from "@/lib/notifications";
 import type { AppNotification } from "@/lib/extras-types";
 import { formatDistanceToNow } from "date-fns";
@@ -28,7 +27,6 @@ export function NotificationBell() {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [count, setCount] = useState(0);
   const panelRef = useRef<HTMLDivElement>(null);
-  const instanceId = useId().replace(/:/g, "");
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -37,97 +35,34 @@ export function NotificationBell() {
     pathname === "/chat" ? searchParams.get("channel") : null;
 
   const load = useCallback(async () => {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return false;
-
-    const [{ data, error }, unreadRes] = await Promise.all([
-      supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(12),
-      supabase
-        .from("notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("read", false),
-    ]);
-
-    if (error) return false;
-
-    setItems(data ?? []);
-    setCount(
-      unreadRes.error
-        ? (data ?? []).filter((row) => !row.read).length
-        : unreadRes.count ?? 0
-    );
-    return true;
+    try {
+      const data = await neonRequest<{ notifications: AppNotification[]; unreadCount: number }>(
+        "/api/neon/notifications?limit=12",
+        { cache: "no-store" },
+      );
+      setItems(data.notifications);
+      setCount(data.unreadCount);
+      return true;
+    } catch {
+      return false;
+    }
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function init() {
-      const ok = await load();
-      if (cancelled || !ok) return;
-
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const channel = supabase
-        .channel(`notif-bell-${instanceId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "notifications",
-            filter: `user_id=eq.${user.id}`,
-          },
-          () => {
-            load();
-          }
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "notifications",
-            filter: `user_id=eq.${user.id}`,
-          },
-          () => {
-            load();
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-
-    let cleanup: (() => void) | undefined;
-    init().then((fn) => {
-      cleanup = fn;
-    });
-
+    // Initial state is populated after the asynchronous API request resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+    const interval = setInterval(load, 10_000);
     return () => {
-      cancelled = true;
-      cleanup?.();
+      clearInterval(interval);
     };
-  }, [instanceId, load]);
+  }, [load]);
 
   useEffect(() => {
     if (!activeChatChannelId) return;
-    load();
+    // Refresh after chat navigation so read-state changes are reflected.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
   }, [activeChatChannelId, load]);
 
   useEffect(() => {
@@ -150,8 +85,10 @@ export function NotificationBell() {
   }, [open]);
 
   async function markRead(id: string) {
-    const supabase = createClient();
-    await supabase.from("notifications").update({ read: true }).eq("id", id);
+    await neonRequest("/api/neon/notifications", {
+      method: "PATCH",
+      body: JSON.stringify({ id, read: true }),
+    });
     setItems((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
@@ -159,16 +96,10 @@ export function NotificationBell() {
   }
 
   async function markAllRead() {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase
-      .from("notifications")
-      .update({ read: true })
-      .eq("user_id", user.id)
-      .eq("read", false);
+    await neonRequest("/api/neon/notifications", {
+      method: "PATCH",
+      body: JSON.stringify({ all: true, read: true }),
+    });
     setItems((prev) => prev.map((n) => ({ ...n, read: true })));
     setCount(0);
   }

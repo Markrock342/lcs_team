@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { PageHeader, PageShell } from "@/components/mobile-ui";
 import { ACTIVITY_ACTION_LABELS, type ActivityLog } from "@/lib/extras-types";
 import {
@@ -38,19 +38,17 @@ export default function ActivityPage() {
 
   async function load() {
     setError(null);
-    const supabase = createClient();
-    const { data, error: loadError } = await supabase
-      .from("activity_logs")
-      .select("*, user:profiles(*)")
-      .order("created_at", { ascending: false })
-      .limit(100);
-    if (loadError) {
-      setError("โหลดประวัติกิจกรรมไม่สำเร็จ ลองอีกครั้ง");
+    try {
+      const { activities } = await neonRequest<{ activities: ActivityLog[] }>(
+        "/api/neon/activity?limit=100",
+        { cache: "no-store" }
+      );
+      setLogs(activities ?? []);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "โหลดประวัติกิจกรรมไม่สำเร็จ ลองอีกครั้ง");
+    } finally {
       setLoading(false);
-      return;
     }
-    setLogs(data ?? []);
-    setLoading(false);
   }
 
   if (loading) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ClipboardList, Copy, CornerDownLeft } from "lucide-react";
 import { Button, StatusStamp } from "@/components/ui";
 import { useRole } from "@/components/RoleProvider";
@@ -16,15 +16,15 @@ const CHIPS = [
 ];
 
 function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(media.matches);
-    const onChange = () => setReduced(media.matches);
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, []);
-  return reduced;
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+      media.addEventListener("change", onStoreChange);
+      return () => media.removeEventListener("change", onStoreChange);
+    },
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    () => false
+  );
 }
 
 export function WorkspaceBrief() {

@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import type { SavedView } from "@/lib/extras-types";
 
 const LAST_FILTER_KEY = "lcs-last-filters";
@@ -35,36 +35,28 @@ export function writeLastFilters(page: SavedView["page"], filters: Record<string
 }
 
 export async function loadSavedViews(page: SavedView["page"]) {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [] as SavedView[];
-  const { data } = await supabase
-    .from("saved_views")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("page", page)
-    .order("created_at", { ascending: true });
-  return (data ?? []) as SavedView[];
+  const { views } = await neonRequest<{ views: SavedView[] }>(
+    `/api/neon/saved-views?page=${encodeURIComponent(page)}`,
+    { cache: "no-store" },
+  );
+  return views;
 }
 
 export async function saveView(page: SavedView["page"], name: string, filters: Record<string, string>) {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "ยังไม่ได้เข้าสู่ระบบ" };
-  const { data, error } = await supabase
-    .from("saved_views")
-    .insert({
-      user_id: user.id,
-      page,
-      name,
-      filters,
-    })
-    .select("*")
-    .single();
-  return { view: data as SavedView | null, error: error?.message };
+  try {
+    const { view } = await neonRequest<{ view: SavedView }>("/api/neon/saved-views", {
+      method: "POST",
+      body: JSON.stringify({ page, name, filters }),
+    });
+    return { view, error: undefined };
+  } catch (error) {
+    return { view: null, error: error instanceof Error ? error.message : "บันทึกมุมมองไม่สำเร็จ" };
+  }
 }
 
 export async function deleteSavedView(id: string) {
-  const supabase = createClient();
-  await supabase.from("saved_views").delete().eq("id", id);
+  await neonRequest("/api/neon/saved-views", {
+    method: "DELETE",
+    body: JSON.stringify({ id }),
+  });
 }

@@ -65,6 +65,7 @@ export interface Profile {
   notify_mentions?: boolean | null;
   notify_tasks?: boolean | null;
   push_enabled?: boolean | null;
+  theme?: "dark" | "light" | null;
   bank_name?: string | null;
   bank_account_number?: string | null;
   bank_account_name?: string | null;

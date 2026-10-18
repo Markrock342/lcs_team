@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Check, GripVertical, Plus, Trash2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { useRole } from "@/components/RoleProvider";
 import type { TaskChecklistItem } from "@/lib/types";
 
@@ -24,66 +24,66 @@ export function TaskChecklist({ taskId, onProgressChange }: Props) {
   const [loading, setLoading] = useState(true);
   const [dbError, setDbError] = useState("");
 
-  useEffect(() => {
-    load();
-  }, [taskId]);
-
   async function load() {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("task_checklist_items")
-      .select("*")
-      .eq("task_id", taskId)
-      .order("sort_order", { ascending: true });
-
-    if (error?.message.includes("relation")) {
-      setDbError("รัน supabase/add-productivity-features.sql");
+    try {
+      const { items: data } = await neonRequest<{ items: TaskChecklistItem[] }>(
+        `/api/neon/checklist?taskId=${encodeURIComponent(taskId)}`,
+        { cache: "no-store" }
+      );
+      const list = data ?? [];
+      setItems(list);
+      onProgressChange?.(calcProgress(list));
+    } catch (error) {
+      setDbError(error instanceof Error ? error.message : "โหลดรายการตรวจไม่สำเร็จ");
       setLoading(false);
       return;
     }
-
-    const list = (data ?? []) as TaskChecklistItem[];
-    setItems(list);
-    onProgressChange?.(calcProgress(list));
     setLoading(false);
   }
+
+  useEffect(() => {
+    // Loading happens after mount and task changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId]);
 
   async function syncProgress(list: TaskChecklistItem[]) {
     const percent = calcProgress(list);
     onProgressChange?.(percent);
-    const supabase = createClient();
-    await supabase.from("tasks").update({ progress: percent }).eq("id", taskId);
+    await neonRequest("/api/neon/tasks", {
+      method: "PATCH",
+      body: JSON.stringify({ id: taskId, progress: percent }),
+    });
   }
 
   async function addItem(e: React.FormEvent) {
     e.preventDefault();
     const title = newTitle.trim();
     if (!title) return;
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("task_checklist_items")
-      .insert({
+    try {
+      const { item: data } = await neonRequest<{ item: TaskChecklistItem }>("/api/neon/checklist", {
+        method: "POST",
+        body: JSON.stringify({
         task_id: taskId,
         title,
         sort_order: items.length,
-      })
-      .select()
-      .single();
-
-    if (error || !data) return;
+        }),
+      });
     const next = [...items, data as TaskChecklistItem];
     setItems(next);
     setNewTitle("");
     await syncProgress(next);
+    } catch (error) {
+      setDbError(error instanceof Error ? error.message : "เพิ่มรายการตรวจไม่สำเร็จ");
+    }
   }
 
   async function toggleItem(item: TaskChecklistItem) {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("task_checklist_items")
-      .update({ done: !item.done })
-      .eq("id", item.id);
-    if (error) return;
+    await neonRequest("/api/neon/checklist", {
+      method: "PATCH",
+      body: JSON.stringify({ id: item.id, done: !item.done }),
+    });
 
     const next = items.map((i) =>
       i.id === item.id ? { ...i, done: !i.done } : i
@@ -93,8 +93,10 @@ export function TaskChecklist({ taskId, onProgressChange }: Props) {
   }
 
   async function removeItem(id: string) {
-    const supabase = createClient();
-    await supabase.from("task_checklist_items").delete().eq("id", id);
+    await neonRequest("/api/neon/checklist", {
+      method: "DELETE",
+      body: JSON.stringify({ id }),
+    });
     const next = items.filter((i) => i.id !== id);
     setItems(next);
     await syncProgress(next);

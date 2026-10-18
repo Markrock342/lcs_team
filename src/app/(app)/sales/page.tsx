@@ -14,7 +14,7 @@ import {
   Upload,
   BookOpen,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import {
   Card,
   CardHeader,
@@ -188,46 +188,27 @@ function SalesPageInner() {
   }, []);
 
   async function load() {
-    const supabase = createClient();
-    const [dealsRes, clientsRes, profilesRes, prospectsRes] = await Promise.all([
-      supabase
-        .from("sales_deals")
-        .select("*, client:clients(*), owner:profiles!sales_deals_owner_id_fkey(*)")
-        .order("updated_at", { ascending: false }),
-      supabase.from("clients").select("*").order("name"),
-      supabase.from("profiles").select("*").order("display_name"),
-      supabase
-        .from("sales_prospects")
-        .select("*, owner:profiles!sales_prospects_owner_id_fkey(*)")
-        .order("updated_at", { ascending: false }),
+    const [salesData, clientData, profileData] = await Promise.all([
+      neonRequest<{ deals: SalesDeal[]; prospects: SalesProspect[] }>("/api/neon/sales", { cache: "no-store" }),
+      neonRequest<{ clients: Client[] }>("/api/neon/clients", { cache: "no-store" }),
+      neonRequest<{ profiles: Profile[] }>("/api/neon/profiles", { cache: "no-store" }),
     ]);
-    setDeals((dealsRes.data as SalesDeal[]) ?? []);
-    setClients(clientsRes.data ?? []);
-    setProfiles(profilesRes.data ?? []);
-    setProspects((prospectsRes.data as SalesProspect[]) ?? []);
-    const errors = [dealsRes.error, prospectsRes.error].filter(Boolean);
-    if (errors.length) {
-      const message = errors[0]?.message ?? "";
-      const missingTable = /schema cache|does not exist|Could not find the table/i.test(message);
-      setLoadError(
-        missingTable
-          ? "ยังไม่พบตารางขายในโปรเจกต์นี้ — รัน add-sales-department.sql และ add-sales-productivity.sql ใน SQL Editor ของโปรเจกต์เดียวกับแอป แล้วกด Reload ที่ Settings → API"
-          : message
-      );
-    } else {
-      setLoadError("");
-    }
+    setDeals(salesData.deals ?? []);
+    setClients(clientData.clients ?? []);
+    setProfiles(profileData.profiles ?? []);
+    setProspects(salesData.prospects ?? []);
+    setLoadError("");
     setLoading(false);
 
     const openId = searchParams.get("open");
     if (openId) {
-      const foundProspect = ((prospectsRes.data as SalesProspect[]) ?? []).find(
+      const foundProspect = (salesData.prospects ?? []).find(
         (item) => item.id === openId
       );
       if (foundProspect) {
         setOpenProspect(foundProspect);
       } else {
-        const foundDeal = ((dealsRes.data as SalesDeal[]) ?? []).find((item) => item.id === openId);
+        const foundDeal = (salesData.deals ?? []).find((item) => item.id === openId);
         if (foundDeal) openEdit(foundDeal);
       }
     }
@@ -266,7 +247,6 @@ function SalesPageInner() {
       return;
     }
     setFormSaving(true);
-    const supabase = createClient();
     const payload = {
       title: form.title.trim(),
       client_id: form.client_id || null,
@@ -283,14 +263,14 @@ function SalesPageInner() {
     };
 
     let errorMessage = "";
-    if (editing) {
-      const { error } = await supabase.from("sales_deals").update(payload).eq("id", editing.id);
-      if (error) errorMessage = error.message;
-      else await logActivity("update", "sales_deal", editing.id, form.title);
-    } else {
-      const { data, error } = await supabase.from("sales_deals").insert(payload).select("id").single();
-      if (error) errorMessage = error.message;
-      else if (data) await logActivity("create", "sales_deal", data.id, form.title);
+    try {
+      const result = await neonRequest<{ row: SalesDeal }>("/api/neon/sales", {
+        method: editing ? "PATCH" : "POST",
+        body: JSON.stringify({ resource: "deal", id: editing?.id, data: payload }),
+      });
+      await logActivity(editing ? "update" : "create", "sales_deal", result.row.id, form.title);
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : "บันทึกดีลไม่สำเร็จ";
     }
 
     setFormSaving(false);
@@ -306,10 +286,13 @@ function SalesPageInner() {
   async function moveDeal(deal: SalesDeal, stage: SalesStage) {
     if (!canEdit || deal.stage === stage) return;
     const previous = deal.stage;
-    const supabase = createClient();
-    const { error } = await supabase.from("sales_deals").update({ stage }).eq("id", deal.id);
-    if (error) {
-      toast(error.message);
+    try {
+      await neonRequest("/api/neon/sales", {
+        method: "PATCH",
+        body: JSON.stringify({ resource: "deal", id: deal.id, data: { stage } }),
+      });
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "ย้ายสถานะไม่สำเร็จ");
       return;
     }
     setDeals((prev) => prev.map((item) => (item.id === deal.id ? { ...item, stage } : item)));
@@ -319,7 +302,10 @@ function SalesPageInner() {
       if (result.error) toast(result.error);
     }
     toast(`ย้ายเป็น${SALES_STAGE_LABELS[stage]}`, async () => {
-      await supabase.from("sales_deals").update({ stage: previous }).eq("id", deal.id);
+      await neonRequest("/api/neon/sales", {
+        method: "PATCH",
+        body: JSON.stringify({ resource: "deal", id: deal.id, data: { stage: previous } }),
+      });
       await load();
     });
   }
@@ -333,12 +319,16 @@ function SalesPageInner() {
       danger: true,
     });
     if (!ok) return;
-    const supabase = createClient();
-    await supabase.from("sales_deals").delete().eq("id", deal.id);
+    await neonRequest("/api/neon/sales", {
+      method: "DELETE",
+      body: JSON.stringify({ resource: "deal", id: deal.id }),
+    });
     await logActivity("delete", "sales_deal", deal.id, deal.title);
     setDeals((prev) => prev.filter((item) => item.id !== deal.id));
     toast("ลบดีลแล้ว", async () => {
-      await supabase.from("sales_deals").insert({
+      await neonRequest("/api/neon/sales", {
+        method: "POST",
+        body: JSON.stringify({ resource: "deal", data: {
         id: deal.id,
         title: deal.title,
         client_id: deal.client_id,
@@ -351,7 +341,7 @@ function SalesPageInner() {
         owner_id: deal.owner_id,
         notes: deal.notes,
         next_follow_up: deal.next_follow_up,
-        created_by: deal.created_by,
+        } }),
       });
       await load();
     });
@@ -363,11 +353,13 @@ function SalesPageInner() {
     options: { category: string; replaceBroken: boolean }
   ) {
     setSaving(true);
-    const supabase = createClient();
     if (options.replaceBroken) {
       const brokenIds = prospects.filter((item) => isBrokenProspectName(item.name)).map((item) => item.id);
       if (brokenIds.length) {
-        await supabase.from("sales_prospects").delete().in("id", brokenIds);
+        await neonRequest("/api/neon/sales", {
+          method: "DELETE",
+          body: JSON.stringify({ resource: "prospect", ids: brokenIds }),
+        });
       }
     }
     const batch = new Date().toISOString();
@@ -387,8 +379,10 @@ function SalesPageInner() {
       setSaving(false);
       return "ทุกรายชื่อซ้ำกับที่มีอยู่แล้ว";
     }
-    const { error } = await supabase.from("sales_prospects").insert(
-      unique.map((row) => ({
+    try {
+      await neonRequest("/api/neon/sales", {
+        method: "POST",
+        body: JSON.stringify({ resource: "prospect", data: unique.map((row) => ({
         name: row.name,
         company: row.company,
         contact_name: row.contact_name,
@@ -402,12 +396,14 @@ function SalesPageInner() {
         status: ownerId ? "assigned" : "new",
         source: "excel",
         import_batch_id: batch,
-        created_by: profile?.id ?? null,
         external_key: row.external_key,
-      }))
-    );
+        })) }),
+      });
+    } catch (error) {
+      setSaving(false);
+      return error instanceof Error ? error.message : "นำเข้ารายชื่อไม่สำเร็จ";
+    }
     setSaving(false);
-    if (error) return error.message;
     const skipped = rows.length - unique.length;
     toast(skipped ? `นำเข้า ${unique.length} รายชื่อ (ข้ามซ้ำ ${skipped})` : `นำเข้า ${unique.length} รายชื่อ`);
     setCategoryFilter(options.category);
@@ -420,16 +416,16 @@ function SalesPageInner() {
 
   async function assignProspect(item: SalesProspect, ownerId: string) {
     if (!canEdit) return;
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("sales_prospects")
-      .update({
+    try {
+      await neonRequest("/api/neon/sales", {
+        method: "PATCH",
+        body: JSON.stringify({ resource: "prospect", id: item.id, data: {
         owner_id: ownerId || null,
         status: ownerId && item.status === "new" ? "assigned" : item.status,
-      })
-      .eq("id", item.id);
-    if (error) {
-      toast(error.message);
+        } }),
+      });
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "มอบหมายไม่สำเร็จ");
       return;
     }
     toast(ownerId ? "มอบหมายแล้ว" : "ยกเลิกการมอบหมายแล้ว");
@@ -448,17 +444,21 @@ function SalesPageInner() {
       if (!ok) return;
     }
     setSaving(true);
-    const supabase = createClient();
-    const { error } = await supabase.from("sales_prospects").delete().eq("id", item.id);
+    let deleteError = "";
+    try {
+      await neonRequest("/api/neon/sales", { method: "DELETE", body: JSON.stringify({ resource: "prospect", id: item.id }) });
+    } catch (error) {
+      deleteError = error instanceof Error ? error.message : "ลบรายชื่อไม่สำเร็จ";
+    }
     setSaving(false);
-    if (error) {
-      toast(error.message);
+    if (deleteError) {
+      toast(deleteError);
       return;
     }
     if (openProspect?.id === item.id) setOpenProspect(null);
     setProspects((prev) => prev.filter((row) => row.id !== item.id));
     toast("ลบรายชื่อแล้ว", async () => {
-      await supabase.from("sales_prospects").insert(prospectRow(item));
+      await neonRequest("/api/neon/sales", { method: "POST", body: JSON.stringify({ resource: "prospect", data: prospectRow(item) }) });
       await load();
     });
   }
@@ -475,20 +475,24 @@ function SalesPageInner() {
     });
     if (!ok) return;
     setSaving(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("sales_prospects")
-      .delete()
-      .in("id", broken.map((item) => item.id));
+    let deleteError = "";
+    try {
+      await neonRequest("/api/neon/sales", {
+        method: "DELETE",
+        body: JSON.stringify({ resource: "prospect", ids: broken.map((item) => item.id) }),
+      });
+    } catch (error) {
+      deleteError = error instanceof Error ? error.message : "ลบรายการไม่สำเร็จ";
+    }
     setSaving(false);
-    if (error) {
-      toast(error.message);
+    if (deleteError) {
+      toast(deleteError);
       return;
     }
     const brokenIds = new Set(broken.map((item) => item.id));
     setProspects((prev) => prev.filter((item) => !brokenIds.has(item.id)));
     toast(`ลบรายการผิด ${broken.length} รายการแล้ว`, async () => {
-      await supabase.from("sales_prospects").insert(broken.map(prospectRow));
+      await neonRequest("/api/neon/sales", { method: "POST", body: JSON.stringify({ resource: "prospect", data: broken.map(prospectRow) }) });
       await load();
     });
   }

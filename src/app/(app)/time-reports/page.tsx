@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { PageHeader, PageShell } from "@/components/mobile-ui";
 import {
   Avatar,
@@ -21,7 +21,7 @@ import {
 } from "@/lib/time-reports";
 import { exportToCSV } from "@/lib/activity";
 import type { TimeEntry } from "@/lib/extras-types";
-import type { Profile } from "@/lib/types";
+import type { Profile, Task } from "@/lib/types";
 import { Clock3, Download, Users } from "lucide-react";
 
 export default function TimeReportsPage() {
@@ -40,42 +40,23 @@ export default function TimeReportsPage() {
 
   async function load() {
     setError(null);
-    const supabase = createClient();
-    const [entriesRes, tasksRes, profilesRes] = await Promise.all([
-      supabase
-        .from("time_entries")
-        .select("*, user:profiles(*)")
-        .not("ended_at", "is", null)
-        .order("started_at", { ascending: false }),
-      supabase
-        .from("tasks")
-        .select("id, client_id, title, client:clients(name)"),
-      supabase.from("profiles").select("*"),
+    const [entryData, taskData, profileData] = await Promise.all([
+      neonRequest<{ entries: TimeEntry[] }>("/api/neon/time-entries", { cache: "no-store" }),
+      neonRequest<{ tasks: Task[] }>("/api/neon/tasks", { cache: "no-store" }),
+      neonRequest<{ profiles: Profile[] }>("/api/neon/profiles", { cache: "no-store" }),
     ]);
-    if (entriesRes.error || tasksRes.error || profilesRes.error) {
-      setError("โหลดรายงานเวลาไม่สำเร็จ ลองอีกครั้ง");
-      setLoading(false);
-      return;
-    }
-
-    setEntries((entriesRes.data ?? []) as TimeEntry[]);
+    setEntries(entryData.entries);
     setTasks(
-      (tasksRes.data ?? []).map((t) => {
-        const row = t as {
-          id: string;
-          client_id: string | null;
-          title: string;
-          client?: { name: string } | { name: string }[] | null;
-        };
+      (taskData.tasks ?? []).map((row) => {
         return {
           id: row.id,
           client_id: row.client_id,
           title: row.title,
-          client: Array.isArray(row.client) ? row.client[0] : row.client ?? null,
+          client: row.client ? { name: row.client.name } : null,
         };
       })
     );
-    setProfiles(profilesRes.data ?? []);
+    setProfiles(profileData.profiles);
     setLoading(false);
   }
 

@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import {
   sendNotification,
   sendNotifications,
@@ -12,18 +12,18 @@ export async function logActivity(
   details?: Record<string, unknown>
 ) {
   try {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from("activity_logs").insert({
-      user_id: user?.id ?? null,
-      action,
-      entity_type: entityType,
-      entity_id: entityId,
-      entity_title: entityTitle,
-      details: details ?? null,
+    await neonRequest("/api/neon/activity", {
+      method: "POST",
+      body: JSON.stringify({
+        action,
+        entityType,
+        entityId,
+        entityTitle,
+        details: details ?? null,
+      }),
     });
   } catch {
-    // table may not exist yet
+    // Activity logging must not block the user's primary action.
   }
 }
 
@@ -43,11 +43,13 @@ export async function notifyTeam(
   link?: string
 ) {
   try {
-    const supabase = createClient();
-    const { data: profiles } = await supabase.from("profiles").select("id");
-    const items = (profiles ?? [])
-      .filter((p) => p.id !== excludeUserId)
-      .map((p) => ({ userId: p.id, title, body, link }));
+    const { profiles } = await neonRequest<{ profiles: Array<{ id: string }> }>(
+      "/api/neon/profiles",
+      { cache: "no-store" },
+    );
+    const items = profiles
+      .filter((profile) => profile.id !== excludeUserId)
+      .map((profile) => ({ userId: profile.id, title, body, link }));
     await sendNotifications(items);
   } catch {
     // ignore
