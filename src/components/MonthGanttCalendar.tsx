@@ -41,32 +41,34 @@ export function MonthGanttCalendar({
   const hasTasks = scheduled.length > 0;
 
   return (
-    <div className="bg-[#0d1a30] border border-[#2a5080]/60 rounded-2xl overflow-hidden shadow-lg shadow-black/20">
+    <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-card)]">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a5080]/50 bg-[#112240]">
+      <div className="flex items-center justify-between border-b border-border bg-surface-raised px-4 py-3.5">
         <button
           onClick={() => onMonthChange(subMonths(month, 1))}
-          className="p-2 rounded-lg hover:bg-white/10 text-zinc-200"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-foreground transition-colors hover:bg-card-hover"
+          aria-label="เดือนก่อนหน้า"
         >
           <ChevronLeft size={20} />
         </button>
-        <h2 className="font-semibold text-lg text-white">
+        <h2 className="text-lg font-semibold text-foreground">
           {format(month, "MMMM yyyy", { locale: th })}
         </h2>
         <button
           onClick={() => onMonthChange(addMonths(month, 1))}
-          className="p-2 rounded-lg hover:bg-white/10 text-zinc-200"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-foreground transition-colors hover:bg-card-hover"
+          aria-label="เดือนถัดไป"
         >
           <ChevronRight size={20} />
         </button>
       </div>
 
       {/* Day labels */}
-      <div className="grid grid-cols-7 border-b border-[#2a5080]/50 bg-[#152848]">
+      <div className="grid grid-cols-7 border-b border-border bg-surface-soft">
         {DAY_LABELS.map((d) => (
           <div
             key={d}
-            className="py-2.5 text-center text-xs font-semibold text-[#8bb4d9]"
+            className="py-3 text-center text-xs font-semibold text-muted"
           >
             {d}
           </div>
@@ -81,8 +83,8 @@ export function MonthGanttCalendar({
         return (
           <div
             key={wi}
-            className={`border-b border-[#2a5080]/30 last:border-b-0 ${
-              weekAlt ? "bg-[#0d1a30]" : "bg-[#101f38]"
+            className={`border-b border-border last:border-b-0 ${
+              weekAlt ? "bg-card" : "bg-surface-soft"
             }`}
           >
             {/* Day numbers */}
@@ -93,17 +95,17 @@ export function MonthGanttCalendar({
                 return (
                   <div
                     key={day.toISOString()}
-                    className={`min-h-[40px] px-0.5 pt-2 pb-1 text-center border-r border-[#2a5080]/25 last:border-r-0 ${
-                      !inMonth ? "bg-black/15" : ""
+                    className={`min-h-[46px] border-r border-border px-0.5 pb-1 pt-2 text-center last:border-r-0 ${
+                      !inMonth ? "bg-background/45" : ""
                     }`}
                   >
                     <span
                       className={`inline-flex items-center justify-center w-8 h-8 text-sm font-semibold rounded-full ${
                         today
-                          ? "bg-accent text-white ring-2 ring-accent/40 shadow-[0_0_12px_rgba(0,163,255,0.4)]"
+                          ? "bg-accent text-on-accent ring-2 ring-accent/35 ring-offset-2 ring-offset-card"
                           : inMonth
-                            ? "text-zinc-100"
-                            : "text-zinc-600"
+                            ? "text-foreground"
+                            : "text-muted/50"
                       }`}
                     >
                       {format(day, "d")}
@@ -116,7 +118,7 @@ export function MonthGanttCalendar({
             {/* Gantt bars — only when there are tasks */}
             {hasTasks && (
               <div
-                className="relative border-t border-[#2a5080]/20 bg-[#0a1525]/60"
+                className="relative border-t border-border bg-background/30"
                 style={{ height: segments.length > 0 ? ganttHeight : 36 }}
               >
                 {/* Column guides */}
@@ -124,8 +126,8 @@ export function MonthGanttCalendar({
                   {week.days.map((day) => (
                     <div
                       key={`grid-${day.toISOString()}`}
-                      className={`border-r border-[#2a5080]/15 last:border-r-0 ${
-                        !isSameMonth(day, month) ? "bg-black/10" : ""
+                      className={`border-r border-border/70 last:border-r-0 ${
+                        !isSameMonth(day, month) ? "bg-background/35" : ""
                       }`}
                     />
                   ))}
@@ -137,7 +139,7 @@ export function MonthGanttCalendar({
                   return (
                     <div
                       key={`${seg.task.id}-${wi}`}
-                      className={`absolute mx-0.5 px-2 flex items-center gap-1 text-[10px] sm:text-xs font-medium truncate backdrop-blur-sm ${color.bg} ${color.text} border ${color.border} ${
+                      className={`absolute mx-0.5 flex items-center gap-1 truncate border px-2 text-xs font-semibold ${color.bg} ${color.text} ${color.border} ${
                         seg.continuesBefore ? "rounded-l-sm" : "rounded-l-lg"
                       } ${seg.continuesAfter ? "rounded-r-sm" : "rounded-r-lg"} rounded-lg shadow-sm`}
                       style={{
@@ -163,10 +165,12 @@ export function MonthGanttCalendar({
 
       {/* Empty state — once, compact */}
       {!hasTasks && (
-        <div className="flex flex-col items-center justify-center py-8 px-4 border-t border-[#2a5080]/30 bg-[#0a1525]/40">
-          <CalendarDays className="text-[#4a8ab8] mb-2" size={28} />
-          <p className="text-sm text-zinc-300">ยังไม่มีงานที่มีวันที่ในปฏิทิน</p>
-          <p className="text-xs text-zinc-500 mt-1">
+        <div className="flex flex-col items-center justify-center border-t border-border bg-surface-soft px-4 py-9 text-center">
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--status-blue-bg)] text-[var(--status-blue-fg)]">
+            <CalendarDays size={24} />
+          </div>
+          <p className="text-sm font-semibold text-foreground">ยังไม่มีงานที่มีวันที่ในปฏิทิน</p>
+          <p className="mt-1 text-sm text-muted">
             ใส่วันเริ่ม-ครบที่หน้างาน แล้วจะเห็นแถบสีตรงนี้
           </p>
         </div>
@@ -174,8 +178,8 @@ export function MonthGanttCalendar({
 
       {/* Legend */}
       {hasTasks && (
-        <div className="px-4 py-3 border-t border-[#2a5080]/40 bg-[#112240] space-y-2">
-          <p className="text-xs text-[#8bb4d9] font-medium">งานในเดือนนี้</p>
+        <div className="space-y-3 border-t border-border bg-surface-raised px-4 py-4">
+          <p className="text-sm font-semibold text-foreground">งานในเดือนนี้</p>
           <div className="flex flex-wrap gap-2">
             {scheduled.map((t) => {
               const tl = taskLanes.find((x) => x.task.id === t.id);
@@ -183,28 +187,28 @@ export function MonthGanttCalendar({
               return (
                 <div
                   key={t.id}
-                  className="flex items-center gap-1.5 text-xs bg-[#0d1a30] border border-[#2a5080]/40 rounded-lg px-2.5 py-1.5"
+                  className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs"
                 >
                   <div className={`w-3 h-3 rounded-sm border ${color.bg} ${color.border}`} />
-                  <span className="truncate max-w-[120px] text-zinc-200">{t.title}</span>
+                  <span className="max-w-[120px] truncate text-foreground">{t.title}</span>
                   {t.parent_id && (
-                    <span className="text-[10px] text-zinc-500">(ย่อย)</span>
+                    <span className="text-xs text-muted">(ย่อย)</span>
                   )}
                   {t.assignee && (
                     <Avatar name={t.assignee.display_name} src={t.assignee.avatar_url} size="sm" />
                   )}
-                  <span className="text-zinc-500 text-[10px]">
+                  <span className="text-xs text-muted">
                     {t.start_date?.slice(5)}–{t.due_date?.slice(5)}
                   </span>
                 </div>
               );
             })}
           </div>
-          <p className="text-[10px] text-zinc-500">
+          <p className="text-xs text-muted">
             งานทับกันแสดงคนละแถว · สีสว่าง = งาน · แถบบาง = งานย่อย
           </p>
         </div>
       )}
-    </div>
+    </section>
   );
 }

@@ -301,7 +301,7 @@ export default function AssistantPage() {
               {messages.map((message) => (
                 <article key={message.id} className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                   {message.role === "assistant" && <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent/12 text-accent"><Bot size={16} /></div>}
-                  <div className={`min-w-0 max-w-[88%] ${message.role === "user" ? "rounded-2xl rounded-br-md bg-accent px-4 py-3 text-white" : "py-1"}`}>
+                  <div className={`min-w-0 max-w-[88%] ${message.role === "user" ? "rounded-2xl rounded-br-md bg-accent px-4 py-3 text-on-accent" : "py-1"}`}>
                     {message.context_files?.length > 0 && (
                       <div className="mb-2 flex flex-wrap gap-1.5">
                         {message.context_files.map((item) => <span key={`${item.repository}-${item.path}`} className="rounded-lg bg-black/10 px-2 py-1 text-xs">{item.path}</span>)}
@@ -349,7 +349,7 @@ export default function AssistantPage() {
                 aria-label="ข้อความถึง LCS Assistant"
                 className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-2 py-2.5 text-base outline-none placeholder:text-muted disabled:opacity-60"
               />
-              <button type="button" onClick={() => void sendMessage()} disabled={!input.trim() || sending || !configured} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-white transition-colors hover:bg-accent-dim disabled:bg-surface-soft disabled:text-muted" aria-label="ส่งข้อความ"><ArrowUp size={19} /></button>
+              <button type="button" onClick={() => void sendMessage()} disabled={!input.trim() || sending || !configured} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-on-accent transition-colors hover:bg-accent-dim disabled:bg-surface-soft disabled:text-muted" aria-label="ส่งข้อความ"><ArrowUp size={19} /></button>
             </div>
             <p className="mt-1.5 text-center text-[0.6875rem] text-muted">Enter เพื่อส่ง · Shift + Enter ขึ้นบรรทัดใหม่ · ตรวจคำตอบก่อนนำไปใช้</p>
           </div>

@@ -189,12 +189,12 @@ export const CLIENT_LINK_FIELDS = [
 ] as const;
 
 export const TASK_BAR_COLORS = [
-  { bg: "bg-[#00a3ff]/35", text: "text-[#7dd3ff]", border: "border-[#00a3ff]/60" },
-  { bg: "bg-emerald-400/30", text: "text-emerald-200", border: "border-emerald-400/55" },
-  { bg: "bg-violet-400/30", text: "text-violet-200", border: "border-violet-400/55" },
-  { bg: "bg-orange-400/30", text: "text-orange-200", border: "border-orange-400/55" },
-  { bg: "bg-pink-400/30", text: "text-pink-200", border: "border-pink-400/55" },
-  { bg: "bg-amber-400/30", text: "text-amber-100", border: "border-amber-400/55" },
-  { bg: "bg-cyan-300/30", text: "text-cyan-100", border: "border-cyan-300/55" },
-  { bg: "bg-rose-400/30", text: "text-rose-200", border: "border-rose-400/55" },
+  { bg: "bg-[var(--timeline-blue-bg)]", text: "text-[var(--timeline-blue-fg)]", border: "border-[var(--timeline-blue-border)]" },
+  { bg: "bg-[var(--timeline-green-bg)]", text: "text-[var(--timeline-green-fg)]", border: "border-[var(--timeline-green-border)]" },
+  { bg: "bg-[var(--timeline-violet-bg)]", text: "text-[var(--timeline-violet-fg)]", border: "border-[var(--timeline-violet-border)]" },
+  { bg: "bg-[var(--timeline-orange-bg)]", text: "text-[var(--timeline-orange-fg)]", border: "border-[var(--timeline-orange-border)]" },
+  { bg: "bg-[var(--timeline-pink-bg)]", text: "text-[var(--timeline-pink-fg)]", border: "border-[var(--timeline-pink-border)]" },
+  { bg: "bg-[var(--timeline-amber-bg)]", text: "text-[var(--timeline-amber-fg)]", border: "border-[var(--timeline-amber-border)]" },
+  { bg: "bg-[var(--timeline-blue-bg)]", text: "text-[var(--timeline-blue-fg)]", border: "border-[var(--timeline-blue-border)]" },
+  { bg: "bg-[var(--timeline-pink-bg)]", text: "text-[var(--timeline-pink-fg)]", border: "border-[var(--timeline-pink-border)]" },
 ];

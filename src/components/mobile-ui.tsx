@@ -57,8 +57,8 @@ export function FilterTabs({ tabs, active, onChange }: FilterTabsProps) {
             aria-pressed={active === tab.key}
             className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-colors min-h-11 touch-manipulation ${
               active === tab.key
-                ? "bg-accent/20 text-accent border border-accent/40"
-                : "bg-card border border-border text-muted hover:text-foreground active:bg-card-hover"
+                ? "border border-accent bg-accent text-on-accent shadow-sm"
+                : "border border-border bg-card text-foreground hover:border-accent/60 hover:bg-card-hover active:bg-card-hover"
             }`}
           >
             {label}

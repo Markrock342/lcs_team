@@ -378,7 +378,7 @@ export default function CodeWorkspacePage() {
                 <a href={file.html_url} target="_blank" rel="noreferrer" className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover hover:text-foreground" aria-label="เปิดไฟล์บน GitHub"><ExternalLink size={16} /></a>
                 <Link
                   href={`/assistant?repo=${encodeURIComponent(file.repository)}&path=${encodeURIComponent(file.path)}&ref=${encodeURIComponent(file.ref ?? workspace?.branch ?? "")}`}
-                  className="flex min-h-11 items-center gap-2 rounded-xl bg-accent px-3 text-sm font-semibold text-white hover:bg-accent-dim"
+                  className="flex min-h-11 items-center gap-2 rounded-xl bg-accent px-3 text-sm font-semibold text-on-accent hover:bg-accent-dim"
                 >
                   <Bot size={16} /> ถาม AI
                 </Link>
