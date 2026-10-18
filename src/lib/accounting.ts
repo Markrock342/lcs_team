@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import type { AccountingEntryType } from "@/lib/extras-types";
 
 export type AccountingTransactionInput = {
@@ -22,49 +22,14 @@ export type AccountingResult =
   | { ok: true; id: string | null }
   | { ok: false; error: string };
 
-function accountingError(message: string) {
-  if (message.includes("deleted_at") || message.includes("updated_by")) {
-    return "รัน supabase/add-accounting-audit.sql ใน Supabase ก่อน";
-  }
-  if (message.includes("relation") || message.includes("column")) {
-    return "รัน supabase/add-accounting-ledger.sql ใน Supabase ก่อน";
-  }
-  return message;
-}
-
-async function currentUserId() {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id ?? null;
-}
-
-async function getCategoryId(slug: string): Promise<AccountingResult> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("accounting_categories")
-    .select("id")
-    .eq("slug", slug)
-    .single();
-
-  if (error) return { ok: false, error: accountingError(error.message) };
-  return { ok: true, id: data?.id ?? null };
-}
-
 export async function saveAccountingTransaction(
   input: AccountingTransactionInput
 ): Promise<AccountingResult> {
-  const supabase = createClient();
-  const category = await getCategoryId(input.categorySlug);
-  if (!category.ok) return category;
-
-  const createdBy = input.createdBy ?? (await currentUserId());
   const payload = {
     type: input.type,
     amount: input.amount,
     transaction_date: input.transactionDate,
-    category_id: category.id,
+    category_slug: input.categorySlug,
     description: input.description.trim(),
     member_id: input.memberId ?? null,
     client_id: input.clientId ?? null,
@@ -74,39 +39,16 @@ export async function saveAccountingTransaction(
     slip_url: input.slipUrl ?? null,
     slip_file_name: input.slipFileName ?? null,
     notes: input.notes?.trim() || null,
-    created_by: createdBy,
   };
-
-  if (input.sourceType && input.sourceId) {
-    const { data: existing, error: lookupError } = await supabase
-      .from("accounting_transactions")
-      .select("id")
-      .eq("source_type", input.sourceType)
-      .eq("source_id", input.sourceId)
-      .maybeSingle();
-
-    if (lookupError) {
-      return { ok: false, error: accountingError(lookupError.message) };
-    }
-
-    if (existing?.id) {
-      const { error } = await supabase
-        .from("accounting_transactions")
-        .update(payload)
-        .eq("id", existing.id);
-      if (error) return { ok: false, error: accountingError(error.message) };
-      return { ok: true, id: existing.id };
-    }
+  try {
+    const { row } = await neonRequest<{ row: { id: string } }>("/api/neon/accounting", {
+      method: "POST",
+      body: JSON.stringify({ resource: "transaction", data: payload }),
+    });
+    return { ok: true, id: row?.id ?? null };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "บันทึกรายการบัญชีไม่สำเร็จ" };
   }
-
-  const { data, error } = await supabase
-    .from("accounting_transactions")
-    .insert(payload)
-    .select("id")
-    .single();
-
-  if (error) return { ok: false, error: accountingError(error.message) };
-  return { ok: true, id: data?.id ?? null };
 }
 
 export async function updateAccountingTransaction(
@@ -116,16 +58,11 @@ export async function updateAccountingTransaction(
     keepSlipFileName?: string | null;
   }
 ): Promise<AccountingResult> {
-  const supabase = createClient();
-  const category = await getCategoryId(input.categorySlug);
-  if (!category.ok) return category;
-
-  const updatedBy = await currentUserId();
   const payload = {
     type: input.type,
     amount: input.amount,
     transaction_date: input.transactionDate,
-    category_id: category.id,
+    category_slug: input.categorySlug,
     description: input.description.trim(),
     member_id: input.memberId ?? null,
     client_id: input.clientId ?? null,
@@ -133,36 +70,27 @@ export async function updateAccountingTransaction(
     slip_url: input.slipUrl ?? input.keepSlipUrl ?? null,
     slip_file_name: input.slipFileName ?? input.keepSlipFileName ?? null,
     notes: input.notes?.trim() || null,
-    updated_by: updatedBy,
   };
-
-  const { error } = await supabase
-    .from("accounting_transactions")
-    .update(payload)
-    .eq("id", id)
-    .is("deleted_at", null);
-
-  if (error) return { ok: false, error: accountingError(error.message) };
-  return { ok: true, id };
+  try {
+    await neonRequest("/api/neon/accounting", {
+      method: "PATCH",
+      body: JSON.stringify({ id, data: payload }),
+    });
+    return { ok: true, id };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "แก้ไขรายการบัญชีไม่สำเร็จ" };
+  }
 }
 
 export async function softDeleteAccountingTransaction(
   id: string
 ): Promise<AccountingResult> {
-  const supabase = createClient();
-  const deletedBy = await currentUserId();
-  const { error } = await supabase
-    .from("accounting_transactions")
-    .update({
-      deleted_at: new Date().toISOString(),
-      deleted_by: deletedBy,
-      updated_by: deletedBy,
-    })
-    .eq("id", id)
-    .is("deleted_at", null);
-
-  if (error) return { ok: false, error: accountingError(error.message) };
-  return { ok: true, id };
+  try {
+    await neonRequest("/api/neon/accounting", { method: "DELETE", body: JSON.stringify({ id }) });
+    return { ok: true, id };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "ลบรายการบัญชีไม่สำเร็จ" };
+  }
 }
 
 export async function syncInvoicePaymentToLedger(input: {

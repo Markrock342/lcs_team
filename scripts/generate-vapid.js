@@ -4,6 +4,9 @@
  * Run: node scripts/generate-vapid.js
  * Add output to .env.local
  */
+// This standalone Node script intentionally uses CommonJS so it can run
+// without changing the module type of the application package.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const webpush = require("web-push");
 const keys = webpush.generateVAPIDKeys();
 console.log("Add to .env.local:\n");

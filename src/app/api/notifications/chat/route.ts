@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import {
   isDispatchAuthorized,
   processChatMessageNotifications,
 } from "@/lib/notification-chat";
 import { NextResponse } from "next/server";
+import { queryNeon } from "@/lib/neon/server";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -19,18 +19,7 @@ export async function POST(request: Request) {
   }
 
   const fromDispatch = isDispatchAuthorized(request);
-  let db = supabase;
-
-  if (fromDispatch) {
-    const admin = createAdminClient();
-    if (!admin) {
-      return NextResponse.json(
-        { error: "Service role not configured" },
-        { status: 500 }
-      );
-    }
-    db = admin;
-  } else {
+  if (!fromDispatch) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -38,17 +27,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: msg } = await supabase
-      .from("messages")
-      .select("sender_id")
-      .eq("id", messageId)
-      .maybeSingle();
+    const { rows } = await queryNeon<{ sender_id: string }>(
+      `SELECT sender_id FROM public.messages WHERE id = $1 LIMIT 1`, [messageId]
+    );
+    const msg = rows[0];
 
     if (!msg || msg.sender_id !== user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }
 
-  const result = await processChatMessageNotifications(db, messageId);
+  const result = await processChatMessageNotifications(messageId);
   return NextResponse.json({ ok: true, ...result });
 }

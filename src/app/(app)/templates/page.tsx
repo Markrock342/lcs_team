@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus, Play, Trash2, Pencil } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { FilterTabs, PageHeader, PageShell } from "@/components/mobile-ui";
 import {
   Button,
@@ -23,7 +23,7 @@ import { logActivity, notifyTeam } from "@/lib/activity";
 import { isAdmin } from "@/lib/permissions";
 import { useActionFeedback } from "@/components/workspace/ActionFeedback";
 import type { TaskTemplate, TaskTemplateItem } from "@/lib/extras-types";
-import type { Client, TeamRole } from "@/lib/types";
+import type { Client, Profile, TeamRole } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { DocumentKitList } from "@/components/workspace/DocumentKitList";
 
@@ -51,6 +51,7 @@ export default function TemplatesPage() {
   const [formItems, setFormItems] = useState([{ ...emptyItem }]);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"tasks" | "quotation" | "agreement">("tasks");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     void load();
@@ -58,32 +59,22 @@ export default function TemplatesPage() {
 
   async function load() {
     setError(null);
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const [tpl, cls, profile] = await Promise.all([
-      supabase.from("task_templates").select("*, items:task_template_items(*)").order("name"),
-      supabase.from("clients").select("*").order("name"),
-      user
-        ? supabase.from("profiles").select("role").eq("id", user.id).single()
-        : Promise.resolve({ data: null }),
+    const [templateData, clientData, profileData] = await Promise.all([
+      neonRequest<{ templates: TaskTemplate[] }>("/api/neon/templates", { cache: "no-store" }),
+      neonRequest<{ clients: Client[] }>("/api/neon/clients", { cache: "no-store" }),
+      neonRequest<{ profile: Profile }>("/api/neon/profiles?me=1", { cache: "no-store" }),
     ]);
-    if (tpl.error || cls.error) {
-      setError("โหลดเทมเพลตไม่สำเร็จ ลองอีกครั้ง");
-      setLoading(false);
-      return;
-    }
     setTemplates(
-      (tpl.data ?? []).map((t) => ({
+      templateData.templates.map((t) => ({
         ...t,
         items: (t.items ?? []).sort(
           (a: TaskTemplateItem, b: TaskTemplateItem) => a.sort_order - b.sort_order
         ),
       }))
     );
-    setClients(cls.data ?? []);
-    if (profile.data?.role) setCurrentRole(profile.data.role as TeamRole);
+    setClients(clientData.clients ?? []);
+    setCurrentRole(profileData.profile.role);
+    setCurrentUserId(profileData.profile.id);
     setLoading(false);
   }
 
@@ -114,47 +105,29 @@ export default function TemplatesPage() {
     e.preventDefault();
     if (!formName.trim()) return;
     setSaving(true);
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    let templateId = editModal?.id;
+    const items = formItems
+      .filter((item) => item.title.trim())
+      .map((item, index) => ({
+        title: item.title.trim(),
+        description: item.description.trim() || null,
+        suggested_role: item.suggested_role || null,
+        duration_days: parseInt(item.duration_days) || 3,
+        sort_order: index + 1,
+      }));
+    let templateId = editModal?.id ?? "";
     if (editModal?.id) {
-      await supabase
-        .from("task_templates")
-        .update({ name: formName.trim(), description: formDesc.trim() || null })
-        .eq("id", editModal.id);
-      await supabase.from("task_template_items").delete().eq("template_id", editModal.id);
+      await neonRequest("/api/neon/templates", {
+        method: "PATCH",
+        body: JSON.stringify({ id: editModal.id, name: formName.trim(), description: formDesc.trim() || null, items }),
+      });
     } else {
-      const { data } = await supabase
-        .from("task_templates")
-        .insert({
-          name: formName.trim(),
-          description: formDesc.trim() || null,
-          created_by: user?.id,
-        })
-        .select("id")
-        .single();
-      templateId = data?.id;
+      const { template } = await neonRequest<{ template: TaskTemplate }>("/api/neon/templates", {
+        method: "POST",
+        body: JSON.stringify({ name: formName.trim(), description: formDesc.trim() || null, items }),
+      });
+      templateId = template.id;
     }
-
-    if (templateId) {
-      const items = formItems
-        .filter((i) => i.title.trim())
-        .map((item, idx) => ({
-          template_id: templateId,
-          title: item.title.trim(),
-          description: item.description.trim() || null,
-          suggested_role: item.suggested_role || null,
-          duration_days: parseInt(item.duration_days) || 3,
-          sort_order: idx + 1,
-        }));
-      if (items.length) {
-        await supabase.from("task_template_items").insert(items);
-      }
-      await logActivity("create", "task_template", templateId, formName);
-    }
+    await logActivity("create", "task_template", templateId, formName);
 
     setSaving(false);
     setEditModal(null);
@@ -169,8 +142,10 @@ export default function TemplatesPage() {
       danger: true,
     });
     if (!ok) return;
-    const supabase = createClient();
-    await supabase.from("task_templates").delete().eq("id", id);
+    await neonRequest("/api/neon/templates", {
+      method: "DELETE",
+      body: JSON.stringify({ id }),
+    });
     void load();
   }
 
@@ -178,34 +153,29 @@ export default function TemplatesPage() {
     e.preventDefault();
     if (!useModal || !clientId) return;
     setApplying(true);
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    const { data: parent } = await supabase
-      .from("tasks")
-      .insert({
+    const { task: parent } = await neonRequest<{ task: { id: string } }>("/api/neon/tasks", {
+      method: "POST",
+      body: JSON.stringify({
         title: useModal.name,
         description: useModal.description,
         client_id: clientId,
         status: "pending",
-        created_by: user?.id,
         duration_days: useModal.items?.reduce((s, i) => s + i.duration_days, 0) ?? 7,
-      })
-      .select()
-      .single();
+      }),
+    });
 
     if (parent && useModal.items) {
       for (const item of useModal.items) {
-        await supabase.from("tasks").insert({
-          parent_id: parent.id,
-          client_id: clientId,
-          title: item.title,
-          description: item.description,
-          status: "pending",
-          duration_days: item.duration_days,
-          created_by: user?.id,
+        await neonRequest("/api/neon/tasks", {
+          method: "POST",
+          body: JSON.stringify({
+            parent_id: parent.id,
+            client_id: clientId,
+            title: item.title,
+            description: item.description,
+            status: "pending",
+            duration_days: item.duration_days,
+          }),
         });
       }
     }
@@ -214,7 +184,7 @@ export default function TemplatesPage() {
       from_template: useModal.id,
     });
     await notifyTeam(
-      user?.id ?? null,
+      currentUserId,
       "โปรเจกต์ใหม่",
       `สร้างจากเทมเพลต: ${useModal.name}`,
       "/tasks"

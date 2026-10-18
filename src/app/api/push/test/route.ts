@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { sendPushToUser } from "@/lib/push-server";
+import { queryNeon } from "@/lib/neon/server";
 import { NextResponse } from "next/server";
 
 export async function POST() {
@@ -15,10 +16,10 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: subs } = await supabase
-    .from("push_subscriptions")
-    .select("endpoint, p256dh, auth")
-    .eq("user_id", user.id);
+  const { rows: subs } = await queryNeon<{ endpoint: string; p256dh: string; auth: string }>(
+    `SELECT endpoint,p256dh,auth FROM public.push_subscriptions WHERE user_id=$1`,
+    [user.id],
+  );
 
   if (!subs?.length) {
     return NextResponse.json(

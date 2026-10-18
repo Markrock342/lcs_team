@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { MessageSquare, Shield, UsersRound } from "lucide-react";
 import { chatDmHref } from "@/lib/channels";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import {
   Avatar,
   Button,
@@ -21,7 +21,7 @@ import { ROLE_ASSIGN_LABELS, ROLE_LABELS } from "@/lib/constants";
 import { ASSIGNABLE_ROLES, isAdmin } from "@/lib/permissions";
 import { getProfileDisplayRoles } from "@/lib/profile-display";
 import { formatPresenceStatus, isOnline } from "@/lib/presence";
-import type { Profile, TeamRole } from "@/lib/types";
+import type { Profile, Task, TeamRole } from "@/lib/types";
 
 type FilterKey = "all" | "online" | TeamRole;
 
@@ -36,30 +36,25 @@ export default function TeamPage() {
 
   async function load() {
     setError("");
-    const supabase = createClient();
-    const [profileRes, taskRes] = await Promise.all([
-      supabase.from("profiles").select("*").order("display_name"),
-      supabase.from("tasks").select("assigned_to, status").neq("status", "done"),
+    const [profileData, taskData] = await Promise.all([
+      neonRequest<{ profiles: Profile[] }>("/api/neon/profiles", { cache: "no-store" }),
+      neonRequest<{ tasks: Task[] }>("/api/neon/tasks", { cache: "no-store" }),
     ]);
 
-    if (profileRes.error) {
-      setError(profileRes.error.message);
-      setLoading(false);
-      return;
-    }
-
     const counts: Record<string, number> = {};
-    for (const task of taskRes.data ?? []) {
+    for (const task of (taskData.tasks ?? []).filter((item) => item.status !== "done")) {
       if (!task.assigned_to) continue;
       counts[task.assigned_to] = (counts[task.assigned_to] ?? 0) + 1;
     }
 
-    setMembers(profileRes.data ?? []);
+    setMembers(profileData.profiles ?? []);
     setOpenByMember(counts);
     setLoading(false);
   }
 
   useEffect(() => {
+    // Data loading is asynchronous; state updates happen after the requests resolve.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, []);
 

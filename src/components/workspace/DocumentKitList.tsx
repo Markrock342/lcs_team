@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { FileText, Play, Printer } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import {
   Button,
   Card,
@@ -80,10 +80,6 @@ export function DocumentKitList({
     }
     setSaving(true);
     setError("");
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
     const subtotal = sumLineItems(form.line_items);
     const payload = {
       client_id: clientId || null,
@@ -99,18 +95,18 @@ export function DocumentKitList({
       vat_amount: 0,
       line_items: form.line_items,
       document_meta: form.document_meta,
-      created_by: user?.id ?? null,
     };
-    const { error: saveError } = await supabase.from("invoices").insert(payload);
-    setSaving(false);
-    if (saveError) {
-      setError(
-        saveError.message.includes("document_type") || saveError.message.includes("check")
-          ? "รัน supabase/add-document-kinds.sql ใน Supabase ก่อน"
-          : saveError.message
-      );
+    try {
+      await neonRequest("/api/neon/invoices", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    } catch (saveError) {
+      setSaving(false);
+      setError(saveError instanceof Error ? saveError.message : "บันทึกเอกสารไม่สำเร็จ");
       return;
     }
+    setSaving(false);
     await logActivity("create", "invoice", null, form.title, { type: form.document_type, from: useKit.id });
     setPreview(true);
   }

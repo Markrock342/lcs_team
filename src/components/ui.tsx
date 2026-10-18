@@ -50,8 +50,11 @@ function trapFocus(container: HTMLElement, event: KeyboardEvent) {
 
 function useDialogFocus(open: boolean, onClose: () => void, dialogRef: RefObject<HTMLElement | null>) {
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
   const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Calendar } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import {
   Avatar,
   Card,
@@ -33,24 +33,18 @@ export default function SchedulePage() {
 
   async function loadTasks() {
     setError(null);
-    const supabase = createClient();
-    const [tasksRes, profilesRes] = await Promise.all([
-      supabase
-        .from("tasks")
-        .select(
-          "*, client:clients(*), assignee:profiles!tasks_assigned_to_fkey(*)"
-        )
-        .order("start_date", { ascending: true }),
-      supabase.from("profiles").select("*").order("display_name"),
-    ]);
-    if (tasksRes.error || profilesRes.error) {
-      setError("โหลดตารางงานไม่สำเร็จ ลองอีกครั้ง");
+    try {
+      const data = await neonRequest<{ tasks: Task[]; profiles: Profile[] }>(
+        "/api/neon/tasks",
+        { cache: "no-store" }
+      );
+      setTasks((data.tasks ?? []).sort((a, b) => (a.start_date ?? "").localeCompare(b.start_date ?? "")));
+      setProfiles(data.profiles ?? []);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "โหลดตารางงานไม่สำเร็จ ลองอีกครั้ง");
+    } finally {
       setLoading(false);
-      return;
     }
-    setTasks(tasksRes.data ?? []);
-    setProfiles(profilesRes.data ?? []);
-    setLoading(false);
   }
 
   const filteredTasks =

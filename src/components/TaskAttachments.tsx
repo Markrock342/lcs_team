@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FileText, Download, Loader2, Paperclip, Trash2, X } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { uploadFile, isImageFile, isTextPreviewFile, normalizeStoredFileType, downloadFile } from "@/lib/upload";
 import { useRole } from "@/components/RoleProvider";
 import { TextFilePreviewModal } from "@/components/TextFilePreviewModal";
@@ -37,33 +37,33 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    load();
-  }, [taskId]);
-
   async function load() {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("task_attachments")
-      .select("*")
-      .eq("task_id", taskId)
-      .order("created_at", { ascending: false });
-
-    if (error?.message.includes("relation") || error?.message.includes("does not exist")) {
-      setDbError("รัน supabase/add-task-attachments.sql");
+    try {
+      const { attachments } = await neonRequest<{ attachments: TaskAttachment[] }>(
+        `/api/neon/task-attachments?taskId=${encodeURIComponent(taskId)}`,
+        { cache: "no-store" }
+      );
+      setItems(attachments ?? []);
+    } catch (loadError) {
+      setDbError(loadError instanceof Error ? loadError.message : "โหลดไฟล์แนบไม่สำเร็จ");
       setLoading(false);
       return;
     }
-    setItems((data ?? []) as TaskAttachment[]);
     setLoading(false);
   }
+
+  useEffect(() => {
+    // Loading happens after mount and task changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId]);
 
   async function handleFiles(files: FileList | File[]) {
     const list = Array.from(files);
     if (!list.length) return;
     setError("");
     setUploading(true);
-    const supabase = createClient();
     const added: TaskAttachment[] = [];
 
     for (const file of list) {
@@ -72,28 +72,22 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
         setError(uploaded.error);
         continue;
       }
-      const { data, error } = await supabase
-        .from("task_attachments")
-        .insert({
+      try {
+        const { attachment: data } = await neonRequest<{ attachment: TaskAttachment }>("/api/neon/task-attachments", {
+          method: "POST",
+          body: JSON.stringify({
           task_id: taskId,
           file_url: uploaded.url,
           file_name: file.name,
           file_type: normalizeStoredFileType(file),
           file_size: file.size,
           uploaded_by: currentUserId ?? null,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        if (error.message.includes("relation") || error.message.includes("does not exist")) {
-          setDbError("รัน supabase/add-task-attachments.sql");
-        } else {
-          setError(error.message);
-        }
-        continue;
-      }
+          }),
+        });
       if (data) added.push(data as TaskAttachment);
+      } catch (saveError) {
+        setError(saveError instanceof Error ? saveError.message : "บันทึกไฟล์แนบไม่สำเร็จ");
+      }
     }
 
     if (added.length) {
@@ -105,8 +99,10 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
   }
 
   async function removeItem(id: string) {
-    const supabase = createClient();
-    await supabase.from("task_attachments").delete().eq("id", id);
+    await neonRequest("/api/neon/task-attachments", {
+      method: "DELETE",
+      body: JSON.stringify({ id }),
+    });
     setItems((prev) => prev.filter((i) => i.id !== id));
     onChange?.();
   }

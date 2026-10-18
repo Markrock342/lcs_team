@@ -15,7 +15,6 @@ import {
   Users,
   UserRound,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { PageHeader, PageShell } from "@/components/mobile-ui";
 import {
   Card,
@@ -29,7 +28,8 @@ import {
 } from "@/components/ui";
 import { PROJECT_TYPE_LABELS } from "@/lib/constants";
 import { buildClientTimeline } from "@/lib/client-timeline";
-import type { ClientTimelineItem } from "@/lib/extras-types";
+import { neonRequest } from "@/lib/neon/client";
+import type { ActivityLog, ClientFile, ClientTimelineItem, Invoice, PortalComment } from "@/lib/extras-types";
 import type { Client, Task } from "@/lib/types";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
@@ -52,86 +52,35 @@ export default function ClientDetailPage() {
   const [loadError, setLoadError] = useState("");
 
   const load = useCallback(async () => {
-    const supabase = createClient();
     try {
-      const [clientRes, tasksRes, actRes, invRes, filesRes, portalRes] =
-        await Promise.all([
-        supabase.from("clients").select("*").eq("id", clientId).single(),
-        supabase
-          .from("tasks")
-          .select("*, assignee:profiles!tasks_assigned_to_fkey(*)")
-          .eq("client_id", clientId)
-          .is("parent_id", null)
-          .order("updated_at", { ascending: false }),
-        supabase
-          .from("activity_logs")
-          .select("*, user:profiles(*)")
-          .eq("entity_id", clientId)
-          .order("created_at", { ascending: false })
-          .limit(30),
-        supabase
-          .from("invoices")
-          .select("*")
-          .eq("client_id", clientId)
-          .order("updated_at", { ascending: false }),
-        supabase
-          .from("client_files")
-          .select("*")
-          .eq("client_id", clientId)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("portal_comments")
-          .select("author_name, content, created_at")
-          .eq("client_id", clientId)
-          .order("created_at", { ascending: false })
-          .limit(20),
-      ]);
+      const {
+        client: neonClient,
+        tasks: neonTasks,
+        activities,
+        invoices,
+        files,
+        portalComments,
+      } = await neonRequest<{
+        client: Client;
+        tasks: Task[];
+        activities: ActivityLog[];
+        invoices: Invoice[];
+        files: ClientFile[];
+        portalComments: PortalComment[];
+      }>(`/api/neon/clients/${clientId}`, {
+          cache: "no-store",
+      });
 
-      if (clientRes.error && clientRes.error.code !== "PGRST116") {
-        setLoadError(clientRes.error.message);
-        setLoading(false);
-        return;
-      }
-
-      if (!clientRes.data) {
-        setClient(null);
-        setLoading(false);
-        return;
-      }
-
-      if (tasksRes.error) {
-        setLoadError(tasksRes.error.message);
-        setLoading(false);
-        return;
-      }
-
-      setClient(clientRes.data);
-      setTasks((tasksRes.data ?? []) as Task[]);
-
-      const taskIds = (tasksRes.data ?? []).map((task) => task.id);
-      const taskActivities =
-        taskIds.length > 0
-          ? await supabase
-              .from("activity_logs")
-              .select("*, user:profiles(*)")
-              .eq("entity_type", "task")
-              .in("entity_id", taskIds)
-              .order("created_at", { ascending: false })
-              .limit(30)
-          : { data: [], error: null };
-
-      const allActivities = [
-        ...(actRes.data ?? []),
-        ...(taskActivities.data ?? []),
-      ];
+      setClient(neonClient);
+      setTasks(neonTasks ?? []);
 
       setTimeline(
         buildClientTimeline({
-          activities: allActivities,
-          tasks: (tasksRes.data ?? []) as Task[],
-          invoices: invRes.data ?? [],
-          files: filesRes.data ?? [],
-          portalComments: portalRes.error ? [] : portalRes.data ?? [],
+          activities: activities ?? [],
+          tasks: neonTasks ?? [],
+          invoices: invoices ?? [],
+          files: files ?? [],
+          portalComments: portalComments ?? [],
         })
       );
       setLoading(false);

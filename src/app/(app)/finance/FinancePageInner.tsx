@@ -16,6 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { PageShell, PageHeader, FilterTabs, RowMenu } from "@/components/mobile-ui";
 import { SavedViewsBar } from "@/components/workspace/SavedViewsBar";
 import {
@@ -201,6 +202,7 @@ export default function FinancePageInner() {
 
   useEffect(() => {
     if (!canViewFinance) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }
@@ -232,40 +234,18 @@ export default function FinancePageInner() {
     } = await supabase.auth.getUser();
     setCurrentUserId(user?.id ?? null);
 
-    const [ledgerRes, categoryRes, memRes, clientRes] = await Promise.all([
-      supabase
-        .from("accounting_transactions")
-        .select(
-          "*, category:accounting_categories(*), member:profiles!accounting_transactions_member_id_fkey(*), client:clients(*), updater:profiles!accounting_transactions_updated_by_fkey(*)"
-        )
-        .is("deleted_at", null)
-        .order("transaction_date", { ascending: false })
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("accounting_categories")
-        .select("*")
-        .order("sort_order", { ascending: true }),
-      supabase.from("profiles").select("*").order("display_name"),
-      supabase.from("clients").select("*").order("name"),
+    const [accountingData, profileData, clientData] = await Promise.all([
+      neonRequest<{ transactions: AccountingTransaction[]; categories: AccountingCategory[] }>(
+        "/api/neon/accounting", { cache: "no-store" }
+      ),
+      neonRequest<{ profiles: Profile[] }>("/api/neon/profiles", { cache: "no-store" }),
+      neonRequest<{ clients: Client[] }>("/api/neon/clients", { cache: "no-store" }),
     ]);
-
-    if (ledgerRes.error || categoryRes.error) {
-      const msg = ledgerRes.error?.message ?? categoryRes.error?.message ?? "";
-      setDbError(
-        msg.includes("deleted_at")
-          ? "รัน supabase/add-accounting-audit.sql ใน Supabase ก่อน"
-          : msg.includes("relation") || msg.includes("column")
-            ? "รัน supabase/add-accounting-ledger.sql ใน Supabase ก่อน"
-            : msg
-      );
-    } else {
-      setDbError("");
-    }
-
-    setTransactions((ledgerRes.data ?? []) as AccountingTransaction[]);
-    setCategories((categoryRes.data ?? []) as AccountingCategory[]);
-    setMembers((memRes.data ?? []).map(mergeProfileBank));
-    setClients((clientRes.data ?? []) as Client[]);
+    setDbError("");
+    setTransactions(accountingData.transactions ?? []);
+    setCategories(accountingData.categories ?? []);
+    setMembers((profileData.profiles ?? []).map(mergeProfileBank));
+    setClients(clientData.clients ?? []);
     setLoading(false);
   }
 
@@ -323,7 +303,6 @@ export default function FinancePageInner() {
     setSaving(true);
     setDbError("");
 
-    const supabase = createClient();
     let slip_url: string | null = null;
     let slip_file_name: string | null = null;
 
@@ -341,10 +320,11 @@ export default function FinancePageInner() {
     const amount = parseFloat(payoutForm.amount);
     const savedForm = { ...payoutForm };
 
-    const { data: payout, error } = await supabase
-      .from("team_payouts")
-      .insert({
-        payer_id: currentUserId,
+    let payout: { id: string } | null = null;
+    try {
+      const result = await neonRequest<{ row: { id: string } }>("/api/neon/accounting", {
+        method: "POST",
+        body: JSON.stringify({ resource: "payout", data: {
         payee_id: payoutForm.payee_id,
         amount,
         description: payoutForm.description.trim(),
@@ -352,14 +332,12 @@ export default function FinancePageInner() {
         slip_url,
         slip_file_name,
         notes: payoutForm.notes.trim() || null,
-        created_by: currentUserId,
-      })
-      .select("id")
-      .single();
-
-    if (error) {
+        } }),
+      });
+      payout = result.row;
+    } catch (error) {
       setSaving(false);
-      setDbError(error.message);
+      setDbError(error instanceof Error ? error.message : "บันทึกรายจ่ายไม่สำเร็จ");
       return;
     }
     if (!payout?.id) {
@@ -414,7 +392,6 @@ export default function FinancePageInner() {
     setSaving(true);
     setDbError("");
 
-    const supabase = createClient();
     let slip_url: string | null = null;
     let slip_file_name: string | null = null;
 
@@ -432,9 +409,11 @@ export default function FinancePageInner() {
     const amount = parseFloat(fundForm.amount);
     const savedForm = { ...fundForm };
 
-    const { data: contribution, error } = await supabase
-      .from("team_fund_contributions")
-      .insert({
+    let contribution: { id: string } | null = null;
+    try {
+      const result = await neonRequest<{ row: { id: string } }>("/api/neon/accounting", {
+        method: "POST",
+        body: JSON.stringify({ resource: "fund", data: {
         contributor_id: fundForm.contributor_id,
         amount,
         description: fundForm.description.trim(),
@@ -442,14 +421,12 @@ export default function FinancePageInner() {
         slip_url,
         slip_file_name,
         notes: fundForm.notes.trim() || null,
-        created_by: currentUserId,
-      })
-      .select("id")
-      .single();
-
-    if (error) {
+        } }),
+      });
+      contribution = result.row;
+    } catch (error) {
       setSaving(false);
-      setDbError(error.message);
+      setDbError(error instanceof Error ? error.message : "บันทึกกองกลางไม่สำเร็จ");
       return;
     }
     if (!contribution?.id) {

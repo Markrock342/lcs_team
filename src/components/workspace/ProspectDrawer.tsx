@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { Button, Drawer, Input, Select, StatusStamp, Textarea } from "@/components/ui";
 import { AiAssistPanel } from "@/components/workspace/AiAssistPanel";
 import {
@@ -79,16 +79,13 @@ export function ProspectDrawer({
     setFromAi(false);
     setLog("");
     setHistoryLoading(true);
-    const supabase = createClient();
-    void supabase
-      .from("sales_interactions")
-      .select("*, creator:profiles!sales_interactions_created_by_fkey(*)")
-      .eq("prospect_id", prospect.id)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        setHistory((data as SalesInteraction[]) ?? []);
+    void neonRequest<{ interactions: SalesInteraction[] }>(
+      `/api/neon/sales?prospectId=${encodeURIComponent(prospect.id)}`,
+      { cache: "no-store" }
+    ).then(({ interactions }) => {
+        setHistory(interactions ?? []);
         setHistoryLoading(false);
-      });
+      }).catch(() => setHistoryLoading(false));
   }, [prospect]);
 
   if (!prospect) return null;
@@ -96,10 +93,10 @@ export function ProspectDrawer({
 
   async function saveMeta() {
     setSaving(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("sales_prospects")
-      .update({
+    try {
+      await neonRequest("/api/neon/sales", {
+        method: "PATCH",
+        body: JSON.stringify({ resource: "prospect", id: current.id, data: {
         name: name.trim() || current.name,
         contact_name: contactName.trim() || null,
         contact_phone: phone.trim() || null,
@@ -109,13 +106,14 @@ export function ProspectDrawer({
         next_follow_up: followUp || null,
         owner_id: ownerId || null,
         status: ownerId && status === "new" ? "assigned" : status,
-      })
-      .eq("id", current.id);
-    setSaving(false);
-    if (error) {
-      toast(error.message);
+        } }),
+      });
+    } catch (error) {
+      setSaving(false);
+      toast(error instanceof Error ? error.message : "บันทึกไม่สำเร็จ");
       return;
     }
+    setSaving(false);
     toast(ownerId ? "บันทึกและมอบหมายแล้ว" : "บันทึกแล้ว");
     onChanged();
   }
@@ -127,33 +125,29 @@ export function ProspectDrawer({
     nextOutcome = outcome
   ) {
     setSaving(true);
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
     const nextStatus = nextStatusFromOutcome(status, nextOutcome);
-    const { error: logError } = await supabase.from("sales_interactions").insert({
-      prospect_id: current.id,
-      type: nextType,
-      outcome: nextOutcome,
-      content,
-      ai_generated: ai,
-      created_by: user?.id ?? null,
-    });
-    if (logError) {
+    try {
+      await neonRequest("/api/neon/sales", {
+        method: "POST",
+        body: JSON.stringify({ resource: "interaction", data: {
+          prospect_id: current.id,
+          type: nextType,
+          outcome: nextOutcome,
+          content,
+          ai_generated: ai,
+        } }),
+      });
+      await neonRequest("/api/neon/sales", {
+        method: "PATCH",
+        body: JSON.stringify({ resource: "prospect", id: current.id, data: {
+          status: nextStatus,
+          notes: notes || content,
+          next_follow_up: followUp || null,
+        } }),
+      });
+    } catch (error) {
       setSaving(false);
-      toast(logError.message);
-      return;
-    }
-    const { error: updateError } = await supabase
-      .from("sales_prospects")
-      .update({
-        status: nextStatus,
-        notes: notes || content,
-        next_follow_up: followUp || null,
-      })
-      .eq("id", current.id);
-    if (updateError) {
-      setSaving(false);
-      toast(updateError.message);
+      toast(error instanceof Error ? error.message : "บันทึกการติดต่อไม่สำเร็จ");
       return;
     }
     await logActivity("update", "sales_prospect", current.id, current.name, {

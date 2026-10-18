@@ -14,7 +14,7 @@ import {
   Wallet,
   Handshake,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import { useRole } from "@/components/RoleProvider";
 import { formatBaht } from "@/lib/money";
 import {
@@ -78,65 +78,47 @@ export default function DashboardPage() {
   }
 
   async function loadData() {
-    const supabase = createClient();
     setError(null);
 
-    const skip = { data: [] as never[], error: null };
-    const [tasksRes, clientsRes, profilesRes, ledgerRes, invoicesRes, dealsRes] =
-      await Promise.all([
-      supabase
-        .from("tasks")
-        .select("*, client:clients(*), assignee:profiles!tasks_assigned_to_fkey(*)")
-        .order("created_at", { ascending: false }),
-      supabase.from("clients").select("*").order("created_at", { ascending: false }),
-      supabase.from("profiles").select("*"),
-      canViewFinance
-        ? supabase
-            .from("accounting_transactions")
-            .select(
-              "*, category:accounting_categories(*), member:profiles!accounting_transactions_member_id_fkey(*), client:clients(*)"
-            )
-            .is("deleted_at", null)
-            .order("transaction_date", { ascending: false })
-            .order("created_at", { ascending: false })
-        : Promise.resolve(skip),
-      canViewFinance
-        ? supabase
-            .from("invoices")
-            .select("status, total_amount, document_type, payments:invoice_payments(amount)")
-        : Promise.resolve(skip),
-      supabase
-        .from("sales_deals")
-        .select("id, title, value, stage, next_follow_up, client:clients(name)")
-        .order("updated_at", { ascending: false }),
-    ]);
-
-    const loadError =
-      tasksRes.error ??
-      clientsRes.error ??
-      profilesRes.error ??
-      ledgerRes.error ??
-      invoicesRes.error;
-
-    if (loadError) {
-      setError(loadError.message);
+    let core: { tasks: Task[]; clients: Client[] };
+    let invoiceData: { invoices: typeof invoices } = { invoices: [] };
+    let salesData: { deals: typeof deals };
+    let accountingData: { transactions: AccountingTransaction[] } = { transactions: [] };
+    try {
+      [core, invoiceData, salesData, accountingData] = await Promise.all([
+        neonRequest<{ tasks: Task[]; clients: Client[] }>("/api/neon/tasks", { cache: "no-store" }),
+        canViewFinance
+          ? neonRequest<{ invoices: typeof invoices }>("/api/neon/invoices", { cache: "no-store" })
+          : Promise.resolve({ invoices: [] }),
+        neonRequest<{ deals: typeof deals }>("/api/neon/sales", { cache: "no-store" }),
+        canViewFinance
+          ? neonRequest<{ transactions: AccountingTransaction[] }>("/api/neon/accounting", { cache: "no-store" })
+          : Promise.resolve({ transactions: [] }),
+      ]);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "โหลดข้อมูลหลักไม่สำเร็จ");
       setLoading(false);
       return;
     }
 
-    setTasks(tasksRes.data ?? []);
-    setClients(clientsRes.data ?? []);
-    setProfiles(profilesRes.data ?? []);
-    setTransactions((ledgerRes.data ?? []) as AccountingTransaction[]);
-    setInvoices(invoicesRes.data ?? []);
+    const profileData = await neonRequest<{ profiles: Profile[] }>(
+      "/api/neon/profiles",
+      { cache: "no-store" },
+    );
+
+    setTasks(core.tasks ?? []);
+    setClients(core.clients ?? []);
+    setProfiles(profileData.profiles ?? []);
+    setTransactions(accountingData.transactions ?? []);
+    setInvoices(invoiceData.invoices ?? []);
     setDeals(
-      (dealsRes.error ? [] : dealsRes.data ?? []).map((row) => ({
+      (salesData.deals ?? []).map((row) => ({
         id: row.id,
         title: row.title,
         value: row.value,
         stage: row.stage as SalesStage,
         next_follow_up: row.next_follow_up,
-        client: Array.isArray(row.client) ? row.client[0] ?? null : row.client,
+        client: row.client ?? null,
       }))
     );
     setLoading(false);
@@ -146,6 +128,8 @@ export default function DashboardPage() {
     // Updates happen only after the remote requests resolve.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadData();
+    // loadData is intentionally recreated with the current finance permission.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canViewFinance]);
 
   const pending = tasks.filter((t) => t.status === "pending");

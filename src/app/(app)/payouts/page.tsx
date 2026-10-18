@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Building2, ChevronRight, Plus, ReceiptText, Users } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import {
   Avatar,
   Button,
@@ -35,6 +35,7 @@ export default function PayoutsPage() {
 
   useEffect(() => {
     if (!canViewFinance) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }
@@ -43,22 +44,12 @@ export default function PayoutsPage() {
 
   async function load() {
     setLoadError("");
-    const supabase = createClient();
-    const [payRes, memRes] = await Promise.all([
-      supabase
-        .from("team_payouts")
-        .select(
-          "*, payer:profiles!team_payouts_payer_id_fkey(*), payee:profiles!team_payouts_payee_id_fkey(*)"
-        )
-        .order("paid_at", { ascending: false })
-        .limit(5),
-      supabase.from("profiles").select("*").order("display_name"),
+    const [accountingData, profileData] = await Promise.all([
+      neonRequest<{ payouts: TeamPayout[] }>("/api/neon/accounting", { cache: "no-store" }),
+      neonRequest<{ profiles: Profile[] }>("/api/neon/profiles", { cache: "no-store" }),
     ]);
-    if (payRes.error || memRes.error) {
-      setLoadError(payRes.error?.message ?? memRes.error?.message ?? "โหลดข้อมูลไม่สำเร็จ");
-    }
-    setPayouts(payRes.data ?? []);
-    setMembers((memRes.data ?? []).map(mergeProfileBank));
+    setPayouts((accountingData.payouts ?? []).slice(0, 5));
+    setMembers((profileData.profiles ?? []).map(mergeProfileBank));
     setLoading(false);
   }
 

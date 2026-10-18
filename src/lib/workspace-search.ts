@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { chatMessageHref, formatChannelDisplay } from "./channels";
+import { neonRequest } from "./neon/client";
+import type { Client, SalesDeal, SalesProspect, Task } from "./types";
+import type { Invoice } from "./extras-types";
 
 export type WorkspaceSearchHit = {
   type: "task" | "client" | "message" | "invoice" | "prospect" | "deal";
@@ -19,50 +22,26 @@ export async function searchWorkspace(
   q: string,
   opts?: { includeFinance?: boolean }
 ): Promise<WorkspaceSearchHit[]> {
-  const pattern = `%${q}%`;
   const includeFinance = opts?.includeFinance ?? true;
 
-  const [tasksRes, clientsRes, messagesRes, invoicesRes, prospectsRes, dealsRes] =
+  const [taskData, clientData, messagesRes, invoiceData, salesData] =
     await Promise.all([
-      supabase
-        .from("tasks")
-        .select("id, title, client:clients(name)")
-        .ilike("title", pattern)
-        .limit(6),
-      supabase
-        .from("clients")
-        .select("id, name, company")
-        .ilike("name", pattern)
-        .limit(6),
-      supabase
-        .from("messages")
-        .select("id, content, channel_id, channels(name, kind)")
-        .is("deleted_at", null)
-        .ilike("content", pattern)
-        .limit(6),
+      neonRequest<{ tasks: Task[] }>("/api/neon/tasks", { cache: "no-store" }),
+      neonRequest<{ clients: Client[] }>("/api/neon/clients", { cache: "no-store" }),
+      neonRequest<{ messages: Array<{ id: string; content: string | null; channel_id: string; channels: { name: string; kind?: string | null } }> }>(
+        `/api/neon/chat?mode=search&q=${encodeURIComponent(q)}`, { cache: "no-store" }
+      ),
       includeFinance
-        ? supabase
-            .from("invoices")
-            .select("id, title, client:clients(name)")
-            .ilike("title", pattern)
-            .limit(4)
-        : Promise.resolve({ data: [] as { id: string; title: string; client?: unknown }[] }),
-      supabase
-        .from("sales_prospects")
-        .select("id, name, contact_phone")
-        .ilike("name", pattern)
-        .limit(6),
-      supabase
-        .from("sales_deals")
-        .select("id, title, company")
-        .ilike("title", pattern)
-        .limit(4),
+        ? neonRequest<{ invoices: Invoice[] }>("/api/neon/invoices", { cache: "no-store" })
+        : Promise.resolve({ invoices: [] as Invoice[] }),
+      neonRequest<{ prospects: SalesProspect[]; deals: SalesDeal[] }>("/api/neon/sales", { cache: "no-store" }),
     ]);
 
   const items: WorkspaceSearchHit[] = [];
 
-  for (const row of tasksRes.data ?? []) {
-    const client = asOne(row.client as { name: string } | { name: string }[] | null);
+  const query = q.trim().toLocaleLowerCase("th");
+  for (const row of taskData.tasks.filter((item) => item.title.toLocaleLowerCase("th").includes(query)).slice(0, 6)) {
+    const client = row.client;
     items.push({
       type: "task",
       id: row.id,
@@ -72,7 +51,7 @@ export async function searchWorkspace(
     });
   }
 
-  for (const row of clientsRes.data ?? []) {
+  for (const row of clientData.clients.filter((item) => item.name.toLocaleLowerCase("th").includes(query)).slice(0, 6)) {
     items.push({
       type: "client",
       id: row.id,
@@ -82,7 +61,7 @@ export async function searchWorkspace(
     });
   }
 
-  for (const row of messagesRes.data ?? []) {
+  for (const row of messagesRes.messages ?? []) {
     const raw = row as {
       id: string;
       content: string | null;
@@ -99,13 +78,8 @@ export async function searchWorkspace(
     });
   }
 
-  for (const row of invoicesRes.data ?? []) {
-    const raw = row as {
-      id: string;
-      title: string;
-      client?: { name: string } | { name: string }[] | null;
-    };
-    const client = asOne(raw.client);
+  for (const raw of invoiceData.invoices.filter((item) => item.title.toLocaleLowerCase("th").includes(query)).slice(0, 4)) {
+    const client = raw.client;
     items.push({
       type: "invoice",
       id: raw.id,
@@ -115,7 +89,7 @@ export async function searchWorkspace(
     });
   }
 
-  for (const row of prospectsRes.data ?? []) {
+  for (const row of salesData.prospects.filter((item) => item.name.toLocaleLowerCase("th").includes(query)).slice(0, 6)) {
     items.push({
       type: "prospect",
       id: row.id,
@@ -125,7 +99,7 @@ export async function searchWorkspace(
     });
   }
 
-  for (const row of dealsRes.data ?? []) {
+  for (const row of salesData.deals.filter((item) => item.title.toLocaleLowerCase("th").includes(query)).slice(0, 4)) {
     items.push({
       type: "deal",
       id: row.id,

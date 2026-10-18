@@ -1,23 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Message, Profile } from "./types";
+import { neonRequest } from "./neon/client";
+import type { Message } from "./types";
 
-/** ระบุ FK ชัดเจน — กัน error "more than one relationship" หลังมี message_reads */
 export const MESSAGE_SELECT_BASIC = "*, sender:profiles!sender_id(*)";
+export const MESSAGE_SELECT_FULL = MESSAGE_SELECT_BASIC;
 
-export const MESSAGE_SELECT_FULL = `
-  *,
-  sender:profiles!sender_id(*),
-  reply_to:messages!messages_reply_to_id_fkey(
-    id, content, sender_id, deleted_at, file_name,
-    sender:profiles!sender_id(display_name)
-  ),
-  reads:message_reads!message_reads_message_id_fkey(
-    user_id, read_at,
-    reader:profiles!user_id(id, display_name, username)
-  )
-`;
-
-/** PostgREST อาจคืน reply_to เป็น array (ความสัมพันธ์กลับ) — ใช้เฉพาะเมื่อมี reply_to_id */
 export function getMessageReplyPreview(msg: Message) {
   if (!msg.reply_to_id) return null;
   const rt = msg.reply_to;
@@ -29,170 +16,56 @@ export function getMessageReplyPreview(msg: Message) {
 function normalizeMessage(msg: Message): Message {
   const reply_to = getMessageReplyPreview(msg);
   if (reply_to) return { ...msg, reply_to };
-  const { reply_to: _, ...rest } = msg;
-  return rest;
+  return { ...msg, reply_to: undefined };
 }
 
 export function isSchemaError(message: string) {
   const m = message.toLowerCase();
-  return (
-    m.includes("column") ||
-    m.includes("relation") ||
-    m.includes("schema cache") ||
-    m.includes("does not exist") ||
-    m.includes("more than one relationship") ||
-    m.includes("could not find")
-  );
-}
-
-async function fetchWithProfilesFallback(
-  supabase: SupabaseClient,
-  channelId: string
-): Promise<{ data: Message[]; error: string | null }> {
-  const { data: rows, error } = await supabase
-    .from("messages")
-    .select("*")
-    .eq("channel_id", channelId)
-    .order("created_at", { ascending: true })
-    .limit(200);
-
-  if (error) return { data: [], error: error.message };
-  if (!rows?.length) return { data: [], error: null };
-
-  const senderIds = [...new Set(rows.map((r) => r.sender_id))];
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("*")
-    .in("id", senderIds);
-
-  const profileMap = new Map(
-    (profiles as Profile[] | null)?.map((p) => [p.id, p]) ?? []
-  );
-
-  return {
-    data: rows.map((row) =>
-      normalizeMessage({
-        ...(row as Message),
-        sender: profileMap.get(row.sender_id) ?? null,
-      })
-    ),
-    error: null,
-  };
+  return m.includes("column") || m.includes("relation") || m.includes("schema") || m.includes("does not exist");
 }
 
 export async function fetchChannelMessages(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   channelId: string,
   opts?: { threadId?: string | null }
 ): Promise<{ data: Message[]; error: string | null }> {
-  for (const select of [MESSAGE_SELECT_FULL, MESSAGE_SELECT_BASIC]) {
-    let query = supabase
-      .from("messages")
-      .select(select)
-      .eq("channel_id", channelId)
-      .order("created_at", { ascending: true })
-      .limit(200);
-
-    if (opts?.threadId) {
-      query = query.or(`id.eq.${opts.threadId},thread_id.eq.${opts.threadId}`);
-    } else {
-      query = query.is("thread_id", null);
-    }
-
-    const res = await query;
-
-    if (!res.error) {
-      const data =
-        (res.data as unknown as Message[] | null)?.map(normalizeMessage) ?? [];
-      return { data, error: null };
-    }
-
-    if (
-      opts?.threadId === undefined &&
-      isSchemaError(res.error.message) &&
-      res.error.message.toLowerCase().includes("thread_id")
-    ) {
-      const fallback = await supabase
-        .from("messages")
-        .select(select)
-        .eq("channel_id", channelId)
-        .order("created_at", { ascending: true })
-        .limit(200);
-      if (!fallback.error) {
-        const data =
-          (fallback.data as unknown as Message[] | null)?.map(normalizeMessage) ??
-          [];
-        return { data, error: null };
-      }
-    }
-
-    if (!isSchemaError(res.error.message)) {
-      return { data: [], error: res.error.message };
-    }
+  try {
+    const params = new URLSearchParams({ mode: "messages", channelId });
+    if (opts?.threadId) params.set("threadId", opts.threadId);
+    const { messages } = await neonRequest<{ messages: Message[] }>(`/api/neon/chat?${params}`, { cache: "no-store" });
+    return { data: (messages ?? []).map(normalizeMessage), error: null };
+  } catch (error) {
+    return { data: [], error: error instanceof Error ? error.message : "โหลดข้อความไม่สำเร็จ" };
   }
-
-  return fetchWithProfilesFallback(supabase, channelId);
 }
 
 export async function fetchThreadCounts(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   rootIds: string[]
 ): Promise<Record<string, number>> {
-  const counts: Record<string, number> = {};
-  if (!rootIds.length) return counts;
-  const { data, error } = await supabase
-    .from("messages")
-    .select("thread_id")
-    .in("thread_id", rootIds)
-    .is("deleted_at", null);
-  if (error) return counts;
-  for (const row of data ?? []) {
-    if (!row.thread_id) continue;
-    counts[row.thread_id] = (counts[row.thread_id] ?? 0) + 1;
+  if (!rootIds.length) return {};
+  try {
+    const params = new URLSearchParams({ mode: "thread-counts", ids: rootIds.join(",") });
+    const { counts } = await neonRequest<{ counts: Record<string, number> }>(`/api/neon/chat?${params}`, { cache: "no-store" });
+    return counts ?? {};
+  } catch {
+    return {};
   }
-  return counts;
-}
-
-async function fetchOneWithProfileFallback(
-  supabase: SupabaseClient,
-  id: string
-): Promise<Message | null> {
-  const { data: row, error } = await supabase
-    .from("messages")
-    .select("*")
-    .eq("id", id)
-    .single();
-
-  if (error || !row) return null;
-
-  const { data: sender } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", row.sender_id)
-    .single();
-
-  return normalizeMessage({ ...(row as Message), sender: sender ?? null });
 }
 
 export async function fetchMessageById(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   id: string
 ): Promise<Message | null> {
-  for (const select of [MESSAGE_SELECT_FULL, MESSAGE_SELECT_BASIC]) {
-    const res = await supabase
-      .from("messages")
-      .select(select)
-      .eq("id", id)
-      .single();
-
-    if (!res.error && res.data) {
-      return normalizeMessage(res.data as unknown as Message);
-    }
-
-    if (res.error && !isSchemaError(res.error.message)) return null;
+  try {
+    const { message } = await neonRequest<{ message: Message | null }>(
+      `/api/neon/chat?mode=message&id=${encodeURIComponent(id)}`,
+      { cache: "no-store" }
+    );
+    return message ? normalizeMessage(message) : null;
+  } catch {
+    return null;
   }
-
-  return fetchOneWithProfileFallback(supabase, id);
 }
 
 type InsertPayload = {
@@ -209,83 +82,33 @@ type InsertPayload = {
 };
 
 export async function insertChatMessage(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   payload: InsertPayload
 ): Promise<{ data: Message | null; error: string | null }> {
-  const attempts: Record<string, unknown>[] = [
-    { ...payload },
-    { ...payload, thread_id: undefined },
-    { ...payload, reply_to_id: undefined, thread_id: undefined },
-    {
-      channel_id: payload.channel_id,
-      sender_id: payload.sender_id,
-      content: payload.content,
-      file_url: payload.file_url,
-      file_name: payload.file_name,
-      file_type: payload.file_type,
-    },
-  ];
-
-  let lastError = "ส่งข้อความไม่สำเร็จ";
-
-  for (const body of attempts) {
-    const clean = Object.fromEntries(
-      Object.entries(body).filter(([, v]) => v !== undefined)
-    );
-
-    const res = await supabase
-      .from("messages")
-      .insert(clean)
-      .select(MESSAGE_SELECT_BASIC)
-      .single();
-
-    if (!res.error && res.data) {
-      return {
-        data: normalizeMessage(res.data as unknown as Message),
-        error: null,
-      };
-    }
-
-    if (res.error) {
-      lastError = res.error.message;
-
-      if (isSchemaError(res.error.message)) {
-        const plain = await supabase
-          .from("messages")
-          .insert(clean)
-          .select("*")
-          .single();
-
-        if (!plain.error && plain.data) {
-          const withSender = await fetchMessageById(supabase, plain.data.id);
-          return { data: withSender, error: null };
-        }
-
-        if (plain.error && !isSchemaError(plain.error.message)) {
-          return { data: null, error: plain.error.message };
-        }
-      } else {
-        return { data: null, error: lastError };
-      }
-    }
+  try {
+    const { message } = await neonRequest<{ message: Message }>("/api/neon/chat", {
+      method: "POST",
+      body: JSON.stringify({ action: "message", data: payload }),
+    });
+    return { data: normalizeMessage(message), error: null };
+  } catch (error) {
+    return { data: null, error: error instanceof Error ? error.message : "ส่งข้อความไม่สำเร็จ" };
   }
-
-  return { data: null, error: lastError };
 }
 
 export async function markMessagesAsReadSafe(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   messageIds: string[],
   userId: string
 ) {
+  void userId;
   if (!messageIds.length) return;
-
-  const { error } = await supabase.from("message_reads").upsert(
-    messageIds.map((message_id) => ({ message_id, user_id: userId })),
-    { onConflict: "message_id,user_id" }
-  );
-
-  if (error && !isSchemaError(error.message)) {
-    console.error("markMessagesAsRead:", error.message);
+  try {
+    await neonRequest("/api/neon/chat", {
+      method: "POST",
+      body: JSON.stringify({ action: "read-messages", data: { ids: messageIds } }),
+    });
+  } catch (error) {
+    console.error("markMessagesAsRead:", error);
   }
 }

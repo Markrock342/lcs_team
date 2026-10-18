@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getNeonAuthContext } from "@/lib/neon/auth";
 import { getGeminiKey, generateGeminiText, streamGeminiText } from "@/lib/gemini";
 import { canViewFinance } from "@/lib/permissions";
 import {
@@ -15,17 +15,8 @@ export const maxDuration = 60;
 const MAX_QUESTION = 800;
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  if (!supabase) {
-    return NextResponse.json({ error: "ยังไม่ได้ตั้งค่า Supabase" }, { status: 500 });
-  }
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await getNeonAuthContext();
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   if (!getGeminiKey()) {
     return NextResponse.json({ error: "ยังไม่ได้ตั้งค่า GEMINI_API_KEY" }, { status: 503 });
@@ -37,16 +28,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "คำถามยาวเกินไป" }, { status: 400 });
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name, role, display_roles")
-    .eq("id", user.id)
-    .single();
-
+  const profile = auth.context.profile;
   const includeFinance = canViewFinance(profile);
-  const prompt = await buildWorkspaceBriefPrompt(supabase, question, {
+  const prompt = await buildWorkspaceBriefPrompt(question, {
     includeFinance,
-    userId: user.id,
+    userId: auth.context.userId,
     asker: profile?.display_name ? `${profile.display_name} (${profile.role})` : undefined,
   });
 

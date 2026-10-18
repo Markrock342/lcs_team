@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import type { ThemeMode } from "@/lib/extras-types";
 
 const ThemeContext = createContext<{
@@ -31,16 +31,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function loadProfile() {
       try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("theme")
-          .eq("id", user.id)
-          .single();
-        if (error || !data?.theme) return;
-        setThemeState(data.theme as ThemeMode);
+        const { profile } = await neonRequest<{ profile: { theme?: ThemeMode | null } }>(
+          "/api/neon/profiles?me=1",
+          { cache: "no-store" },
+        );
+        if (profile.theme) setThemeState(profile.theme);
       } catch {
         // ignore
       }
@@ -51,11 +46,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   async function setTheme(t: ThemeMode) {
     setThemeState(t);
     try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from("profiles").update({ theme: t }).eq("id", user.id);
-      }
+      await neonRequest("/api/neon/profiles", {
+        method: "PATCH",
+        body: JSON.stringify({ data: { theme: t } }),
+      });
     } catch {
       // ignore
     }

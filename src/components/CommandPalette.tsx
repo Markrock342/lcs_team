@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -55,14 +55,14 @@ export function CommandPalette({
   const [results, setResults] = useState<WorkspaceSearchHit[]>([]);
   const [loading, setLoading] = useState(false);
 
-  async function search(q: string) {
+  const search = useCallback(async (q: string) => {
     setLoading(true);
     const items = await searchWorkspace(createClient(), q, {
       includeFinance: canViewFinance,
     });
     setResults(items);
     setLoading(false);
-  }
+  }, [canViewFinance]);
 
   useEffect(() => {
     if (!open) {
@@ -81,7 +81,7 @@ export function CommandPalette({
     }
     const timer = setTimeout(() => void search(query.trim()), 250);
     return () => clearTimeout(timer);
-  }, [query, canViewFinance]);
+  }, [query, search]);
 
   if (!open) return null;
 

@@ -42,7 +42,6 @@ export async function POST(request: Request) {
   }
 
   const result = await deliverNotifications(
-    supabase,
     valid.map((n) => ({
       userId: n.userId,
       title: n.title,

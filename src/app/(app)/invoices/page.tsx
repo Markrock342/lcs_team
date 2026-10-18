@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus, DollarSign, Eye, Printer, FileText, Pencil, Receipt, FileDown, Trash2, MoreHorizontal } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { neonRequest } from "@/lib/neon/client";
 import {
   Button,
   Card,
@@ -135,20 +135,18 @@ export default function InvoicesPage() {
 
   async function load() {
     setLoadError("");
-    const supabase = createClient();
-    const [inv, cls] = await Promise.all([
-      supabase
-        .from("invoices")
-        .select("*, client:clients(*), payments:invoice_payments(*)")
-        .order("created_at", { ascending: false }),
-      supabase.from("clients").select("*"),
-    ]);
-    if (inv.error || cls.error) {
-      setLoadError(inv.error?.message ?? cls.error?.message ?? "โหลดข้อมูลไม่สำเร็จ");
+    try {
+      const data = await neonRequest<{
+        invoices: (Invoice & { client?: Client })[];
+        clients: Client[];
+      }>("/api/neon/invoices", { cache: "no-store" });
+      setInvoices(data.invoices ?? []);
+      setClients(data.clients ?? []);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "โหลดข้อมูลไม่สำเร็จ");
+    } finally {
+      setLoading(false);
     }
-    setInvoices(inv.data ?? []);
-    setClients(cls.data ?? []);
-    setLoading(false);
   }
 
   const filtered = invoices.filter((i) =>
@@ -199,45 +197,34 @@ export default function InvoicesPage() {
   async function saveReceipt(receiptForm: DocumentFormData, sourceInvoiceId: string) {
     setSaving(true);
     setDbError("");
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
     const { payload } = buildPayload(receiptForm);
-
-    const { data: created, error } = await supabase
-      .from("invoices")
-      .insert({ ...payload, created_by: user?.id })
-      .select("id, doc_number")
-      .single();
-
-    if (error) {
+    try {
+      const { invoice: created } = await neonRequest<{ invoice: Invoice }>(
+        "/api/neon/invoices",
+        { method: "POST", body: JSON.stringify(payload) }
+      );
+      const source = invoices.find((i) => i.id === sourceInvoiceId);
+      const sourceMeta = (source?.document_meta as Record<string, unknown>) ?? {};
+      await neonRequest("/api/neon/invoices", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id: sourceInvoiceId,
+          document_meta: {
+            ...sourceMeta,
+            receipt_id: created.id,
+            receipt_doc_number: created.doc_number,
+          },
+        }),
+      });
+      await logActivity("create", "invoice", created.id, receiptForm.title, {
+        type: "receipt",
+        from_invoice: sourceInvoiceId,
+      });
+    } catch (error) {
       setSaving(false);
-      if (error.message.includes("column") || error.message.includes("schema")) {
-        setDbError("รัน supabase/add-invoice-documents.sql ใน Supabase ก่อน");
-      } else {
-        setDbError(error.message);
-      }
+      setDbError(error instanceof Error ? error.message : "สร้างใบเสร็จไม่สำเร็จ");
       return;
     }
-
-    const source = invoices.find((i) => i.id === sourceInvoiceId);
-    const sourceMeta = (source?.document_meta as Record<string, unknown>) ?? {};
-    await supabase
-      .from("invoices")
-      .update({
-        document_meta: {
-          ...sourceMeta,
-          receipt_id: created.id,
-          receipt_doc_number: created.doc_number,
-        },
-      })
-      .eq("id", sourceInvoiceId);
-
-    await logActivity("create", "invoice", created.id, receiptForm.title, {
-      type: "receipt",
-      from_invoice: sourceInvoiceId,
-    });
 
     setSaving(false);
     setConvertModal(null);
@@ -257,56 +244,49 @@ export default function InvoicesPage() {
     setSaving(true);
     setDbError("");
 
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
     const { payload } = buildPayload(form);
 
     const sourceInvoiceId = getReceiptSourceId(
       form.document_meta as Record<string, unknown>
     );
 
-    let error;
     let createdId: string | null = null;
-    if (editingId) {
-      ({ error } = await supabase.from("invoices").update(payload).eq("id", editingId));
-    } else {
-      const result = await supabase
-        .from("invoices")
-        .insert({ ...payload, created_by: user?.id })
-        .select("id, doc_number")
-        .single();
-      error = result.error;
-      createdId = result.data?.id ?? null;
+    try {
+      if (editingId) {
+        await neonRequest("/api/neon/invoices", {
+          method: "PATCH",
+          body: JSON.stringify({ id: editingId, ...payload }),
+        });
+      } else {
+        const { invoice: created } = await neonRequest<{ invoice: Invoice }>(
+          "/api/neon/invoices",
+          { method: "POST", body: JSON.stringify(payload) }
+        );
+        createdId = created.id;
 
-      if (!error && sourceInvoiceId && form.document_type === "receipt" && createdId) {
-        const source = invoices.find((i) => i.id === sourceInvoiceId);
-        const sourceMeta = (source?.document_meta as Record<string, unknown>) ?? {};
-        await supabase
-          .from("invoices")
-          .update({
-            document_meta: {
-              ...sourceMeta,
-              receipt_id: createdId,
-              receipt_doc_number: result.data?.doc_number,
-            },
-          })
-          .eq("id", sourceInvoiceId);
+        if (sourceInvoiceId && form.document_type === "receipt") {
+          const source = invoices.find((i) => i.id === sourceInvoiceId);
+          const sourceMeta = (source?.document_meta as Record<string, unknown>) ?? {};
+          await neonRequest("/api/neon/invoices", {
+            method: "PATCH",
+            body: JSON.stringify({
+              id: sourceInvoiceId,
+              document_meta: {
+                ...sourceMeta,
+                receipt_id: created.id,
+                receipt_doc_number: created.doc_number,
+              },
+            }),
+          });
+        }
       }
+    } catch (error) {
+      setSaving(false);
+      setDbError(error instanceof Error ? error.message : "บันทึกเอกสารไม่สำเร็จ");
+      return;
     }
 
     setSaving(false);
-
-    if (error) {
-      if (error.message.includes("column") || error.message.includes("schema")) {
-        setDbError("รัน supabase/add-invoice-documents.sql ใน Supabase ก่อน");
-      } else {
-        setDbError(error.message);
-      }
-      return;
-    }
 
     if (editingId) {
       await logActivity("update", "invoice", editingId, form.title, {
@@ -330,46 +310,34 @@ export default function InvoicesPage() {
     if (!payModal || saving) return;
     setSaving(true);
     setDbError("");
-    const supabase = createClient();
     const amount = parseFloat(payAmount);
 
     const paidAt = new Date().toISOString().slice(0, 10);
-    const { data: payment, error: payError } = await supabase
-      .from("invoice_payments")
-      .insert({
-        invoice_id: payModal.id,
-        amount,
-        paid_at: paidAt,
-      })
-      .select("id")
-      .single();
-    if (payError) {
+    let payment: { id: string };
+    let newStatus: InvoiceStatus;
+    try {
+      const result = await neonRequest<{
+        payment: { id: string };
+        status: InvoiceStatus;
+      }>("/api/neon/invoices/payments", {
+        method: "POST",
+        body: JSON.stringify({
+          invoice_id: payModal.id,
+          amount,
+          paid_at: paidAt,
+          payment_method: payMethod || null,
+        }),
+      });
+      payment = result.payment;
+      newStatus = result.status;
+    } catch (error) {
       setSaving(false);
-      setDbError(payError.message);
+      setDbError(error instanceof Error ? error.message : "บันทึกการชำระเงินไม่สำเร็จ");
       return;
     }
     if (!payment?.id) {
       setSaving(false);
       setDbError("บันทึกชำระแล้ว แต่ไม่พบเลขอ้างอิงรายการ");
-      return;
-    }
-
-    const paid =
-      (payModal.payments?.reduce((s, p) => s + p.amount, 0) ?? 0) + amount;
-    const newStatus: InvoiceStatus =
-      paid >= payModal.total_amount ? "paid" : "partial";
-
-    const updates: Record<string, unknown> = { status: newStatus };
-    if (newStatus === "paid" && payMethod) {
-      updates.payment_method = payMethod;
-    }
-    const { error: statusError } = await supabase
-      .from("invoices")
-      .update(updates)
-      .eq("id", payModal.id);
-    if (statusError) {
-      setSaving(false);
-      setDbError(statusError.message);
       return;
     }
 
@@ -431,28 +399,36 @@ export default function InvoicesPage() {
       danger: true,
     })) return;
 
-    const supabase = createClient();
+    try {
+      if (linkedReceipt) {
+        await neonRequest("/api/neon/invoices", {
+          method: "DELETE",
+          body: JSON.stringify({ id: linkedReceipt.id }),
+        });
+      }
 
-    if (linkedReceipt) {
-      await supabase.from("invoices").delete().eq("id", linkedReceipt.id);
-    }
-
-    if (docType === "receipt") {
-      const sourceId = getReceiptSourceId(inv.document_meta);
-      if (sourceId) {
-        const source = invoices.find((i) => i.id === sourceId);
-        if (source) {
-          const meta = { ...(source.document_meta as Record<string, unknown>) };
-          delete meta.receipt_id;
-          delete meta.receipt_doc_number;
-          await supabase.from("invoices").update({ document_meta: meta }).eq("id", sourceId);
+      if (docType === "receipt") {
+        const sourceId = getReceiptSourceId(inv.document_meta);
+        if (sourceId) {
+          const source = invoices.find((i) => i.id === sourceId);
+          if (source) {
+            const meta = { ...(source.document_meta as Record<string, unknown>) };
+            delete meta.receipt_id;
+            delete meta.receipt_doc_number;
+            await neonRequest("/api/neon/invoices", {
+              method: "PATCH",
+              body: JSON.stringify({ id: sourceId, document_meta: meta }),
+            });
+          }
         }
       }
-    }
 
-    const { error } = await supabase.from("invoices").delete().eq("id", inv.id);
-    if (error) {
-      toast(error.message);
+      await neonRequest("/api/neon/invoices", {
+        method: "DELETE",
+        body: JSON.stringify({ id: inv.id }),
+      });
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "ลบเอกสารไม่สำเร็จ");
       return;
     }
 

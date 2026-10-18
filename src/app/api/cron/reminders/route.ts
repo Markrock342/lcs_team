@@ -1,9 +1,9 @@
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { deliverNotifications } from "@/lib/notification-server";
 import { buildTaskDeadlineNotifications } from "@/lib/task-deadline-reminders";
 import { differenceInCalendarDays, parseISO, startOfDay } from "date-fns";
 import { NextResponse } from "next/server";
+import { queryNeon } from "@/lib/neon/server";
 
 function isAuthorized(request: Request): boolean {
   const secret =
@@ -16,8 +16,6 @@ function isAuthorized(request: Request): boolean {
 
 export async function GET(request: Request) {
   const cronAuth = isAuthorized(request);
-  const admin = createAdminClient();
-
   if (!cronAuth) {
     const supabase = await createClient();
     if (!supabase) {
@@ -31,31 +29,20 @@ export async function GET(request: Request) {
     }
   }
 
-  const db = admin;
-  if (!db) {
-    return NextResponse.json(
-      { error: "SUPABASE_SERVICE_ROLE_KEY required for reminders" },
-      { status: 500 }
-    );
-  }
-
   const today = startOfDay(new Date());
-  const { data: tasks, error } = await db
-    .from("tasks")
-    .select("id, title, due_date, assigned_to, created_by, status, updated_at")
-    .neq("status", "done")
-    .not("due_date", "is", null);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  const { rows: tasks } = await queryNeon<{
+    id: string; title: string; due_date: string; assigned_to: string | null;
+    created_by: string | null; status: string; updated_at: string;
+  }>(`SELECT id, title, due_date, assigned_to, created_by, status, updated_at
+      FROM public.tasks WHERE status <> 'done' AND due_date IS NOT NULL`);
 
   const notifications = buildTaskDeadlineNotifications(tasks ?? []);
 
-  const { data: invoices } = await db
-    .from("invoices")
-    .select("id, title, due_date, status, created_by, client_id")
-    .in("status", ["sent", "partial", "overdue"]);
+  const { rows: invoices } = await queryNeon<{
+    id: string; title: string; due_date: string | null; status: string;
+    created_by: string | null; client_id: string | null;
+  }>(`SELECT id, title, due_date, status, created_by, client_id
+      FROM public.invoices WHERE status IN ('sent', 'partial', 'overdue')`);
 
   for (const invoice of invoices ?? []) {
     if (!invoice.due_date || !invoice.created_by) continue;
@@ -66,16 +53,18 @@ export async function GET(request: Request) {
       title: days < 0 ? "ใบแจ้งหนี้เลยกำหนด" : "ใบแจ้งหนี้ใกล้ครบ",
       body: invoice.title,
       link: "/invoices",
-      sourceType: days < 0 ? "invoice_overdue" : "invoice_due",
-      sourceId: `${invoice.id}:${today.toISOString().slice(0, 10)}`,
+      sourceType: `${days < 0 ? "invoice_overdue" : "invoice_due"}:${today.toISOString().slice(0, 10)}`,
+      sourceId: invoice.id,
       kind: "invoice",
     });
   }
 
-  const { data: prospects } = await db
-    .from("sales_prospects")
-    .select("id, name, owner_id, updated_at, status, next_follow_up")
-    .in("status", ["new", "assigned", "contacted", "interested"]);
+  const { rows: prospects } = await queryNeon<{
+    id: string; name: string; owner_id: string | null; updated_at: string;
+    status: string; next_follow_up: string | null;
+  }>(`SELECT id, name, owner_id, updated_at, status, next_follow_up
+      FROM public.sales_prospects
+      WHERE status IN ('new', 'assigned', 'contacted', 'interested')`);
 
   for (const prospect of prospects ?? []) {
     if (!prospect.owner_id || !prospect.updated_at) continue;
@@ -89,13 +78,13 @@ export async function GET(request: Request) {
       title: due != null && due <= 0 ? "ถึงเวลานัดติดตาม" : "รายชื่อไม่มีความเคลื่อนไหว",
       body: prospect.name,
       link: `/sales?view=prospects&open=${prospect.id}`,
-      sourceType: due != null && due <= 0 ? "prospect_followup" : "prospect_stale",
-      sourceId: `${prospect.id}:${today.toISOString().slice(0, 10)}`,
+      sourceType: `${due != null && due <= 0 ? "prospect_followup" : "prospect_stale"}:${today.toISOString().slice(0, 10)}`,
+      sourceId: prospect.id,
       kind: "sales",
     });
   }
 
-  const result = await deliverNotifications(db, notifications);
+  const result = await deliverNotifications(notifications);
 
   return NextResponse.json({
     checked: tasks?.length ?? 0,

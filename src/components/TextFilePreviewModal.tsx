@@ -17,17 +17,20 @@ export function TextFilePreviewModal({
   fileUrl,
   fileName,
 }: Props) {
-  const [content, setContent] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [preview, setPreview] = useState<{
+    fileUrl: string;
+    content: string;
+    error: string;
+  } | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const currentPreview = preview?.fileUrl === fileUrl ? preview : null;
+  const loading = Boolean(open && fileUrl && !currentPreview);
+  const content = currentPreview?.content ?? "";
+  const error = currentPreview?.error ?? "";
 
   useEffect(() => {
     if (!open || !fileUrl) return;
     let cancelled = false;
-    setLoading(true);
-    setError("");
-    setContent("");
 
     fetch(fileUrl)
       .then((res) => {
@@ -37,13 +40,16 @@ export function TextFilePreviewModal({
       .then((buf) => {
         // บังคับ decode เป็น UTF-8 เสมอ — ไฟล์เก่าที่ไม่มี charset ก็อ่านไทยได้
         const text = new TextDecoder("utf-8").decode(buf);
-        if (!cancelled) setContent(text);
+        if (!cancelled) setPreview({ fileUrl, content: text, error: "" });
       })
       .catch((e) => {
-        if (!cancelled) setError(e.message || "โหลดไฟล์ไม่สำเร็จ");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setPreview({
+            fileUrl,
+            content: "",
+            error: e.message || "โหลดไฟล์ไม่สำเร็จ",
+          });
+        }
       });
 
     return () => {
@@ -72,7 +78,11 @@ export function TextFilePreviewModal({
               try {
                 await downloadFile(fileUrl, fileName);
               } catch {
-                setError("ดาวน์โหลดไม่สำเร็จ");
+                setPreview((current) => ({
+                  fileUrl,
+                  content: current?.fileUrl === fileUrl ? current.content : "",
+                  error: "ดาวน์โหลดไม่สำเร็จ",
+                }));
               } finally {
                 setDownloading(false);
               }

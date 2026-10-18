@@ -1,7 +1,9 @@
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { deliverNotifications } from "@/lib/notification-server";
+import { queryNeon } from "@/lib/neon/server";
 import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function POST(
   request: Request,
@@ -14,7 +16,7 @@ export async function POST(
   const status = String(body.status ?? "comment");
   const comment = body.comment ? String(body.comment).trim() : null;
 
-  if (!authorName || !taskId) {
+  if (!UUID_RE.test(token) || !authorName || !UUID_RE.test(taskId) || authorName.length > 200 || (comment?.length ?? 0) > 10_000) {
     return NextResponse.json({ error: "ข้อมูลไม่ครบ" }, { status: 400 });
   }
 
@@ -22,34 +24,19 @@ export async function POST(
     return NextResponse.json({ error: "สถานะไม่ถูกต้อง" }, { status: 400 });
   }
 
-  const supabase = await createClient();
-  if (!supabase) {
-    return NextResponse.json({ error: "Not configured" }, { status: 500 });
-  }
+  const { rows } = await queryNeon<{ id: string; client_id: string; client_name: string }>(`
+    INSERT INTO public.portal_task_feedback (client_id, task_id, author_name, status, comment)
+    SELECT c.id, t.id, $3, $4, $5
+    FROM public.clients c
+    JOIN public.tasks t ON t.client_id = c.id AND t.id = $2
+    WHERE c.portal_token = $1 AND c.portal_enabled = TRUE
+    RETURNING id, client_id, (SELECT name FROM public.clients WHERE id = client_id) AS client_name
+  `, [token, taskId, authorName, status, comment]);
+  const posted = rows[0];
+  if (!posted) return NextResponse.json({ error: "Invalid portal or task" }, { status: 400 });
+  const feedbackId = posted.id;
 
-  const { data: feedbackId, error } = await supabase.rpc(
-    "post_portal_task_feedback",
-    {
-      token,
-      p_task_id: taskId,
-      author_name: authorName,
-      p_status: status,
-      p_comment: comment,
-    }
-  );
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
-  }
-
-  const admin = createAdminClient();
-  if (admin) {
-    const { data: client } = await admin
-      .from("clients")
-      .select("id, name")
-      .eq("portal_token", token)
-      .single();
-
+  {
     const statusLabel =
       status === "approved"
         ? "อนุมัติ"
@@ -57,18 +44,18 @@ export async function POST(
           ? "ขอแก้ไข"
           : "แสดงความคิดเห็น";
 
-    if (client) {
-      const { data: profiles } = await admin.from("profiles").select("id");
-      const notifications = (profiles ?? []).map((p) => ({
-        userId: p.id,
+    if (posted) {
+      const { rows: profiles } = await queryNeon<{ id: string }>(`SELECT id FROM public.profiles`);
+      const notifications = profiles.map((profile) => ({
+        userId: profile.id,
         title: `✅ ลูกค้า${statusLabel}งาน`,
         body: `${authorName} — ${comment?.slice(0, 60) ?? statusLabel}`,
-        link: `/clients/${client.id}`,
+        link: `/clients/${posted.client_id}`,
         sourceType: "portal_feedback",
-        sourceId: feedbackId as string,
+        sourceId: feedbackId,
         kind: "system" as const,
       }));
-      await deliverNotifications(admin, notifications);
+      await deliverNotifications(notifications);
     }
   }
 
