@@ -33,6 +33,7 @@ import {
 import { TaskCountdown } from "@/components/TaskCountdown";
 import { PageHeader, PageShell, QuickActionGrid } from "@/components/mobile-ui";
 import { WorkspaceBrief } from "@/components/workspace/WorkspaceBrief";
+import { PressFeatureCard } from "@/components/PressFeatureCard";
 import { SALES_STAGE_LABELS, TEAM } from "@/lib/constants";
 import { CLIENT_STATUS_LABELS } from "@/lib/constants";
 import {
@@ -185,6 +186,8 @@ export default function DashboardPage() {
       />
 
       <WorkspaceBrief />
+
+      <PressFeatureCard />
 
       <QuickActionGrid
         actions={[

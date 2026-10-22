@@ -119,6 +119,7 @@ const PAGE_KICKERS: { match: string; kicker: string }[] = [
   { match: "/templates", kicker: "เทมเพลต · งานและเอกสาร" },
   { match: "/notifications", kicker: "แจ้งเตือน · กล่องงาน" },
   { match: "/activity", kicker: "ประวัติ · กิจกรรม" },
+  { match: "/press", kicker: "บริษัท · ข่าวและสื่อ" },
   { match: "/settings", kicker: "ตั้งค่า · ระบบ" },
   { match: "/more", kicker: "เมนู · เพิ่มเติม" },
   { match: "/dashboard", kicker: "โต๊ะงาน · ภาพรวม" },

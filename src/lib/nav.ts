@@ -20,6 +20,7 @@ import {
   UserRound,
   Bot,
   Code2,
+  Newspaper,
 } from "lucide-react";
 
 export type NavItem = {
@@ -56,6 +57,7 @@ export const EXTRA_NAV: NavItem[] = [
   { href: "/templates", label: "เทมเพลต", icon: LayoutTemplate, desc: "งาน ใบเสนอราคา สัญญา", color: "text-violet-400" },
   { href: "/notifications", label: "กล่องงาน", icon: Bell, desc: "งานที่ต้องจัดการ", color: "text-pink-400" },
   { href: "/activity", label: "ประวัติกิจกรรม", icon: History, desc: "การเปลี่ยนแปลงล่าสุด", color: "text-amber-400" },
+  { href: "/press", label: "ข่าวและสื่อ", icon: Newspaper, desc: "บทความและเรื่องราวของ Limit Code Studio", color: "text-sky-400" },
   { href: "/settings", label: "ตั้งค่า", icon: Settings, desc: "โปรไฟล์ · ธีม · สุขภาพระบบ", color: "text-zinc-400" },
 ];
 
@@ -92,6 +94,10 @@ export const MORE_SECTIONS: { title: string; items: NavItem[] }[] = [
       ...EXTRA_NAV.filter((n) => n.href === "/finance"),
       ...EXTRA_NAV.filter((n) => ["/invoices", "/payouts"].includes(n.href)),
     ],
+  },
+  {
+    title: "บริษัท",
+    items: EXTRA_NAV.filter((n) => n.href === "/press"),
   },
   {
     title: "ระบบ",
