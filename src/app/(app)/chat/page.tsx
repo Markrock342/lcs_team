@@ -1213,12 +1213,12 @@ function ChatPageContent() {
               <div className="min-w-0 flex-1">
                 <h1 className="font-semibold truncate">{activeTitle}</h1>
                 {activeChannel.description && !activeIsDm && (
-                  <p className="text-xs text-muted truncate">
+                  <p className="hidden text-xs text-muted truncate sm:block">
                     {activeChannel.description}
                   </p>
                 )}
                 {activeIsDm && (
-                  <p className="text-xs text-muted truncate">ข้อความส่วนตัว</p>
+                  <p className="hidden text-xs text-muted truncate sm:block">ข้อความส่วนตัว</p>
                 )}
                 {isChatMuted(activeMute) && <p className="truncate text-xs text-(--status-amber-fg)" title={chatMuteLabel(activeMute)}>{chatMuteLabel(activeMute)}</p>}
               </div>
@@ -1508,7 +1508,7 @@ function ChatPageContent() {
                 <select
                   value={linkedTaskId}
                   onChange={(e) => setLinkedTaskId(e.target.value)}
-                  className="mb-2 min-h-11 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                  className="mb-2 min-h-11 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm max-[380px]:min-h-10 max-[380px]:py-1"
                   aria-label="แนบลิงก์งาน"
                 >
                   <option value="">แนบลิงก์งาน (ไม่บังคับ)</option>
@@ -1590,7 +1590,7 @@ function ChatPageContent() {
                         ? "ตอบในเธรด"
                         : activeIsDm
                           ? `ส่งถึง ${activeTitle}`
-                          : "พิมพ์ข้อความ…"
+                          : "พิมพ์…"
                   }
                 />
                 <button
@@ -1608,7 +1608,7 @@ function ChatPageContent() {
                   {sending ? <X size={18} /> : <Send size={18} />}
                 </button>
               </div>
-              <p id="chat-composer-hint" className="mt-2 px-1 text-xs text-muted">
+              <p id="chat-composer-hint" className="mt-2 px-1 text-xs text-muted max-[380px]:hidden">
                 Enter เพื่อส่ง · Shift+Enter เพื่อขึ้นบรรทัดใหม่
                 <span className="hidden sm:inline"> · ลากไฟล์มาวางเพื่อแนบ</span>
               </p>
