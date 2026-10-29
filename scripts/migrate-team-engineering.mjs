@@ -18,6 +18,35 @@ function databaseUrl() {
   }
 }
 
+async function verifyChatNotificationSchema(client) {
+  const required = {
+    notifications: ["user_id", "title", "body", "link", "read", "source_type", "source_id", "push_sent", "created_at"],
+    profiles: ["id", "display_name", "notify_chat", "notify_mentions", "notify_tasks", "push_enabled"],
+    messages: ["id", "channel_id", "sender_id", "content", "file_name", "deleted_at", "mentioned_ids"],
+    channels: ["id", "name", "kind", "created_by"],
+    channel_members: ["channel_id", "user_id"],
+  };
+  const { rows: columns } = await client.query(
+    `SELECT table_name, column_name FROM information_schema.columns
+     WHERE table_schema='public' AND table_name=ANY($1::text[])`,
+    [Object.keys(required)],
+  );
+  const missing = Object.entries(required).flatMap(([table, names]) =>
+    names.filter((name) => !columns.some((column) => column.table_name === table && column.column_name === name))
+      .map((name) => `${table}.${name}`),
+  );
+  const { rows: indexes } = await client.query(
+    `SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND tablename='notifications'`,
+  );
+  const dedupeIndex = indexes.some(({ indexdef }) =>
+    indexdef.includes("UNIQUE") && /\(user_id, source_type, source_id\)/.test(indexdef),
+  );
+  if (missing.length || !dedupeIndex) {
+    throw new Error(`[chat-notifications] Schema not ready: missing=${missing.join(",") || "none"}; deduplication index=${dedupeIndex}`);
+  }
+  console.log("[chat-notifications] Ready: required columns and deduplication index verified");
+}
+
 async function exactCounts(client) {
   const { rows: tables } = await client.query(`
     SELECT tablename
@@ -55,6 +84,7 @@ const pool = new Pool({
 const client = await pool.connect();
 
 try {
+  await verifyChatNotificationSchema(client);
   const before = await exactCounts(client);
   const sql = fs.readFileSync(new URL("./neon-team-engineering-workspace.sql", import.meta.url), "utf8");
   await client.query(sql);
