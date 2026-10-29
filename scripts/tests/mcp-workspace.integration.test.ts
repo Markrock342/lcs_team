@@ -229,6 +229,17 @@ test("isolated PostgreSQL: bot, MCP writes, approvals, mute and existing tools",
             assert.equal((await pool.query(`SELECT mute_forever FROM chat_notification_preferences WHERE user_id=$1`, [partner])).rows[0].mute_forever, true);
             assert.equal((await mute.PATCH(patch(room, 0))).status, 200);
         });
+        await t.test("normal channel deletion still works and preserves historical audit IDs", async () => {
+            const channel=randomUUID();
+            await pool.query(`INSERT INTO channels(id,name,created_by) VALUES($1,'Disposable synthetic room',$2)`,[channel,actor]);
+            await pool.query(`INSERT INTO workspace_bot_channels(bot_user_id,channel_id,granted_by) VALUES($1,$2,$3)`,[bot,channel,actor]);
+            await pool.query(`INSERT INTO channel_members(channel_id,user_id) VALUES($1,$2)`,[channel,bot]);
+            const pending=await approved("delete-room regression",actor,channel);
+            const sent=await messages.sendMcpMessage(actor,input(pending));
+            await pool.query(`DELETE FROM channels WHERE id=$1`,[channel]);
+            assert.equal((await pool.query(`SELECT count(*)::int AS count FROM messages WHERE id=$1`,[sent.message_id])).rows[0].count,0);
+            assert.equal((await pool.query(`SELECT count(*)::int AS count FROM mcp_audit_logs WHERE tool_name='send_message' AND message_id=$1 AND channel_id=$2`,[sent.message_id,channel])).rows[0].count,1);
+        });
         await t.test("real MCP SDK exposes old/new tools; reads have no write side effects", async () => {
             const task = loadSource("src/lib/mcp-create-task.ts", {});
             const serverSource = loadSource("src/lib/lcs-mcp.ts", { "next/server": { after: () => { } }, "@/lib/env": { getSiteUrl: () => "https://lcs.example.test" }, "@/lib/neon/server": database, "@/lib/github": {}, "@/lib/mcp-create-task": task, "@/lib/mcp-messages": messages, "@/lib/mcp-clients": business, "@/lib/notification-chat": inserts });

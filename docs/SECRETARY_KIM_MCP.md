@@ -15,7 +15,7 @@
 - ช่องแชทไม่มี foreign key โปรเจกต์ จึงคืน `project_id: null` และไม่เดาความสัมพันธ์จากชื่อห้อง
 - Vercel เดิมใช้ validate → build → postbuild migration; migration ของเลขาคิมและลูกค้าใหม่เป็นไฟล์แยก รันจาก build ได้เฉพาะเมื่อกำหนด `LCS_MCP_APPLY_WRITE_MIGRATIONS=true` สำหรับ release ที่อนุมัติ
 
-ยังไม่ได้อ่าน schema metadata ของ Production หรือทดสอบผ่านบัญชี ChatGPT จริงในงานนี้ เพราะยังไม่ได้อนุมัติ release/production access ใช้ schema จาก source ที่ตรวจแล้วและฐาน PostgreSQL สังเคราะห์ในการทดสอบ มี `scripts/secretary-kim-preflight.sql` สำหรับตรวจ metadata ของ target ก่อน apply จริง และ migration ปฏิเสธ schema ที่ยังผูก `profiles.id` กับ auth FK โดยไม่แก้/ลบ constraint นั้นเอง
+หลังผู้ใช้อนุมัติ deploy ได้ตรวจ schema metadata ของ Production และรัน migration ผ่าน Vercel build แล้ว โดยตรวจจำนวนแถวตารางเดิมและอนุญาตเพิ่มเฉพาะ Bot profile หนึ่งบัญชี การทดสอบอัตโนมัติยังใช้ PostgreSQL สังเคราะห์ ไม่ได้ใช้ข้อมูล Production ทดสอบส่งข้อความ และยังต้อง Refresh Connector ผ่านบัญชี ChatGPT ของผู้ใช้ มี `scripts/secretary-kim-preflight.sql` สำหรับตรวจ metadata ของ target ก่อน apply จริง และ migration ปฏิเสธ schema ที่ยังผูก `profiles.id` กับ auth FK โดยไม่แก้/ลบ constraint นั้นเอง
 
 ## เครื่องมือ
 

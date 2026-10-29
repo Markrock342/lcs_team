@@ -119,7 +119,12 @@ try {
       ORDER BY table_name,ordinal_position`);
     const { rows: constraints } = await client.query(`SELECT conrelid::regclass::text AS table_name,conname,pg_get_constraintdef(oid) AS definition
       FROM pg_constraint WHERE conrelid IN ('public.profiles'::regclass,'public.messages'::regclass,'public.clients'::regclass) AND contype='f'`);
-    console.log("[kim/preflight] Target schema metadata:", JSON.stringify({ columns:schema,foreignKeys:constraints }));
+    for (const table of [...new Set(schema.map((column) => column.table_name))]) {
+      console.log(`[kim/preflight/${table}]`, JSON.stringify({
+        columns: schema.filter((column) => column.table_name === table).map((column) => `${column.column_name}:${column.data_type}:${column.is_nullable}`),
+        foreignKeys: constraints.filter((constraint) => constraint.table_name === table),
+      }));
+    }
     const { rows: existing } = await client.query(`SELECT count(*)::int AS count FROM public.profiles WHERE username='secretary-kim'`);
     const botSql = fs.readFileSync(new URL("./neon-secretary-kim.sql", import.meta.url), "utf8");
     const clientsSql = fs.readFileSync(new URL("./neon-mcp-client-writes.sql", import.meta.url), "utf8");

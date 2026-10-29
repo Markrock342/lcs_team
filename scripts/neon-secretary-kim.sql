@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS public.mcp_message_requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   actor_user_id uuid NOT NULL REFERENCES public.profiles(id),
   bot_user_id uuid NOT NULL REFERENCES public.profiles(id),
-  channel_id uuid NOT NULL REFERENCES public.channels(id),
+  channel_id uuid NOT NULL REFERENCES public.channels(id) ON DELETE CASCADE,
   idempotency_key text NOT NULL,
   content text NOT NULL CHECK (length(content) BETWEEN 1 AND 4000),
   content_hash text NOT NULL,
@@ -57,17 +57,29 @@ CREATE TABLE IF NOT EXISTS public.mcp_message_requests (
   created_at timestamptz NOT NULL DEFAULT NOW(),
   expires_at timestamptz NOT NULL DEFAULT (NOW()+INTERVAL '15 minutes'),
   approved_at timestamptz,
-  message_id uuid REFERENCES public.messages(id),
+  message_id uuid REFERENCES public.messages(id) ON DELETE SET NULL,
   sent_at timestamptz,
   UNIQUE (actor_user_id,idempotency_key)
 );
 CREATE INDEX IF NOT EXISTS idx_mcp_message_requests_actor_created ON public.mcp_message_requests(actor_user_id,created_at DESC);
 ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS approved_by uuid REFERENCES public.profiles(id);
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS bot_request_id uuid UNIQUE REFERENCES public.mcp_message_requests(id);
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS bot_request_id uuid UNIQUE REFERENCES public.mcp_message_requests(id) ON DELETE SET NULL;
 ALTER TABLE public.mcp_audit_logs ADD COLUMN IF NOT EXISTS actor_user_id uuid REFERENCES public.profiles(id);
 ALTER TABLE public.mcp_audit_logs ADD COLUMN IF NOT EXISTS bot_user_id uuid REFERENCES public.profiles(id);
-ALTER TABLE public.mcp_audit_logs ADD COLUMN IF NOT EXISTS channel_id uuid REFERENCES public.channels(id);
-ALTER TABLE public.mcp_audit_logs ADD COLUMN IF NOT EXISTS message_id uuid REFERENCES public.messages(id);
-ALTER TABLE public.mcp_audit_logs ADD COLUMN IF NOT EXISTS request_id uuid REFERENCES public.mcp_message_requests(id);
+ALTER TABLE public.mcp_audit_logs ADD COLUMN IF NOT EXISTS channel_id uuid;
+ALTER TABLE public.mcp_audit_logs ADD COLUMN IF NOT EXISTS message_id uuid;
+ALTER TABLE public.mcp_audit_logs ADD COLUMN IF NOT EXISTS request_id uuid;
+
+-- Historical audit IDs survive deleted channels/messages. They must not prevent
+-- the chat system's existing channel deletion cascades.
+ALTER TABLE public.mcp_audit_logs DROP CONSTRAINT IF EXISTS mcp_audit_logs_channel_id_fkey;
+ALTER TABLE public.mcp_audit_logs DROP CONSTRAINT IF EXISTS mcp_audit_logs_message_id_fkey;
+ALTER TABLE public.mcp_audit_logs DROP CONSTRAINT IF EXISTS mcp_audit_logs_request_id_fkey;
+ALTER TABLE public.mcp_message_requests DROP CONSTRAINT IF EXISTS mcp_message_requests_channel_id_fkey;
+ALTER TABLE public.mcp_message_requests ADD CONSTRAINT mcp_message_requests_channel_id_fkey FOREIGN KEY(channel_id) REFERENCES public.channels(id) ON DELETE CASCADE;
+ALTER TABLE public.mcp_message_requests DROP CONSTRAINT IF EXISTS mcp_message_requests_message_id_fkey;
+ALTER TABLE public.mcp_message_requests ADD CONSTRAINT mcp_message_requests_message_id_fkey FOREIGN KEY(message_id) REFERENCES public.messages(id) ON DELETE SET NULL;
+ALTER TABLE public.messages DROP CONSTRAINT IF EXISTS messages_bot_request_id_fkey;
+ALTER TABLE public.messages ADD CONSTRAINT messages_bot_request_id_fkey FOREIGN KEY(bot_request_id) REFERENCES public.mcp_message_requests(id) ON DELETE SET NULL;
 
 COMMIT;
