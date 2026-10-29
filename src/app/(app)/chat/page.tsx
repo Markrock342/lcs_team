@@ -1197,10 +1197,10 @@ function ChatPageContent() {
         {activeChannel ? (
           <>
             {/* Channel header */}
-            <div className="flex min-h-16 shrink-0 items-center gap-3 border-b border-border bg-surface-soft px-3 sm:px-4">
+            <div className="flex min-h-14 shrink-0 items-center gap-2 border-b border-border bg-surface-soft px-2 sm:min-h-16 sm:gap-3 sm:px-4">
               <button
                 onClick={() => setShowMobileChannels(true)}
-                className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover lg:hidden"
+                className="flex min-h-10 min-w-10 items-center justify-center rounded-xl text-muted hover:bg-card-hover lg:hidden sm:min-h-11 sm:min-w-11"
                 aria-label="กลับไปยังรายการช่อง"
               >
                 <ChevronLeft size={20} />
@@ -1228,7 +1228,7 @@ function ChatPageContent() {
               <div className="relative shrink-0">
                 <button
                   onClick={() => setChannelMenuOpen(!channelMenuOpen)}
-                  className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover"
+                  className="flex min-h-10 min-w-10 items-center justify-center rounded-xl text-muted hover:bg-card-hover sm:min-h-11 sm:min-w-11"
                   aria-label="เมนูช่อง"
                   aria-expanded={channelMenuOpen}
                 >
@@ -1590,7 +1590,7 @@ function ChatPageContent() {
                         ? "ตอบในเธรด"
                         : activeIsDm
                           ? `ส่งถึง ${activeTitle}`
-                          : `พิมพ์ข้อความใน #${activeChannel.name} หรือ /`
+                          : "พิมพ์ข้อความ…"
                   }
                 />
                 <button

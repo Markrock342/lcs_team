@@ -98,7 +98,7 @@ export function ChatMessageItem({
           size="sm"
         />
       )}
-      <div className={`flex min-w-0 max-w-[min(92%,40rem)] flex-col sm:max-w-[min(85%,40rem)] ${isOwn ? "items-end" : "items-start"}`}>
+      <div className={`flex min-w-0 max-w-[min(94%,40rem)] flex-col sm:max-w-[min(85%,40rem)] ${isOwn ? "items-end" : "items-start"}`}>
         {!isOwn && (
           <p className="mb-1 max-w-full truncate px-1 text-xs font-semibold text-muted">
             {msg.sender?.display_name ?? "ไม่มีชื่อ"}
@@ -135,7 +135,7 @@ export function ChatMessageItem({
           ) : (
             <>
               {msg.content && (
-                <p className="text-base leading-relaxed whitespace-pre-wrap text-foreground">
+                <p className="text-[15px] leading-6 whitespace-pre-wrap text-foreground sm:text-base sm:leading-relaxed">
                   {msg.content.split(/(@\w+)/g).map((part, i) =>
                     part.startsWith("@") ? (
                       <span key={i} className="text-accent font-medium">
