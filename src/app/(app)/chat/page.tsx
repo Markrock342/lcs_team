@@ -1289,7 +1289,7 @@ function ChatPageContent() {
             >
             <div
               ref={messagesScrollRef}
-              className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain scroll-touch px-3 py-5 sm:px-5 space-y-1"
+              className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain scroll-touch px-2 py-3 sm:px-5 sm:py-5 space-y-1"
             >
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center py-12">
