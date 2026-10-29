@@ -284,7 +284,7 @@ export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionIn
         onSelect={syncCursor}
         onPaste={onPaste}
         placeholder={placeholder}
-        className="block min-h-11 max-h-48 w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-base leading-relaxed placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        className="block min-h-11 max-h-32 w-full resize-none overflow-y-auto bg-transparent px-2 py-1.5 text-base leading-relaxed placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       />
     </div>
   );

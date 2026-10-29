@@ -1502,7 +1502,7 @@ function ChatPageContent() {
               ref={composerFormRef}
               onSubmit={handleSend}
               onPaste={handlePaste}
-              className="shrink-0 border-t border-border bg-card p-3 sm:p-4"
+              className="shrink-0 border-t border-border bg-card p-2.5 sm:p-3"
             >
               {openTasks.length > 0 && (
                 <select
@@ -1590,7 +1590,7 @@ function ChatPageContent() {
                         ? "ตอบในเธรด"
                         : activeIsDm
                           ? `ส่งถึง ${activeTitle}`
-                          : `ส่งข้อความใน #${activeChannel.name} หรือพิมพ์ /`
+                          : `พิมพ์ข้อความใน #${activeChannel.name} หรือ /`
                   }
                 />
                 <button

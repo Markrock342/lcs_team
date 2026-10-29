@@ -267,9 +267,9 @@ export function AppShell({
           }
         >
           <div
-            className={`max-w-7xl mx-auto w-full ${
+            className={`${isConversation ? "max-w-6xl" : "max-w-7xl"} mx-auto w-full ${
               isConversation
-                ? "flex-1 min-h-0 flex flex-col px-2 sm:px-6 py-2 lg:py-3"
+                ? "flex-1 min-h-0 flex flex-col px-3 sm:px-6 py-2 lg:py-3"
                 : "px-4 sm:px-6 py-4 sm:py-6"
             }`}
           >
