@@ -27,7 +27,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#071018",
+  themeColor: "#f5f6f8",
 };
 
 export default function RootLayout({
@@ -36,7 +36,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="th" className="h-full">
+    <html lang="th" className="h-full" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `(function(){var t="light";try{var s=localStorage.getItem("lcs-theme");if(s==="light"||s==="dark")t=s;else if(window.matchMedia("(prefers-color-scheme: dark)").matches)t="dark";}catch(e){}document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;})();` }} />
+      </head>
       <body className="min-h-full antialiased bg-background text-foreground">
         <ThemeProvider>
           {children}

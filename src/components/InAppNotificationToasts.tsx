@@ -3,213 +3,82 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AtSign, Bell, CheckSquare, Handshake, MessageCircle, Receipt, X } from "lucide-react";
-import { neonRequest } from "@/lib/neon/client";
-import type { AppNotification } from "@/lib/extras-types";
 import { getChatChannelIdFromLink } from "@/lib/channels";
-import {
-  inferNotificationKind,
-  type NotificationKind,
-} from "@/lib/notifications";
+import { inferNotificationKind } from "@/lib/notifications";
+import { useNotifications } from "./NotificationProvider";
+import type { AppNotification } from "@/lib/extras-types";
 
-type ToastItem = {
-  id: string;
-  notificationId: string;
-  title: string;
-  body: string;
-  link: string;
-  kind: NotificationKind;
-};
+const KIND_ICON = { chat: MessageCircle, mention: AtSign, task: CheckSquare, system: Bell, sales: Handshake, invoice: Receipt } as const;
+const DISMISS_MS = 8_000;
 
-const AUTO_DISMISS_MS = 5000;
-const MAX_TOASTS = 3;
-
-const KIND_ICON = {
-  chat: MessageCircle,
-  mention: AtSign,
-  task: CheckSquare,
-  system: Bell,
-  sales: Handshake,
-  invoice: Receipt,
-} as const;
-
-const KIND_STYLE = {
-  chat: "bg-accent/15 text-accent",
-  mention: "bg-violet-500/15 text-violet-400",
-  task: "bg-amber-500/15 text-amber-400",
-  system: "bg-zinc-500/15 text-zinc-300",
-  sales: "bg-emerald-500/15 text-emerald-300",
-  invoice: "bg-sky-500/15 text-sky-300",
-} as const;
-
-export function InAppNotificationToasts({ userId }: { userId: string }) {
+export function InAppNotificationToasts() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
-  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  const seenRef = useRef<Set<string>>(new Set());
-  const initializedRef = useRef(false);
+  const { incoming, markRead } = useNotifications();
+  const [toasts, setToasts] = useState<AppNotification[]>([]);
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const handled = useRef(new Set<string>());
+  const activeChannel = pathname === "/chat" ? searchParams.get("channel") : null;
 
-  const activeChatChannelId =
-    pathname === "/chat" ? searchParams.get("channel") : null;
-
-  const shouldSuppress = useCallback(
-    (link: string | null) => {
-      const channelId = getChatChannelIdFromLink(link);
-      return (
-        !!channelId &&
-        pathname === "/chat" &&
-        activeChatChannelId === channelId
-      );
-    },
-    [pathname, activeChatChannelId]
-  );
-
-  const removeToast = useCallback((id: string) => {
-    setExitingIds((prev) => new Set(prev).add(id));
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-      setExitingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    }, 280);
-
-    const timer = timersRef.current.get(id);
-    if (timer) {
-      clearTimeout(timer);
-      timersRef.current.delete(id);
-    }
+  const dismiss = useCallback((id: string) => {
+    clearTimeout(timers.current.get(id));
+    timers.current.delete(id);
+    setToasts((previous) => previous.filter((item) => item.id !== id));
   }, []);
-
-  const enqueue = useCallback(
-    (item: Omit<ToastItem, "id">) => {
-      if (shouldSuppress(item.link)) return;
-
-      const id = crypto.randomUUID();
-      const toast: ToastItem = { ...item, id };
-
-      setToasts((prev) => [...prev, toast].slice(-MAX_TOASTS));
-
-      const timer = setTimeout(() => removeToast(id), AUTO_DISMISS_MS);
-      timersRef.current.set(id, timer);
-    },
-    [removeToast, shouldSuppress]
-  );
-
-  const openToast = useCallback(
-    async (toast: ToastItem) => {
-      removeToast(toast.id);
-      await neonRequest("/api/neon/notifications", {
-        method: "PATCH",
-        body: JSON.stringify({ id: toast.notificationId, read: true }),
-      });
-      router.push(toast.link);
-    },
-    [removeToast, router]
-  );
+  const pause = (id: string) => {
+    clearTimeout(timers.current.get(id));
+    timers.current.delete(id);
+  };
+  const resume = useCallback((id: string) => {
+    clearTimeout(timers.current.get(id));
+    timers.current.set(id, setTimeout(() => dismiss(id), DISMISS_MS));
+  }, [dismiss]);
 
   useEffect(() => {
-    let cancelled = false;
-    const timers = timersRef.current;
-    async function poll() {
-      try {
-        const { notifications } = await neonRequest<{ notifications: AppNotification[] }>(
-          "/api/neon/notifications?limit=20",
-          { cache: "no-store" },
-        );
-        if (cancelled) return;
-        if (!initializedRef.current) {
-          for (const notification of notifications) seenRef.current.add(notification.id);
-          initializedRef.current = true;
-          return;
-        }
-        for (const notification of [...notifications].reverse()) {
-          if (seenRef.current.has(notification.id)) continue;
-          seenRef.current.add(notification.id);
-          enqueue({
-            notificationId: notification.id,
-            title: notification.title,
-            body: notification.body ?? "",
-            link: notification.link ?? "/notifications",
-            kind: inferNotificationKind(notification.title, notification.link),
-          });
-        }
-      } catch {
-        // Polling failure must not interrupt the workspace.
-      }
-    }
+    const fresh = incoming.filter((item) => {
+      if (handled.current.has(item.id)) return false;
+      handled.current.add(item.id);
+      return !item.read && !(activeChannel && getChatChannelIdFromLink(item.link) === activeChannel);
+    });
+    if (handled.current.size > 1000) handled.current = new Set([...handled.current].slice(-500));
+    if (!fresh.length) return;
+    // The feed is an external event stream; retain the most recent three notices.
+    setToasts((previous) => [...previous, ...fresh].slice(-3));
+    fresh.forEach((item) => resume(item.id));
+  }, [incoming, activeChannel, resume]);
 
-    void poll();
-    const interval = setInterval(poll, 8_000);
+  useEffect(() => {
+    const pending = timers.current;
+    return () => { pending.forEach(clearTimeout); pending.clear(); };
+  }, []);
 
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-      for (const timer of timers.values()) {
-        clearTimeout(timer);
-      }
-      timers.clear();
-    };
-  }, [userId, enqueue]);
+  function open(item: AppNotification) {
+    dismiss(item.id);
+    // A read-state outage must never block navigation to the message.
+    void markRead(item.id).catch(() => {});
+    router.push(item.link ?? "/notifications");
+  }
 
-  if (!toasts.length) return null;
-
-  return (
-    <div className="fixed inset-x-0 z-60 px-3 flex flex-col gap-2 pointer-events-none top-[calc(3.5rem+env(safe-area-inset-top))] lg:top-3">
-      {toasts.map((toast) => {
-        const Icon = KIND_ICON[toast.kind];
-        const exiting = exitingIds.has(toast.id);
-
-        return (
-          <div
-            key={toast.id}
-            className={
-              exiting ? "animate-toast-out" : "animate-toast-in"
-            }
-          >
-            <button
-              type="button"
-              onClick={() => openToast(toast)}
-              className="pointer-events-auto w-full max-w-md mx-auto flex items-start gap-3 px-4 py-3 rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-lg text-left touch-manipulation"
-            >
-              <div
-                className={`p-2 rounded-lg shrink-0 ${KIND_STYLE[toast.kind]}`}
-              >
-                <Icon size={18} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm truncate">{toast.title}</p>
-                {toast.body && (
-                  <p className="text-sm text-muted mt-0.5 line-clamp-2">
-                    {toast.body}
-                  </p>
-                )}
-              </div>
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeToast(toast.id);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    removeToast(toast.id);
-                  }
-                }}
-                className="p-1 rounded-lg text-muted hover:text-foreground shrink-0 pointer-events-auto"
-              >
-                <X size={16} />
-              </span>
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
+  return <section aria-label="การแจ้งเตือนใหม่" aria-live="polite" aria-relevant="additions"
+    className="pointer-events-none fixed inset-x-3 top-[calc(4rem+env(safe-area-inset-top))] z-60 flex flex-col gap-2 lg:left-auto lg:right-6 lg:top-20 lg:w-96">
+    {toasts.map((item) => {
+      const Icon = KIND_ICON[inferNotificationKind(item.title, item.link)];
+      return <div key={item.id}
+        onMouseEnter={() => pause(item.id)} onMouseLeave={() => resume(item.id)}
+        onFocus={() => pause(item.id)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) resume(item.id); }}
+        className="pointer-events-auto flex rounded-xl border border-border bg-card shadow-(--shadow-float) animate-toast-in">
+        <button type="button" onClick={() => open(item)} className="flex min-w-0 flex-1 items-start gap-3 rounded-xl p-4 text-left hover:bg-card-hover">
+          <span className="shrink-0 rounded-lg bg-accent/10 p-2 text-accent"><Icon size={18} /></span>
+          <span className="min-w-0 flex-1">
+            <span className="mb-1 block text-xs text-muted">การแจ้งเตือนใหม่</span>
+            <span className="block truncate text-sm font-semibold">{item.title}</span>
+            {item.body && <span className="mt-1 line-clamp-2 block text-sm text-muted [overflow-wrap:anywhere]">{item.body}</span>}
+          </span>
+        </button>
+        <button type="button" onClick={() => dismiss(item.id)} aria-label="ปิดการแจ้งเตือน"
+          className="m-1 flex min-h-11 min-w-11 shrink-0 self-start items-center justify-center rounded-lg text-muted hover:bg-card-hover hover:text-foreground"><X size={16} /></button>
+      </div>;
+    })}
+  </section>;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui";
 import {
   applyMention,
@@ -16,8 +16,9 @@ type ChatMentionInputProps = {
   profiles: Profile[];
   currentUserId?: string;
   placeholder?: string;
-  onPaste?: (e: React.ClipboardEvent<HTMLInputElement>) => void;
+  onPaste?: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
   disabled?: boolean;
+  describedBy?: string;
 };
 
 export type ChatMentionInputHandle = {
@@ -35,19 +36,20 @@ export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionIn
       placeholder,
       onPaste,
       disabled,
+      describedBy,
     },
     ref
   ) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [cursor, setCursor] = useState(0);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
 
   const slashItems = useMemo(() => slashSuggestions(value), [value]);
-  const slashOpen = slashItems.length > 0 && !value.includes(" ") && !dismissed;
+  const slashOpen = slashItems.length > 0 && !/\s/.test(value) && !dismissed;
 
   const mentionContext = useMemo(
-    () => (slashItems.length > 0 && !value.includes(" ") ? null : getMentionContext(value, cursor)),
+    () => (slashItems.length > 0 && !/\s/.test(value) ? null : getMentionContext(value, cursor)),
     [value, cursor, slashItems.length]
   );
 
@@ -66,6 +68,24 @@ export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionIn
     setHighlightIndex(0);
     setDismissed(false);
   }, [mentionContext?.query, mentionContext?.start, slashItems.length]);
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    const resize = () => {
+      input.style.height = "auto";
+      input.style.height = `${Math.min(input.scrollHeight, 192)}px`;
+    };
+    resize();
+    let width = input.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (input.clientWidth === width) return;
+      width = input.clientWidth;
+      resize();
+    });
+    observer.observe(input);
+    return () => observer.disconnect();
+  }, [value]);
 
   useImperativeHandle(ref, () => ({
     insertAtCursor(text: string) {
@@ -112,7 +132,11 @@ export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionIn
     [mentionContext, onChange, value]
   );
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Let the IME finish a character before handling shortcuts (including Safari).
+    if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
+    if (e.key === "Enter" && e.shiftKey) return;
+
     if (slashOpen) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -128,7 +152,7 @@ export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionIn
       }
       if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
-        onChange(`${slashItems[highlightIndex].cmd} `);
+        onChange(`${(slashItems[highlightIndex] ?? slashItems[0]).cmd} `);
         return;
       }
       if (e.key === "Escape") {
@@ -138,7 +162,13 @@ export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionIn
       return;
     }
 
-    if (!showMenu) return;
+    if (!showMenu) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (!disabled && !e.repeat) e.currentTarget.form?.requestSubmit();
+      }
+      return;
+    }
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -156,7 +186,7 @@ export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionIn
 
     if (e.key === "Enter" || e.key === "Tab") {
       e.preventDefault();
-      pickSuggestion(suggestions[highlightIndex]);
+      pickSuggestion(suggestions[highlightIndex] ?? suggestions[0]);
       return;
     }
 
@@ -223,9 +253,11 @@ export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionIn
         </ul>
       )}
 
-      <input
+      <textarea
         ref={inputRef}
-        type="text"
+        rows={1}
+        aria-label={placeholder ?? "ข้อความ"}
+        aria-describedby={describedBy}
         value={value}
         disabled={disabled}
         onChange={(e) => {
@@ -239,7 +271,7 @@ export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionIn
         onSelect={syncCursor}
         onPaste={onPaste}
         placeholder={placeholder}
-        className="w-full bg-transparent px-2 py-1.5 text-sm placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        className="block min-h-11 max-h-48 w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-base leading-relaxed placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       />
     </div>
   );

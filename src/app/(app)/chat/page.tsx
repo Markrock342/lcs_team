@@ -24,6 +24,8 @@ import { createClient } from "@/lib/supabase/client";
 import { neonRequest } from "@/lib/neon/client";
 import { Button, EmptyState, Input, Modal, PageLoader, Textarea, ProfileRoleBadges } from "@/components/ui";
 import { useActionFeedback } from "@/components/workspace/ActionFeedback";
+import { ChatDropZone } from "@/components/ChatDropZone";
+import { chatAttachmentError } from "@/lib/chat-attachments";
 import { ChatMessageItem } from "@/components/ChatMessageItem";
 import { ChatMentionInput, type ChatMentionInputHandle } from "@/components/ChatMentionInput";
 import { ChatEmojiPicker } from "@/components/ChatEmojiPicker";
@@ -31,7 +33,6 @@ import { uploadFile, isImageFile } from "@/lib/upload";
 import { slugifyChannelName, formatChannelDisplay, chatChannelHref, resolveChannelFromParam } from "@/lib/channels";
 import { parseMentions, logActivity } from "@/lib/activity";
 import {
-  dispatchChatNotifications,
   markChatChannelNotificationsRead,
 } from "@/lib/notifications";
 import { isOnline, formatPresenceStatus } from "@/lib/presence";
@@ -621,6 +622,16 @@ function ChatPageContent() {
     await logActivity("delete", "channel", activeChannel.id, activeChannel.name);
   }
 
+  function selectAttachment(files: File[]) {
+    if (sending || editingMessage || !activeChannel) return;
+    const error = chatAttachmentError(files);
+    if (error) { setSendError(error); return; }
+    if (!files[0]) return;
+    setFile(files[0]);
+    setSendError("");
+    mentionInputRef.current?.focus();
+  }
+
   function handlePaste(e: React.ClipboardEvent) {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -631,16 +642,16 @@ function ChatPageContent() {
       if (!blob) continue;
       e.preventDefault();
       if (blob.name && blob.name.includes(".")) {
-        setFile(blob);
+        selectAttachment([blob]);
       } else {
         const ext =
           blob.type.split("/")[1]?.replace("jpeg", "jpg") ||
           (blob.type.startsWith("image/") ? "png" : "bin");
-        setFile(
+        selectAttachment([
           new File([blob], `pasted-${Date.now()}.${ext}`, {
             type: blob.type || "application/octet-stream",
           })
-        );
+        ]);
       }
       return;
     }
@@ -799,6 +810,7 @@ function ChatPageContent() {
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
+    if (sending || sendAbortRef.current) return;
     if (!content.trim() && !file) return;
     if (!currentUser || !activeChannel) return;
 
@@ -868,17 +880,28 @@ function ChatPageContent() {
     let file_type: string | null = null;
 
     if (file) {
-      const uploaded = await uploadFile(file, "chat", signal);
+      let uploaded;
+      try { uploaded = await uploadFile(file, "chat", signal); }
+      catch {
+        setSendError("อัปโหลดไฟล์ไม่สำเร็จ ตรวจการเชื่อมต่อแล้วลองส่งอีกครั้ง");
+        setSending(false);
+        sendAbortRef.current = null;
+        return;
+      }
       if (signal.aborted) {
         setSending(false);
         sendAbortRef.current = null;
         return;
       }
-      if (uploaded.ok) {
-        file_url = uploaded.url;
-        file_name = file.name;
-        file_type = file.type;
+      if (!uploaded.ok) {
+        setSendError(uploaded.error);
+        setSending(false);
+        sendAbortRef.current = null;
+        return;
       }
+      file_url = uploaded.url;
+      file_name = file.name;
+      file_type = file.type;
     }
 
     const mentionIds = parseMentions(outgoing ?? "", profiles);
@@ -917,10 +940,6 @@ function ChatPageContent() {
       setSending(false);
       sendAbortRef.current = null;
       return;
-    }
-
-    if (msgData?.id) {
-      void dispatchChatNotifications(msgData.id);
     }
 
     await logActivity("comment", "message", msgData?.id ?? null, `#${activeChannel.name}`);
@@ -1136,7 +1155,10 @@ function ChatPageContent() {
       </aside>
 
       {/* Main chat */}
-      <div
+      <ChatDropZone
+        disabled={sending || !!editingMessage || !activeChannel}
+        onFiles={selectAttachment}
+        onError={setSendError}
         className={`${
           showMobileChannels ? "hidden" : "flex"
         } lg:flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden relative`}
@@ -1217,7 +1239,7 @@ function ChatPageContent() {
               </button>
             )}
 
-            {/* Messages — Discord layout */}
+            {/* Messages */}
             {(chatError || sendError) && (
               <div className="mx-4 mt-3 rounded-xl bg-(--status-red-bg) px-4 py-3 text-sm text-(--status-red-fg)" role="alert">
                 {sendError || chatError}
@@ -1229,11 +1251,11 @@ function ChatPageContent() {
               </div>
             )}
             <div
-              className={`relative flex-1 min-h-0 ${threadRoot ? "lg:flex" : ""}`}
+              className={`relative flex-1 min-h-0 min-w-0 ${threadRoot ? "lg:flex" : ""}`}
             >
             <div
               ref={messagesScrollRef}
-              className="h-full min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-touch px-3 py-5 sm:px-5 space-y-1"
+              className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain scroll-touch px-3 py-5 sm:px-5 space-y-1"
             >
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center py-12">
@@ -1294,7 +1316,7 @@ function ChatPageContent() {
               <div ref={messagesEndRef} />
             </div>
             {threadRoot && (
-              <div className="absolute inset-0 z-20 flex flex-col bg-card lg:static lg:w-80 lg:border-l lg:border-border">
+              <div className="absolute inset-0 z-20 flex min-w-0 shrink-0 flex-col bg-card lg:static lg:w-80 lg:border-l lg:border-border">
                 <div className="flex min-h-14 items-center gap-2 border-b border-border px-3">
                   <MessageSquare size={16} className="text-accent" />
                   <div className="min-w-0 flex-1">
@@ -1466,12 +1488,16 @@ function ChatPageContent() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*,.pdf,.doc,.docx,.zip"
                   className="hidden"
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  disabled={sending || !!editingMessage}
+                  onChange={(e) => {
+                    selectAttachment(Array.from(e.target.files ?? []));
+                    e.target.value = "";
+                  }}
                 />
                 <button
                   type="button"
+                  disabled={sending || !!editingMessage}
                   onClick={() => fileInputRef.current?.click()}
                   className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-card-hover hover:text-foreground"
                   aria-label="แนบไฟล์"
@@ -1516,7 +1542,7 @@ function ChatPageContent() {
                   }}
                   profiles={profiles}
                   currentUserId={currentUser?.id}
-                  onPaste={handlePaste}
+                  describedBy="chat-composer-hint"
                   disabled={sending}
                   placeholder={
                     editingMessage
@@ -1542,6 +1568,10 @@ function ChatPageContent() {
                   {sending ? <X size={18} /> : <Send size={18} />}
                 </button>
               </div>
+              <p id="chat-composer-hint" className="mt-2 px-1 text-xs text-muted">
+                Enter เพื่อส่ง · Shift+Enter เพื่อขึ้นบรรทัดใหม่
+                <span className="hidden sm:inline"> · ลากไฟล์มาวางเพื่อแนบ</span>
+              </p>
             </form>
           </>
         ) : (
@@ -1549,7 +1579,7 @@ function ChatPageContent() {
             เลือกช่องสนทนาจากรายการ
           </div>
         )}
-      </div>
+      </ChatDropZone>
 
       <CreateChannelModal
         open={createOpen}

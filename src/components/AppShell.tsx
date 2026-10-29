@@ -10,6 +10,8 @@ import { ActionFeedbackProvider } from "./workspace/ActionFeedback";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar, ProfileRoleBadges } from "./ui";
 import { Logo } from "./Logo";
+import { NotificationProvider } from "./NotificationProvider";
+import { ThemeToggle } from "./ThemeToggle";
 import { NotificationBell } from "./NotificationBell";
 import { getPageTitle } from "./mobile-ui";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
@@ -32,14 +34,14 @@ function NavLinks({
     <>
       {items.map(({ href, label, icon: Icon }) => {
         const active = isNavActive(pathname, href);
-        const showUnread = href === "/chat" && chatUnread > 0 && !active;
+        const showUnread = href === "/chat" && chatUnread > 0;
         return (
           <Link
             key={href}
             href={href}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
               active
-                ? "bg-accent/15 text-foreground"
+                ? "bg-accent/10 text-accent"
                 : "text-muted hover:text-foreground hover:bg-card-hover"
             }`}
             aria-current={active ? "page" : undefined}
@@ -119,6 +121,7 @@ export function AppShell({
   }
 
   return (
+    <NotificationProvider key={profile?.id ?? "signed-out"} userId={profile?.id}>
     <RoleProvider profile={profile}>
     <ActionFeedbackProvider>
     <div className="flex min-h-dvh">
@@ -130,10 +133,10 @@ export function AppShell({
       </a>
       {profile && (
         <Suspense fallback={null}>
-          <InAppNotificationToasts userId={profile.id} />
+          <InAppNotificationToasts />
         </Suspense>
       )}
-      <aside className="hidden lg:flex flex-col w-64 bg-sidebar border-r border-brand fixed inset-y-0 left-0 overflow-y-auto">
+      <aside className="hidden lg:flex flex-col w-64 bg-sidebar border-r border-border fixed inset-y-0 left-0 overflow-y-auto">
         <div className="p-5 border-b border-border">
           <div className="flex items-center gap-3">
             <Logo size="sm" />
@@ -148,7 +151,7 @@ export function AppShell({
         <nav className="flex-1 p-3 space-y-1">
           <NavLinks items={mainNav} pathname={pathname} chatUnread={chatUnread} />
           <div className="pt-3 mt-3 border-t border-border">
-            <p className="px-3 py-1 text-[10px] text-muted font-semibold">เพิ่มเติม</p>
+            <p className="px-3 py-1 text-xs text-muted font-semibold">เพิ่มเติม</p>
             <NavLinks items={extraNav} pathname={pathname} chatUnread={chatUnread} />
           </div>
         </nav>
@@ -191,6 +194,7 @@ export function AppShell({
             >
               <Search size={18} />
             </button>
+            <ThemeToggle />
             <Suspense fallback={null}>
               <NotificationBell />
             </Suspense>
@@ -236,15 +240,20 @@ export function AppShell({
             : "overflow-x-hidden"
         }`}
       >
-        <div className="hidden lg:flex shrink-0 items-center justify-end gap-2 px-6 py-3 border-b border-border bg-sidebar/40">
+        <div className="hidden lg:flex min-h-16 shrink-0 items-center gap-2 border-b border-border bg-card px-6 py-2">
+          <div className="mr-auto min-w-0">
+            <p className="truncate text-sm font-semibold">{getPageTitle(pathname)}</p>
+            <p className="text-xs text-muted">Limit Code Studio</p>
+          </div>
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-sm text-muted hover:text-foreground hover:border-accent/30"
+            className="flex min-h-11 items-center gap-2 rounded-lg border border-border px-3 text-sm text-muted hover:border-accent/30 hover:text-foreground"
           >
             <Search size={14} /> ค้นหา
             <kbd className="text-[10px] px-1 rounded bg-background border border-border">⌘K</kbd>
           </button>
+          <ThemeToggle />
           <Suspense fallback={null}>
             <NotificationBell />
           </Suspense>
@@ -273,7 +282,7 @@ export function AppShell({
         <div className="flex items-stretch justify-around min-h-16 px-1">
           {mobileNav.map(({ href, label, icon: Icon }) => {
             const active = isNavActive(pathname, href);
-            const showUnread = href === "/chat" && chatUnread > 0 && !active;
+            const showUnread = href === "/chat" && chatUnread > 0;
             return (
               <Link
                 key={href}
@@ -303,5 +312,6 @@ export function AppShell({
     </div>
     </ActionFeedbackProvider>
     </RoleProvider>
+    </NotificationProvider>
   );
 }

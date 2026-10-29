@@ -43,12 +43,27 @@ export async function PATCH(request: Request) {
   try {
     const auth = await getNeonAuthContext();
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-    const body = (await request.json()) as { id?: unknown; all?: unknown; link?: unknown; read?: unknown; done?: unknown };
+    const body = (await request.json()) as { id?: unknown; all?: unknown; channelId?: unknown; link?: unknown; read?: unknown; done?: unknown };
     const read = body.read !== false;
     if (body.all === true) {
       await queryNeon(
         `UPDATE public.notifications SET read = $1 WHERE user_id = $2`,
         [read, auth.context.userId],
+      );
+      return NextResponse.json({ ok: true });
+    }
+    if (body.channelId !== undefined) {
+      if (typeof body.channelId !== "string" || !UUID_RE.test(body.channelId)) {
+        return NextResponse.json({ error: "รหัสช่องไม่ถูกต้อง" }, { status: 400 });
+      }
+      await queryNeon(
+        `UPDATE public.notifications n SET read=$1
+         WHERE n.user_id=$2 AND n.read=FALSE AND (
+           (n.source_type='message' AND n.source_id IN (SELECT id FROM public.messages WHERE channel_id=$3))
+           OR n.link=$4 OR n.link LIKE $5
+         )`,
+        [read, auth.context.userId, body.channelId,
+          `/chat?channel=${body.channelId}`, `/chat?channel=${body.channelId}&%`],
       );
       return NextResponse.json({ ok: true });
     }

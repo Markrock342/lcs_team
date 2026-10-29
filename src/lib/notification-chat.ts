@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg";
 import { chatMessageHref } from "@/lib/channels";
 import { deliverNotifications } from "@/lib/notification-server";
 import { queryNeon } from "@/lib/neon/server";
@@ -22,6 +23,39 @@ function channelName(channels: MessageRow["channels"]): string {
 function channelKind(channels: MessageRow["channels"]): string {
   const row = Array.isArray(channels) ? channels[0] : channels;
   return row?.kind ?? "channel";
+}
+
+/** Store the in-app inbox in the same transaction as its message. */
+export async function insertChatMessageNotifications(client: Pick<PoolClient, "query">, messageId: string) {
+  await client.query(
+    `INSERT INTO public.notifications (user_id, title, body, link, source_type, source_id, push_sent)
+     SELECT recipient.id,
+       CASE
+         WHEN recipient.id = ANY(COALESCE(m.mentioned_ids, '{}'::uuid[]))
+           THEN 'ถูก mention ใน ' || CASE WHEN c.kind = 'dm' THEN 'ข้อความส่วนตัว' ELSE '#' || c.name END
+         WHEN c.kind = 'dm' THEN 'ข้อความส่วนตัว'
+         ELSE '#' || c.name
+       END,
+       COALESCE(sender.display_name, 'ทีม') || ': ' ||
+         COALESCE(NULLIF(LEFT(BTRIM(m.content), 80), ''), m.file_name, 'ส่งไฟล์'),
+       '/chat?channel=' || m.channel_id::text || '&msg=' || m.id::text,
+       'message', m.id, FALSE
+     FROM public.messages m
+     JOIN public.channels c ON c.id = m.channel_id
+     LEFT JOIN public.profiles sender ON sender.id = m.sender_id
+     CROSS JOIN public.profiles recipient
+     WHERE m.id = $1 AND m.deleted_at IS NULL AND recipient.id <> m.sender_id
+       AND (COALESCE(c.kind, 'channel') <> 'dm' OR c.created_by = recipient.id OR EXISTS (
+         SELECT 1 FROM public.channel_members cm WHERE cm.channel_id = c.id AND cm.user_id = recipient.id
+       ))
+       AND CASE WHEN recipient.id = ANY(COALESCE(m.mentioned_ids, '{}'::uuid[]))
+         THEN recipient.notify_mentions IS DISTINCT FROM FALSE
+         ELSE recipient.notify_chat IS DISTINCT FROM FALSE END
+     ON CONFLICT (user_id, source_type, source_id)
+       WHERE source_type IS NOT NULL AND source_id IS NOT NULL
+     DO NOTHING`,
+    [messageId],
+  );
 }
 
 export async function processChatMessageNotifications(

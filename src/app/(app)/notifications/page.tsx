@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { AtSign, Bell, CheckSquare, Handshake, MessageCircle, Receipt } from "lucide-react";
-import { neonRequest } from "@/lib/neon/client";
+import { useNotifications } from "@/components/NotificationProvider";
 import { PageHeader, PageShell } from "@/components/mobile-ui";
 import {
   Button,
@@ -16,9 +16,7 @@ import {
   StatusStamp,
 } from "@/components/ui";
 import { inferNotificationKind, type NotificationKind } from "@/lib/notifications";
-import { useVisiblePolling } from "@/hooks/useVisiblePolling";
 import { inboxActionsFor } from "@/lib/inbox-actions";
-import type { AppNotification } from "@/lib/extras-types";
 import { formatDistanceToNow } from "date-fns";
 import { th } from "date-fns/locale";
 
@@ -33,11 +31,11 @@ const KIND_ICON = {
 
 const KIND_ICON_BG = {
   chat: "bg-accent/15 text-accent",
-  mention: "bg-violet-500/15 text-violet-400",
-  task: "bg-amber-500/15 text-amber-400",
-  system: "bg-zinc-500/15 text-zinc-300",
-  sales: "bg-emerald-500/15 text-emerald-300",
-  invoice: "bg-sky-500/15 text-sky-300",
+  mention: "bg-(--status-violet-bg) text-(--status-violet-fg)",
+  task: "bg-(--status-amber-bg) text-(--status-amber-fg)",
+  system: "bg-(--status-slate-bg) text-(--status-slate-fg)",
+  sales: "bg-(--status-green-bg) text-(--status-green-fg)",
+  invoice: "bg-(--status-blue-bg) text-(--status-blue-fg)",
 } as const;
 
 const KIND_LABEL = {
@@ -59,103 +57,64 @@ function NotificationIcon({ kind }: { kind: NotificationKind }) {
 }
 
 export default function NotificationsPage() {
-  const [items, setItems] = useState<AppNotification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useVisiblePolling(load, 30_000);
-
-  async function load() {
-    setError(null);
-    try {
-      const { notifications } = await neonRequest<{ notifications: AppNotification[] }>(
-        "/api/neon/notifications?limit=50",
-        { cache: "no-store" },
-      );
-      setItems(notifications);
-    } catch {
-      setError("โหลดการแจ้งเตือนไม่สำเร็จ ลองอีกครั้ง");
-      setLoading(false);
-      return;
-    }
-    setLoading(false);
-  }
-
-  async function markAllRead() {
-    await neonRequest("/api/neon/notifications", {
-      method: "PATCH",
-      body: JSON.stringify({ all: true, read: true }),
-    });
-    setItems((prev) => prev.map((n) => ({ ...n, read: true })));
-  }
-
-  async function markRead(id: string) {
-    await neonRequest("/api/neon/notifications", {
-      method: "PATCH",
-      body: JSON.stringify({ id, read: true }),
-    });
-    setItems((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
-  }
-
-  async function markDone(id: string) {
-    await neonRequest("/api/neon/notifications", {
-      method: "PATCH",
-      body: JSON.stringify({ id, read: true, done: true }),
-    });
-    setItems((prev) =>
-      prev.map((n) =>
-        n.id === id ? { ...n, read: true, done_at: new Date().toISOString() } : n
-      )
-    );
-  }
+  const { items, unreadCount, loading, error, refresh: load, markRead, markAllRead } = useNotifications();
+  const [filter, setFilter] = useState("all");
+  const visible = items.filter((item) => {
+    if (filter === "unread") return !item.read;
+    if (filter === "all") return true;
+    return inferNotificationKind(item.title, item.link) === filter;
+  });
 
   if (loading) {
     return <PageLoader label="กำลังโหลดการแจ้งเตือน..." />;
   }
 
-  if (error) {
+  if (error && !items.length) {
     return (
       <PageShell width="medium">
         <ErrorState
           description={error}
-          onRetry={() => {
-            setLoading(true);
-            void load();
-          }}
+          onRetry={() => void load()}
         />
       </PageShell>
     );
   }
 
-  const unread = items.filter((n) => !n.read).length;
+  const unread = unreadCount;
 
   return (
     <PageShell width="medium">
       <PageHeader
-        title="กล่องงาน"
+        title="ศูนย์แจ้งเตือน"
         description={
           unread > 0 ? `ยังไม่ได้อ่าน ${unread} รายการ` : "อ่านครบแล้ว"
         }
         action={
           unread > 0 ? (
-            <Button variant="secondary" onClick={markAllRead}>
+            <Button variant="secondary" onClick={() => void markAllRead().catch(() => {})}>
               อ่านทั้งหมด
             </Button>
           ) : undefined
         }
       />
 
+      {error && <p role="status" className="rounded-xl bg-(--status-amber-bg) p-3 text-sm text-(--status-amber-fg)">{error}</p>}
+      <div className="flex flex-wrap items-center gap-2" aria-label="กรองการแจ้งเตือน">
+        {[["all", "ทั้งหมด"], ["unread", "ยังไม่อ่าน"], ["chat", "ข้อความ"], ["mention", "กล่าวถึงคุณ"]].map(([value, label]) => (
+          <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}
+            className={`min-h-11 rounded-lg px-3 text-sm font-medium ${filter === value ? "bg-accent/10 text-accent" : "text-muted hover:bg-card-hover"}`}>{label}</button>
+        ))}
+        <Link href="/settings" className="ml-auto flex min-h-11 items-center px-2 text-sm text-accent hover:underline">ตั้งค่าการแจ้งเตือน</Link>
+      </div>
       <Card>
         <CardHeader
-          title="รายการที่จัดการได้"
-          description={`ทั้งหมด ${items.length} รายการ`}
+          title="การแจ้งเตือนล่าสุด"
+          description={`แสดง ${visible.length} รายการล่าสุด · อัปเดตอัตโนมัติ`}
           icon={<Bell size={18} className="text-accent" />}
         />
-        {items.length > 0 ? (
+        {visible.length > 0 ? (
           <div className="divide-y divide-border">
-        {items.map((n) => {
+        {visible.map((n) => {
           const kind = inferNotificationKind(n.title, n.link);
           const actions = inboxActionsFor(n);
           const content = (
@@ -191,7 +150,7 @@ export default function NotificationsPage() {
               {n.link ? (
                 <Link
                   href={n.link}
-                  onClick={() => void markRead(n.id)}
+                  onClick={() => void markRead(n.id).catch(() => {})}
                   className="block hover:bg-card-hover"
                 >
                   {content}
@@ -199,7 +158,7 @@ export default function NotificationsPage() {
               ) : (
                 <button
                   type="button"
-                  onClick={() => void markRead(n.id)}
+                  onClick={() => void markRead(n.id).catch(() => {})}
                   className="block w-full text-left hover:bg-card-hover"
                 >
                   {content}
@@ -209,14 +168,14 @@ export default function NotificationsPage() {
                 <div className="flex flex-wrap gap-2 px-4 pb-3">
                   {actions.map((action) =>
                     action.href ? (
-                      <Link key={action.id} href={action.href} onClick={() => void markRead(n.id)}>
+                      <Link key={action.id} href={action.href} onClick={() => void markRead(n.id).catch(() => {})}>
                         <Button variant="secondary">{action.label}</Button>
                       </Link>
                     ) : (
                       <Button
                         key={action.id}
                         variant="secondary"
-                        onClick={() => void markDone(n.id)}
+                        onClick={() => void markRead(n.id, true).catch(() => {})}
                       >
                         {action.label}
                       </Button>
@@ -231,7 +190,7 @@ export default function NotificationsPage() {
         ) : (
           <EmptyState
             icon={<Bell size={28} />}
-            title="ยังไม่มีการแจ้งเตือน"
+            title={filter === "all" ? "ยังไม่มีการแจ้งเตือน" : "ไม่มีรายการในตัวกรองนี้"}
             description="ข้อความ งาน และการกล่าวถึงใหม่จะแสดงที่นี่"
           />
         )}

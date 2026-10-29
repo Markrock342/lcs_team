@@ -1,5 +1,6 @@
 export async function downloadChatFile(url: string, filename: string) {
   const res = await fetch(url);
+  if (!res.ok) throw new Error("ดาวน์โหลดไฟล์ไม่สำเร็จ");
   const blob = await res.blob();
   const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement("a");

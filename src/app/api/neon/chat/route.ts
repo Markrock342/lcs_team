@@ -1,6 +1,8 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getNeonAuthContext } from "@/lib/neon/auth";
 import { queryNeon, withNeonTransaction } from "@/lib/neon/server";
+
+import { insertChatMessageNotifications, processChatMessageNotifications } from "@/lib/notification-chat";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -218,16 +220,25 @@ export async function POST(request: Request) {
         [userId, channelId]
       );
       if (!access.rows[0]) return NextResponse.json({ error: "ไม่มีสิทธิ์เข้าช่องนี้" }, { status: 403 });
-      const { rows } = await queryNeon<{ id: string }>(
-        `INSERT INTO public.messages
-         (channel_id, sender_id, content, file_url, file_name, file_type, mentioned_ids, reply_to_id, thread_id, linked_task_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7::uuid[],$8,$9,$10) RETURNING id`,
-        [channelId, userId, data.content ?? null, data.file_url ?? null, data.file_name ?? null,
-          data.file_type ?? null, Array.isArray(data.mentioned_ids) ? data.mentioned_ids : [],
-          data.reply_to_id ?? null, data.thread_id ?? null, data.linked_task_id ?? null]
-      );
-      const inserted = await queryNeon(`${MESSAGE_SELECT} WHERE m.id = $2 AND ${ACCESS_SQL} LIMIT 1`, [userId, rows[0].id]);
-      return NextResponse.json({ message: inserted.rows[0] }, { status: 201 });
+      const message = await withNeonTransaction(async (client) => {
+        const { rows } = await client.query<{ id: string }>(
+          `INSERT INTO public.messages
+           (channel_id, sender_id, content, file_url, file_name, file_type, mentioned_ids, reply_to_id, thread_id, linked_task_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7::uuid[],$8,$9,$10) RETURNING id`,
+          [channelId, userId, data.content ?? null, data.file_url ?? null, data.file_name ?? null,
+            data.file_type ?? null, Array.isArray(data.mentioned_ids) ? data.mentioned_ids : [],
+            data.reply_to_id ?? null, data.thread_id ?? null, data.linked_task_id ?? null]
+        );
+        await insertChatMessageNotifications(client, rows[0].id);
+        const inserted = await client.query(`${MESSAGE_SELECT} WHERE m.id = $2 AND ${ACCESS_SQL} LIMIT 1`, [userId, rows[0].id]);
+        return inserted.rows[0];
+      });
+      // Push delivery is independent of durable in-app delivery and the sender's tab.
+      after(async () => {
+        try { await processChatMessageNotifications(message.id); }
+        catch (error) { console.error("[chat/push-notifications]", error); }
+      });
+      return NextResponse.json({ message }, { status: 201 });
     }
     if (body.action === "channel") {
       if (auth.context.profile.role === "guest") {

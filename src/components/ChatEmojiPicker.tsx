@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { CHAT_EMOJI_GROUPS } from "@/lib/chat-emoji";
 
 export function ChatEmojiPicker({
@@ -9,14 +9,38 @@ export function ChatEmojiPicker({
   onPick,
   align = "left",
   placement = "above",
+  compact = false,
 }: {
   open: boolean;
   onClose: () => void;
   onPick: (emoji: string) => void;
   align?: "left" | "right";
   placement?: "above" | "below";
+  compact?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!open || !panel) return;
+    function position() {
+      const anchor = panel!.parentElement?.getBoundingClientRect();
+      if (!anchor) return;
+      const width = panel!.offsetWidth;
+      const height = panel!.offsetHeight;
+      const left = align === "right" ? anchor.right - width : anchor.left;
+      const top = placement === "above" ? anchor.top - height - 8 : anchor.bottom + 8;
+      panel!.style.left = `${Math.max(8, Math.min(left, window.innerWidth - width - 8))}px`;
+      panel!.style.top = `${Math.max(8, Math.min(top, window.innerHeight - height - 8))}px`;
+    }
+    position();
+    window.addEventListener("resize", position);
+    window.addEventListener("scroll", position, true);
+    return () => {
+      window.removeEventListener("resize", position);
+      window.removeEventListener("scroll", position, true);
+    };
+  }, [open, align, placement]);
 
   useEffect(() => {
     if (!open) return;
@@ -43,16 +67,14 @@ export function ChatEmojiPicker({
       ref={panelRef}
       role="listbox"
       aria-label="เลือกอิโมจิ"
-      className={`absolute z-30 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-2 shadow-lg ${
-        placement === "above" ? "bottom-full mb-1" : "top-full mt-1"
-      } ${align === "right" ? "right-0" : "left-0"}`}
+      className={`fixed z-70 max-h-[min(24rem,60dvh)] overflow-y-auto overscroll-contain ${compact ? "w-60" : "w-[min(20rem,calc(100vw-2rem))]"} rounded-xl border border-border bg-card p-2 shadow-lg`}
     >
       {CHAT_EMOJI_GROUPS.map((group) => (
         <div key={group.label} className="mb-1 last:mb-0">
           <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
             {group.label}
           </p>
-          <div className="grid grid-cols-8 gap-0.5">
+          <div className={`grid gap-0.5 ${compact ? "grid-cols-4" : "grid-cols-5 sm:grid-cols-6"}`}>
             {group.items.map((emoji) => (
               <button
                 key={`${group.label}-${emoji}`}

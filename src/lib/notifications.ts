@@ -1,5 +1,9 @@
 import { neonRequest } from "@/lib/neon/client";
-import { chatChannelHref } from "./channels";
+export const NOTIFICATIONS_CHANGED_EVENT = "lcs-notifications-changed";
+
+export function notifyNotificationsChanged() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT));
+}
 
 export type NotificationKind = "chat" | "mention" | "task" | "system" | "sales" | "invoice";
 
@@ -59,11 +63,11 @@ export async function dispatchChatNotifications(messageId: string) {
 
 export async function markChatChannelNotificationsRead(channelId: string) {
   try {
-    const link = chatChannelHref(channelId);
     await neonRequest("/api/neon/notifications", {
       method: "PATCH",
-      body: JSON.stringify({ link, read: true }),
+      body: JSON.stringify({ channelId, read: true }),
     });
+    notifyNotificationsChanged();
   } catch {
     // ignore
   }

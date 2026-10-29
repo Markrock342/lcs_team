@@ -692,7 +692,7 @@ export default function SettingsPage() {
           <div>
             <p className="font-medium">การแจ้งเตือนในแอป</p>
             <p className="text-sm text-muted mt-0.5">
-              เลือกเฉพาะเรื่องที่ต้องการรับ
+              แสดงแถบแจ้งเตือนและจำนวนที่ยังไม่อ่านขณะเปิดเว็บ เลือกเรื่องที่ต้องการรับได้ด้านล่าง
             </p>
           </div>
           {(
