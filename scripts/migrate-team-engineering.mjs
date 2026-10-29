@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import process from "node:process";
 import pg from "pg";
+import { runVerifiedMigration } from "./verified-migration.mjs";
 
 const requiredTables = ["ai_conversations", "ai_messages", "mcp_audit_logs"];
 
@@ -85,21 +86,10 @@ const client = await pool.connect();
 
 try {
   await verifyChatNotificationSchema(client);
-  const before = await exactCounts(client);
   const sql = fs.readFileSync(new URL("./neon-team-engineering-workspace.sql", import.meta.url), "utf8");
-  await client.query(sql);
-  const after = await exactCounts(client);
-  const changedExisting = Object.entries(before).filter(([table, count]) => after[table] !== count);
-  const missing = requiredTables.filter((table) => !(table in after));
-
-  if (changedExisting.length || missing.length) {
-    throw new Error(
-      `[neon-migration] Verification failed: changed=${JSON.stringify(changedExisting)} missing=${missing.join(",")}`,
-    );
-  }
-
+  const checked = await runVerifiedMigration(client, sql, exactCounts, requiredTables);
   console.log(
-    `[neon-migration] Ready: checked ${Object.keys(before).length} existing tables; all existing row counts preserved; required tables present`,
+    `[neon-migration] Ready: checked ${checked} existing tables in one snapshot; all existing row counts preserved; required tables present`,
   );
 } finally {
   client.release();

@@ -114,7 +114,7 @@ psql "$DATABASE_URL" -f scripts/neon-team-engineering-workspace.sql
 
 คำสั่งเป็น `CREATE TABLE IF NOT EXISTS` จึงไม่แก้หรือลบข้อมูลเดิม
 
-เมื่อ Vercel build ใน Production สคริปต์ `postbuild` จะรัน migration นี้อัตโนมัติภายใน Vercel และตรวจจำนวนแถวของทุกตารางก่อน–หลัง หากข้อมูลเดิมเปลี่ยนหรือเชื่อม Neon ไม่ได้ deployment จะหยุดก่อนขึ้น Production ส่วน local และ Preview จะข้ามขั้นตอนนี้
+เมื่อ Vercel build ใน Production สคริปต์ `postbuild` จะรัน migration นี้อัตโนมัติภายใน Vercel และตรวจจำนวนแถวของทุกตารางก่อน–หลังใน transaction แบบ Repeatable Read เดียวกัน เพื่อไม่ให้การใช้งานแอประหว่าง build ทำให้ตรวจผิด หาก migration ทำให้ข้อมูลเดิมเปลี่ยนหรือเชื่อม Neon ไม่ได้ deployment จะหยุดก่อนขึ้น Production ส่วน local และ Preview จะข้ามขั้นตอนนี้
 
 ### 6. เชื่อมกับ ChatGPT แชทปกติ
 

@@ -37,6 +37,7 @@ import {
 } from "@/lib/notifications";
 import { isOnline, formatPresenceStatus } from "@/lib/presence";
 import { useOnlinePresence, useTypingIndicator } from "@/hooks/usePresence";
+import { useChatMessageJump } from "@/hooks/useChatMessageJump";
 import { useVisiblePolling } from "@/hooks/useVisiblePolling";
 import {
   fetchChannelMessages,
@@ -125,7 +126,6 @@ function ChatPageContent() {
   const [threadCounts, setThreadCounts] = useState<Record<string, number>>({});
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [slashNotice, setSlashNotice] = useState("");
-  const [highlightMsgId, setHighlightMsgId] = useState<string | null>(null);
   const [composerEmojiOpen, setComposerEmojiOpen] = useState(false);
   const [, setPresenceTick] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -146,6 +146,17 @@ function ChatPageContent() {
     key: string;
     fetchedAt: number;
   }>({ key: "", fetchedAt: 0 });
+
+  const onMessageJump = useCallback(() => {
+    pendingScrollBottomRef.current = false;
+    isNearBottomRef.current = false;
+  }, []);
+  const { highlightMsgId, requestMessageJump, hasPendingJump } = useChatMessageJump({
+    messages,
+    threadMessages,
+    hidden: showMobileChannels,
+    onJump: onMessageJump,
+  });
 
   useEffect(() => {
     threadRootRef.current = threadRoot;
@@ -377,11 +388,11 @@ function ChatPageContent() {
           pendingScrollBottomRef.current = false;
           isNearBottomRef.current = false;
           const inList = msgs.find((m) => m.id === msgParam);
-          if (inList) setHighlightMsgId(msgParam);
+          if (inList) requestMessageJump(msgParam);
           else {
             const full = await fetchMessageById(createClient(), msgParam);
             if (full) {
-              setHighlightMsgId(msgParam);
+              requestMessageJump(msgParam);
               const rootId = full.thread_id ?? full.id;
               const nextRoot = msgs.find((m) => m.id === rootId) ?? full;
               setThreadRoot(nextRoot);
@@ -389,7 +400,7 @@ function ChatPageContent() {
           }
         } else if (firstRun) {
           firstRun = false;
-          setHighlightMsgId(null);
+          requestMessageJump(null);
         }
       } catch (error) {
         if (!cancelled) {
@@ -411,7 +422,7 @@ function ChatPageContent() {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [activeChannel, loadMessages, markMessagesAsRead, currentUser, msgParam]);
+  }, [activeChannel, loadMessages, markMessagesAsRead, currentUser, msgParam, requestMessageJump]);
 
   const refreshSidebar = useCallback(async () => {
     if (!currentUser) return;
@@ -458,7 +469,7 @@ function ChatPageContent() {
 
   useLayoutEffect(() => {
     if (showMobileChannels || !messagesScrollRef.current) return;
-    if (highlightMsgId) return;
+    if (hasPendingJump()) return;
 
     if (pendingScrollBottomRef.current) {
       scrollToBottom("auto");
@@ -469,16 +480,8 @@ function ChatPageContent() {
     if (isNearBottomRef.current) {
       scrollToBottom("auto");
     }
-  }, [messages, showMobileChannels, activeChannel?.id, scrollToBottom, highlightMsgId]);
+  }, [messages, showMobileChannels, activeChannel?.id, scrollToBottom, hasPendingJump]);
 
-  useLayoutEffect(() => {
-    if (!highlightMsgId) return;
-    const node = document.getElementById(`msg-${highlightMsgId}`);
-    if (!node) return;
-    node.scrollIntoView({ block: "center", behavior: "smooth" });
-    pendingScrollBottomRef.current = false;
-    isNearBottomRef.current = false;
-  }, [highlightMsgId, messages, threadMessages]);
 
   function selectChannel(ch: Channel) {
     setActiveChannel(ch);
@@ -487,6 +490,7 @@ function ChatPageContent() {
     setThreadRoot(null);
     setEditingMessage(null);
     setSlashNotice("");
+    requestMessageJump(null);
     isNearBottomRef.current = true;
     pendingScrollBottomRef.current = true;
     router.replace(chatChannelHref(ch.id), { scroll: false });
@@ -1227,7 +1231,7 @@ function ChatPageContent() {
                 type="button"
                 onClick={() => {
                   const id = pinnedMessages[0].id;
-                  setHighlightMsgId(id);
+                  requestMessageJump(id);
                 }}
                 className="flex min-h-11 w-full items-center gap-2 border-b border-border bg-surface-soft px-4 py-2 text-left text-sm hover:bg-card-hover"
               >
