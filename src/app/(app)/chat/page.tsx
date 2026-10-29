@@ -28,6 +28,8 @@ import { ChatDropZone } from "@/components/ChatDropZone";
 import { chatAttachmentError } from "@/lib/chat-attachments";
 import { ChatMessageItem } from "@/components/ChatMessageItem";
 import { ChatMentionInput, type ChatMentionInputHandle } from "@/components/ChatMentionInput";
+import { ChatGifPicker } from "@/components/ChatGifPicker";
+import { isChatGif, recentChatGifs, type ChatGif } from "@/lib/chat-gif";
 import { ChatEmojiPicker } from "@/components/ChatEmojiPicker";
 import { uploadFile, isImageFile } from "@/lib/upload";
 import { slugifyChannelName, formatChannelDisplay, chatChannelHref, resolveChannelFromParam } from "@/lib/channels";
@@ -37,6 +39,7 @@ import {
 } from "@/lib/notifications";
 import { isOnline, formatPresenceStatus } from "@/lib/presence";
 import { useOnlinePresence, useTypingIndicator } from "@/hooks/usePresence";
+import { useChatComposerKeyboard } from "@/hooks/useChatComposerKeyboard";
 import { useChatMessageJump } from "@/hooks/useChatMessageJump";
 import { useVisiblePolling } from "@/hooks/useVisiblePolling";
 import {
@@ -101,6 +104,7 @@ function ChatPageContent() {
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [content, setContent] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [selectedGif, setSelectedGif] = useState<ChatGif | null>(null);
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showMobileChannels, setShowMobileChannels] = useState(true);
@@ -127,6 +131,12 @@ function ChatPageContent() {
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [slashNotice, setSlashNotice] = useState("");
   const [composerEmojiOpen, setComposerEmojiOpen] = useState(false);
+  const [gifPickerOpen, setGifPickerOpen] = useState(false);
+  const recentGifs = useMemo(() => recentChatGifs(
+    [...messages, ...threadMessages]
+      .filter((message) => message.channel_id === activeChannel?.id)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at)),
+  ), [messages, threadMessages, activeChannel?.id]);
   const [, setPresenceTick] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
@@ -135,6 +145,11 @@ function ChatPageContent() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sendAbortRef = useRef<AbortController | null>(null);
   const mentionInputRef = useRef<ChatMentionInputHandle>(null);
+  const composerFormRef = useRef<HTMLFormElement>(null);
+  const prepareComposerSend = useChatComposerKeyboard({
+    inputRef: mentionInputRef, formRef: composerFormRef, sending,
+    enabled: !!activeChannel && !showMobileChannels && !gifPickerOpen,
+  });
   const threadRootRef = useRef<Message | null>(null);
   const readStateRef = useRef(new Map<string, string>());
   const linkedTasksCacheRef = useRef<{
@@ -631,7 +646,11 @@ function ChatPageContent() {
     const error = chatAttachmentError(files);
     if (error) { setSendError(error); return; }
     if (!files[0]) return;
-    setFile(files[0]);
+    setSelectedGif(null);
+    const next = files[0];
+    setFile(isChatGif(next.type, next.name) && next.type !== "image/gif"
+      ? new File([next], next.name, { type: "image/gif", lastModified: next.lastModified })
+      : next);
     setSendError("");
     mentionInputRef.current?.focus();
   }
@@ -815,9 +834,10 @@ function ChatPageContent() {
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (sending || sendAbortRef.current) return;
-    if (!content.trim() && !file) return;
+    if (!content.trim() && !file && !selectedGif) return;
     if (!currentUser || !activeChannel) return;
 
+    prepareComposerSend();
     setSending(true);
     setSendError("");
     setSlashNotice("");
@@ -879,9 +899,9 @@ function ChatPageContent() {
       }
     }
 
-    let file_url: string | null = null;
-    let file_name: string | null = null;
-    let file_type: string | null = null;
+    let file_url: string | null = selectedGif?.url ?? null;
+    let file_name: string | null = selectedGif?.name ?? null;
+    let file_type: string | null = selectedGif ? "image/gif" : null;
 
     if (file) {
       let uploaded;
@@ -955,6 +975,7 @@ function ChatPageContent() {
     }
     setContent("");
     setFile(null);
+    setSelectedGif(null);
     setLinkedTaskId("");
     setReplyTo(null);
     stopTyping();
@@ -1439,26 +1460,26 @@ function ChatPageContent() {
             )}
 
             {/* File preview */}
-            {file && (
+            {(file || selectedGif) && (
               <div className="mx-4 mb-2 flex items-center gap-2 rounded-xl bg-surface-soft px-3 py-2">
-                {isImageFile(file.type) ? (
+                {selectedGif || isImageFile(file?.type) ? (
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={filePreviewUrl ?? ""}
+                      src={selectedGif?.url ?? filePreviewUrl ?? ""}
                       alt=""
                       className="w-10 h-10 rounded object-cover shrink-0"
                     />
-                    <span className="text-sm truncate flex-1">{file.name}</span>
+                    <span className="text-sm truncate flex-1">{file?.name ?? selectedGif?.name}</span>
                   </>
                 ) : (
                   <>
                     <FileText size={16} className="text-accent shrink-0" />
-                    <span className="text-sm truncate flex-1">{file.name}</span>
+                    <span className="text-sm truncate flex-1">{file?.name ?? "ไฟล์แนบ"}</span>
                   </>
                 )}
                 <button
-                  onClick={() => setFile(null)}
+                  onClick={() => { setFile(null); setSelectedGif(null); }}
                   className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover hover:text-foreground"
                   aria-label="นำไฟล์แนบออก"
                 >
@@ -1469,6 +1490,7 @@ function ChatPageContent() {
 
             {/* Input */}
             <form
+              ref={composerFormRef}
               onSubmit={handleSend}
               onPaste={handlePaste}
               className="shrink-0 border-t border-border bg-card p-3 sm:p-4"
@@ -1528,6 +1550,10 @@ function ChatPageContent() {
                     }}
                   />
                 </div>
+                <button type="button" disabled={sending || !!editingMessage}
+                  onClick={() => { setComposerEmojiOpen(false); setGifPickerOpen(true); }}
+                  aria-label="เลือก GIF" aria-haspopup="dialog"
+                  className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-muted hover:bg-card-hover hover:text-foreground disabled:opacity-40">GIF</button>
                 <ChatMentionInput
                   ref={mentionInputRef}
                   value={content}
@@ -1560,8 +1586,9 @@ function ChatPageContent() {
                 />
                 <button
                   type={sending ? "button" : "submit"}
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={sending ? cancelSend : undefined}
-                  disabled={!sending && !content.trim() && !file}
+                  disabled={!sending && !content.trim() && !file && !selectedGif}
                   className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${
                     sending
                       ? "bg-(--status-red-bg) text-(--status-red-fg)"
@@ -1585,6 +1612,12 @@ function ChatPageContent() {
         )}
       </ChatDropZone>
 
+      {gifPickerOpen && activeChannel && !sending && !editingMessage && (
+        <ChatGifPicker key={activeChannel.id} gifs={recentGifs}
+          onPick={(gif) => { selectAttachment([gif]); requestAnimationFrame(() => mentionInputRef.current?.focus()); }}
+          onPickRemote={(gif) => { setFile(null); setSelectedGif(gif); setSendError(""); requestAnimationFrame(() => mentionInputRef.current?.focus()); }}
+          onClose={() => setGifPickerOpen(false)} />
+      )}
       <CreateChannelModal
         open={createOpen}
         onClose={() => {

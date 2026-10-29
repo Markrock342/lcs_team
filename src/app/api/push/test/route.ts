@@ -28,11 +28,14 @@ export async function POST() {
     );
   }
 
-  await sendPushToUser(subs, {
+  const result = await sendPushToUser(subs, {
     title: "Limit Code Studio",
     body: "ทดสอบ Push — ถ้าเห็นข้อความนี้ แจ้งเตือนทำงานแล้ว",
     link: "/notifications",
   });
 
+  if (!result.sent) return NextResponse.json({ error: result.configured
+    ? "บริการ Push ยังส่งไม่สำเร็จ ลองปิดแล้วเปิด Push ใหม่ หากยังไม่ได้ให้แจ้งแอดมินตรวจคีย์และการเชื่อมต่อ"
+    : "เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า Push ครบ กรุณาแจ้งแอดมิน" }, { status: 502 });
   return NextResponse.json({ ok: true });
 }

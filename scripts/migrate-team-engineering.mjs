@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createECDH } from "node:crypto";
 import process from "node:process";
 import pg from "pg";
 import { runVerifiedMigration } from "./verified-migration.mjs";
@@ -48,6 +49,23 @@ async function verifyChatNotificationSchema(client) {
   console.log("[chat-notifications] Ready: required columns and deduplication index verified");
 }
 
+function verifyPushConfiguration() {
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
+  const privateKey = process.env.VAPID_PRIVATE_KEY?.trim();
+  if (!publicKey || !privateKey) {
+    console.warn("[push-config] Not ready: VAPID public/private key missing");
+    return;
+  }
+  try {
+    const curve = createECDH("prime256v1");
+    curve.setPrivateKey(Buffer.from(privateKey, "base64url"));
+    if (!curve.getPublicKey().equals(Buffer.from(publicKey, "base64url"))) throw new Error("mismatch");
+    console.log("[push-config] Ready: VAPID key pair verified (browser permission and push service access still required)");
+  } catch {
+    console.warn("[push-config] Not ready: invalid or mismatched VAPID keys");
+  }
+}
+
 async function exactCounts(client) {
   const { rows: tables } = await client.query(`
     SELECT tablename
@@ -85,8 +103,11 @@ const pool = new Pool({
 const client = await pool.connect();
 
 try {
+  verifyPushConfiguration();
   await verifyChatNotificationSchema(client);
-  const sql = fs.readFileSync(new URL("./neon-team-engineering-workspace.sql", import.meta.url), "utf8");
+  const engineeringSql = fs.readFileSync(new URL("./neon-team-engineering-workspace.sql", import.meta.url), "utf8");
+  const tagsSql = fs.readFileSync(new URL("./neon-custom-team-tags.sql", import.meta.url), "utf8");
+  const sql = engineeringSql.replace(/COMMIT;\s*$/i, `${tagsSql}\nCOMMIT;\n`);
   const checked = await runVerifiedMigration(client, sql, exactCounts, requiredTables);
   console.log(
     `[neon-migration] Ready: checked ${checked} existing tables in one snapshot; all existing row counts preserved; required tables present`,

@@ -5,9 +5,10 @@ import Link from "next/link";
 import { Bot, Check, Copy, Moon, Sun, Bell, Download, Smartphone, Shield, User, Camera, Wallet, PenLine, Plug } from "lucide-react";
 import { PageHeader, PageShell } from "@/components/mobile-ui";
 import { Button, Input, Select, Avatar, ProfileRoleBadges, PageLoader, ErrorState } from "@/components/ui";
+import { TeamTagEditor } from "@/components/TeamTagEditor";
 import { SystemHealthPanel } from "@/components/workspace/SystemHealthPanel";
 import { useTheme } from "@/components/ThemeProvider";
-import { subscribeToPush, unsubscribeFromPush, sendTestPush, getPushBlockers } from "@/components/PWARegister";
+import { subscribeToPush, unsubscribeFromPush, sendTestPush, getPushBlockers, hasPushSubscription } from "@/components/PWARegister";
 import { createClient } from "@/lib/supabase/client";
 import { neonRequest } from "@/lib/neon/client";
 import { uploadFile, isImageFile } from "@/lib/upload";
@@ -84,7 +85,6 @@ export default function SettingsPage() {
       setInstallable(true);
     }
 
-    void checkPush();
     void loadProfile();
     void initializeClientState();
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
@@ -117,6 +117,7 @@ export default function SettingsPage() {
       return;
     }
     setProfile(data);
+    void hasPushSubscription().then((subscribed) => setPushOn(subscribed && data.push_enabled !== false));
     if (data) {
       setNotifyPrefs({
         notify_chat: data.notify_chat !== false,
@@ -210,6 +211,14 @@ export default function SettingsPage() {
     setDisplaySaving(null);
   }
 
+  async function updateMemberCustomTags(memberId: string, tags: string[]) {
+    const { profile: updated } = await neonRequest<{ profile: Profile }>("/api/neon/profiles", {
+      method: "PATCH", body: JSON.stringify({ id: memberId, data: { custom_tags: tags } }),
+    });
+    setTeam((prev) => prev.map((member) => member.id === memberId ? updated : member));
+    if (memberId === profile?.id) setProfile(updated);
+  }
+
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !profile) return;
@@ -265,42 +274,31 @@ export default function SettingsPage() {
     setNotifySaving(false);
   }
 
-  async function checkPush() {
-    if (!("serviceWorker" in navigator)) return;
-    try {
-      if (process.env.NODE_ENV === "production") {
-        await navigator.serviceWorker.register("/sw.js");
-      }
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
-      setPushOn(!!sub);
-    } catch {
-      setPushOn(false);
-    }
-  }
-
   async function togglePush() {
-    setPushLoading(true);
-    setPushError("");
-    if (pushOn) {
-      const ok = await unsubscribeFromPush();
-      if (ok) setPushOn(false);
-      else setPushError("ปิด Push ไม่สำเร็จ");
-    } else {
-      const result = await subscribeToPush();
-      if (result.ok) setPushOn(true);
-      else setPushError(result.error);
-    }
-    setPushLoading(false);
-    setPushBlockers(getPushBlockers());
+    if (pushLoading) return;
+    setPushLoading(true); setPushError("");
+    try {
+      if (pushOn) {
+        const ok = await unsubscribeFromPush();
+        if (ok) setPushOn(false);
+        else setPushError("ปิด Push ไม่สำเร็จ กรุณาลองอีกครั้ง");
+      } else {
+        const result = await subscribeToPush();
+        if (result.ok) setPushOn(true);
+        else setPushError(result.error);
+      }
+    } catch { setPushError("เชื่อมต่อบริการ Push ไม่สำเร็จ กรุณาลองอีกครั้ง"); }
+    finally { setPushLoading(false); setPushBlockers(getPushBlockers()); }
   }
 
   async function testPush() {
-    setPushTesting(true);
-    setPushError("");
-    const result = await sendTestPush();
-    if (!result.ok) setPushError(result.error ?? "ทดสอบไม่สำเร็จ");
-    setPushTesting(false);
+    if (pushTesting) return;
+    setPushTesting(true); setPushError("");
+    try {
+      const result = await sendTestPush();
+      if (!result.ok) setPushError(result.error ?? "ทดสอบไม่สำเร็จ");
+    } catch { setPushError("ทดสอบ Push ไม่สำเร็จ กรุณาตรวจการเชื่อมต่อแล้วลองอีกครั้ง"); }
+    finally { setPushTesting(false); }
   }
 
   async function exportAll() {
@@ -567,7 +565,7 @@ export default function SettingsPage() {
             <Shield size={20} className="text-accent" />
             <div className="min-w-0 flex-1">
               <h2 className="font-semibold">จัดการทีมและสิทธิ์</h2>
-              <p className="text-sm text-muted">กำหนดสิทธิ์จริงและป้าย BE / FN / UI ของสมาชิก</p>
+              <p className="text-sm text-muted">กำหนดสิทธิ์ใช้งาน ป้ายหน้าที่ และป้ายทีมที่ตั้งชื่อเองได้</p>
             </div>
             <Link href="/team" className="inline-flex min-h-11 items-center text-sm font-semibold text-accent">
               ดูหน้าสมาชิก
@@ -598,7 +596,7 @@ export default function SettingsPage() {
                   ))}
                 </Select>
                 <div>
-                  <p className="text-sm text-muted mb-2">ป้ายที่ทีมเห็น — BE / FN / UI</p>
+                  <p className="text-sm text-muted mb-2">ป้ายหน้าที่มาตรฐาน</p>
                   <div className="flex flex-wrap gap-2">
                     {ASSIGNABLE_ROLES.map((role) => {
                       const on = getProfileDisplayRoles(member).includes(role);
@@ -623,6 +621,9 @@ export default function SettingsPage() {
                     ป้ายบัญชี หรือแอดมิน ถึงจะเข้าหน้าการเงินได้ — FN คือ Front End ไม่ใช่บัญชี
                   </p>
                 </div>
+                <TeamTagEditor tags={member.custom_tags ?? []}
+                  suggestions={[...new Set(team.flatMap((person) => person.custom_tags ?? []))]}
+                  onSave={(tags) => updateMemberCustomTags(member.id, tags)} />
                 <p className="text-sm text-muted">{ROLE_DESCRIPTIONS[member.role]}</p>
                 {member.id === profile?.id && (
                   <p className="text-sm text-(--status-amber-fg)">
@@ -684,6 +685,7 @@ export default function SettingsPage() {
           {pushError && (
             <p className="rounded-xl bg-(--status-red-bg) p-4 text-sm text-(--status-red-fg)" role="alert">
               {pushError}
+              <span className="mt-2 block text-muted">การแจ้งเตือนในเว็บยังใช้งานได้ตามการตั้งค่าด้านล่าง</span>
             </p>
           )}
         </div>

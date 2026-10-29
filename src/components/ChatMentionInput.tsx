@@ -97,13 +97,13 @@ export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionIn
       requestAnimationFrame(() => {
         if (!input) return;
         const pos = start + text.length;
-        input.focus();
+        input.focus({ preventScroll: true });
         input.setSelectionRange(pos, pos);
         setCursor(pos);
       });
     },
     focus() {
-      inputRef.current?.focus();
+      inputRef.current?.focus({ preventScroll: true });
     },
   }));
 
@@ -124,7 +124,7 @@ export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionIn
       requestAnimationFrame(() => {
         const input = inputRef.current;
         if (!input) return;
-        input.focus();
+        input.focus({ preventScroll: true });
         input.setSelectionRange(nextCursor, nextCursor);
         setCursor(nextCursor);
       });
@@ -132,7 +132,19 @@ export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionIn
     [mentionContext, onChange, value]
   );
 
+  function pickSlashCommand(command: string) {
+    const next = `${command} `;
+    onChange(next);
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      input?.focus({ preventScroll: true });
+      input?.setSelectionRange(next.length, next.length);
+      setCursor(next.length);
+    });
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (disabled) { if (e.key === "Enter") e.preventDefault(); return; }
     // Let the IME finish a character before handling shortcuts (including Safari).
     if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
     if (e.key === "Enter" && e.shiftKey) return;
@@ -152,7 +164,7 @@ export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionIn
       }
       if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
-        onChange(`${(slashItems[highlightIndex] ?? slashItems[0]).cmd} `);
+        pickSlashCommand((slashItems[highlightIndex] ?? slashItems[0]).cmd);
         return;
       }
       if (e.key === "Escape") {
@@ -208,7 +220,7 @@ export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionIn
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => onChange(`${item.cmd} `)}
+                onClick={() => pickSlashCommand(item.cmd)}
                 className={`w-full px-3 py-2 text-left text-sm transition-colors ${
                   index === highlightIndex
                     ? "bg-accent/15 text-accent"
@@ -259,7 +271,8 @@ export const ChatMentionInput = forwardRef<ChatMentionInputHandle, ChatMentionIn
         aria-label={placeholder ?? "ข้อความ"}
         aria-describedby={describedBy}
         value={value}
-        disabled={disabled}
+        readOnly={disabled}
+        aria-busy={disabled}
         onChange={(e) => {
           onChange(e.target.value);
           setCursor(e.target.selectionStart ?? e.target.value.length);

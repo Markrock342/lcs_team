@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getNeonAuthContext } from "@/lib/neon/auth";
 import { queryNeon } from "@/lib/neon/server";
+import { validateTeamTags } from "@/lib/team-tags";
 import { TEAM_ROLES, type Profile, type TeamRole } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -19,7 +20,7 @@ const OWN_FIELDS = new Set([
   "theme",
   "last_seen_at",
 ]);
-const ADMIN_FIELDS = new Set(["role", "display_roles"]);
+const ADMIN_FIELDS = new Set(["role", "display_roles", "custom_tags"]);
 
 function fail(error: unknown) {
   console.error("[neon/profiles]", error);
@@ -73,6 +74,13 @@ export async function PATCH(request: Request) {
     const isAdmin = auth.context.profile.role === "admin";
     if (!isSelf && !isAdmin) {
       return NextResponse.json({ error: "ไม่มีสิทธิ์แก้ไขสมาชิกนี้" }, { status: 403 });
+    }
+
+    if (body.data && "custom_tags" in body.data) {
+      if (!isAdmin) return NextResponse.json({ error: "เฉพาะแอดมินเท่านั้นที่แก้ป้ายทีมได้" }, { status: 403 });
+      const result = validateTeamTags(body.data.custom_tags);
+      if (result.error) return NextResponse.json({ error: result.error }, { status: 400 });
+      body.data.custom_tags = result.tags;
     }
 
     const entries = Object.entries(body.data ?? {}).filter(([key, value]) => {

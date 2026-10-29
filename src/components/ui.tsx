@@ -162,7 +162,7 @@ export function ProfileRoleBadges({
   profile,
   size = "sm",
 }: {
-  profile: Pick<Profile, "role" | "display_roles">;
+  profile: Pick<Profile, "role" | "display_roles" | "custom_tags">;
   size?: "sm" | "xs";
 }) {
   const roles = getProfileDisplayRoles(profile);
@@ -175,6 +175,12 @@ export function ProfileRoleBadges({
           className={`inline-flex items-center rounded-md font-medium ${text} ${ROLE_COLORS[role]}`}
         >
           {ROLE_LABELS[role]}
+        </span>
+      ))}
+      {(profile.custom_tags ?? []).map((tag) => (
+        <span key={`custom-${tag}`} title="ป้ายทีมกำหนดเอง"
+          className={`inline-flex max-w-full items-center break-words rounded-md bg-surface-soft px-2 py-0.5 font-medium text-muted ${text}`}>
+          {tag}
         </span>
       ))}
     </span>

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { Avatar } from "@/components/ui";
+import { isChatGif } from "@/lib/chat-gif";
 import { ChatImageViewer } from "@/components/ChatImageViewer";
 import { ChatEmojiPicker } from "@/components/ChatEmojiPicker";
 import { isImageFile } from "@/lib/upload";
@@ -145,14 +146,14 @@ export function ChatMessageItem({
                   )}
                 </p>
               )}
-              {msg.file_url && isImageFile(msg.file_type) && (
+              {msg.file_url && (isImageFile(msg.file_type) || isChatGif(msg.file_type, msg.file_name)) && (
                 <>
                   <button type="button" onClick={() => setImageOpen(true)} aria-label={`ดูรูป ${msg.file_name ?? "รูปภาพ"}`} aria-haspopup="dialog"
                     className="mt-2 block max-w-sm overflow-hidden rounded-xl border border-border bg-background text-left">
                     {thumbnailFailed ? <span className="block p-4 text-sm text-muted">{msg.file_name ?? "รูปภาพ"} · กดเปิดดูรูป</span> : <Image
-                      src={msg.file_url} alt={msg.file_name ?? "รูปภาพ"} width={400} height={300} onError={() => setThumbnailFailed(true)}
+                      src={msg.file_url} alt={msg.file_name ?? "รูปภาพ"} width={400} height={300} unoptimized={isChatGif(msg.file_type, msg.file_name)} onError={() => setThumbnailFailed(true)}
                       className="max-h-72 w-full object-contain" />}
-                    <span className="block px-3 py-2 text-xs text-muted">ดูรูปขนาดใหญ่</span>
+                    <span className="block px-3 py-2 text-xs text-muted">{isChatGif(msg.file_type, msg.file_name) ? "GIF · ดูขนาดใหญ่" : "ดูรูปขนาดใหญ่"}</span>
                   </button>
                   {imageOpen && <ChatImageViewer src={msg.file_url} name={msg.file_name ?? "image.png"} onClose={() => setImageOpen(false)} />}
                 </>
@@ -165,7 +166,7 @@ export function ChatMessageItem({
                   📋 {msg.linked_task.title}
                 </a>
               )}
-              {msg.file_url && !isImageFile(msg.file_type) && (
+              {msg.file_url && !(isImageFile(msg.file_type) || isChatGif(msg.file_type, msg.file_name)) && (
                 <a
                   href={msg.file_url}
                   target="_blank"
@@ -306,7 +307,7 @@ export function ChatMessageItem({
                       <Pencil size={14} />
                     </button>
                   )}
-                  {msg.file_url && isImageFile(msg.file_type) && !deleted && (
+                  {msg.file_url && (isImageFile(msg.file_type) || isChatGif(msg.file_type, msg.file_name)) && !deleted && (
                     <button
                       type="button"
                       onClick={() =>

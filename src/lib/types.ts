@@ -59,6 +59,7 @@ export interface Profile {
   display_name: string;
   role: TeamRole;
   display_roles: TeamRole[] | null;
+  custom_tags?: string[] | null;
   avatar_url: string | null;
   last_seen_at: string | null;
   notify_chat?: boolean | null;
