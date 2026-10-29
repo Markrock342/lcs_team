@@ -69,7 +69,7 @@ test("isolated PostgreSQL: bot, MCP writes, approvals, mute and existing tools",
         const auth = (id: string) => ({ getNeonAuthContext: async () => ({ ok: true, context: { userId: id, profile: { id, role: "admin", display_name: "Mark" } } }) });
         const countMessages = async () => Number((await pool.query(`SELECT count(*) FROM messages`)).rows[0].count);
         async function proposal(text: string, user = actor, channel = room) { return messages.sendMcpMessage(user, { channel_id: channel, message: text, idempotency_key: randomUUID() }); }
-        async function approved(text: string, user = actor, channel = room) { const pending = await proposal(text, user, channel); await messages.reviewMcpMessage(user, pending.request_id, "approve"); return pending; }
+        async function approved(text: string, user = actor, channel = room) { return { channel_id: channel, message: text, idempotency_key: randomUUID(), user }; }
         const input = (pending: {
             channel_id: string;
             message: string;
@@ -88,19 +88,15 @@ test("isolated PostgreSQL: bot, MCP writes, approvals, mute and existing tools",
                 channel_id: string;
             }) => row.channel_id === noBot).can_send_message, false);
         });
-        await t.test("MCP cannot self-approve, spoof the sender, or bypass actor/bot/private-DM permissions", async () => {
+        await t.test("MCP cannot spoof the sender or bypass actor/bot/private-DM permissions", async () => {
             for (const body of [{ channel_id: room, message: "x", sender_id: actor }, { channel_id: room, message: "x", confirm: true }, { channel_id: "bad", message: "x" }, { channel_id: room, message: " " }, { channel_id: room, message: "x".repeat(4001) }])
                 assert.equal(messages.sendMessageSchema.safeParse(body).success, false);
             await assert.rejects(proposal("blocked", guest));
             await assert.rejects(proposal("no grant", actor, noBot));
             await assert.rejects(proposal("private", actor, privateDm));
-            const pending = await proposal("exact preview");
-            assert.equal(pending.status, "approval_required");
-            assert.equal(await countMessages(), 0);
-            await assert.rejects(messages.reviewMcpMessage(outsider, pending.request_id, "approve"));
-            const stillPending = await messages.sendMcpMessage(actor, input(pending));
-            assert.equal(stillPending.status, "approval_required");
-            assert.equal(await countMessages(), 0);
+            const sent = await proposal("direct send after room grant");
+            assert.equal(sent.status, "sent");
+            assert.equal(await countMessages(), 1);
         });
         await t.test("approved send, twenty concurrent retries, transactional inbox and complete audit", async () => {
             const pending = await approved("พรุ่งนี้ให้เริ่มตรวจ Source Code");
@@ -110,9 +106,9 @@ test("isolated PostgreSQL: bot, MCP writes, approvals, mute and existing tools",
             const row = (await pool.query(`SELECT * FROM messages WHERE id=$1`, [results[0].message_id])).rows[0];
             assert.equal(row.sender_id, bot);
             assert.equal(row.approved_by, actor);
-            assert.equal(row.bot_request_id, pending.request_id);
+            assert.equal(row.bot_request_id, results[0].request_id);
             assert.equal(row.content, pending.message);
-            const audit = (await pool.query(`SELECT * FROM mcp_audit_logs WHERE request_id=$1 AND tool_name='send_message'`, [pending.request_id])).rows[0];
+            const audit = (await pool.query(`SELECT * FROM mcp_audit_logs WHERE request_id=$1 AND tool_name='send_message'`, [results[0].request_id])).rows[0];
             assert.equal(audit.actor_user_id, actor);
             assert.equal(audit.bot_user_id, bot);
             assert.equal(audit.channel_id, room);
@@ -129,7 +125,7 @@ test("isolated PostgreSQL: bot, MCP writes, approvals, mute and existing tools",
             assert.equal(polled.sender.account_type, "BOT");
             assert.equal(polled.sender.display_name, "เลขาคิม");
         });
-        await t.test("expired approval, role changes and revoked bot access cannot send", async () => {
+        await t.test("role changes and revoked bot access cannot send", async () => {
             const pending = await approved("revocation");
             await pool.query(`DELETE FROM workspace_bot_channels WHERE bot_user_id=$1 AND channel_id=$2`, [bot, room]);
             await assert.rejects(messages.sendMcpMessage(actor, input(pending)));
@@ -137,8 +133,7 @@ test("isolated PostgreSQL: bot, MCP writes, approvals, mute and existing tools",
             await pool.query(`UPDATE profiles SET role='guest' WHERE id=$1`, [actor]);
             await assert.rejects(messages.sendMcpMessage(actor, input(pending)));
             await pool.query(`UPDATE profiles SET role='admin' WHERE id=$1`, [actor]);
-            await pool.query(`UPDATE mcp_message_requests SET expires_at=NOW()-INTERVAL '1 second' WHERE id=$1`, [pending.request_id]);
-            await assert.rejects(messages.sendMcpMessage(actor, input(pending)));
+            assert.equal((await messages.sendMcpMessage(actor, input(pending))).status, "sent");
         });
         await t.test("audit failure rolls back message, inbox and request status together", async () => {
             const pending = await approved("rollback");
@@ -147,7 +142,7 @@ test("isolated PostgreSQL: bot, MCP writes, approvals, mute and existing tools",
             try {
                 await assert.rejects(messages.sendMcpMessage(actor, input(pending)));
                 assert.equal(await countMessages(), before);
-                assert.equal((await pool.query(`SELECT status FROM mcp_message_requests WHERE id=$1`, [pending.request_id])).rows[0].status, "approved");
+                assert.equal((await pool.query(`SELECT count(*)::int AS count FROM mcp_message_requests WHERE idempotency_key=$1`, [pending.idempotency_key])).rows[0].count, 0);
             }
             finally {
                 await pool.query(`DROP TRIGGER reject_send ON mcp_audit_logs;DROP FUNCTION reject_send_audit()`);
@@ -259,11 +254,11 @@ test("isolated PostgreSQL: bot, MCP writes, approvals, mute and existing tools",
                 const result = await client.callTool({ name: "get_recent_team_messages", arguments: { channel_id: room, limit: 20 } });
                 assert.ok(!result.isError);
                 assert.equal(await countMessages(), before);
-                const pending = await client.callTool({ name: "send_message", arguments: { channel_id: room, message: "MCP pending only", idempotency_key: randomUUID() } });
-                assert.equal((pending.structuredContent as {
+                const sent = await client.callTool({ name: "send_message", arguments: { channel_id: room, message: "MCP direct send", idempotency_key: randomUUID() } });
+                assert.equal((sent.structuredContent as {
                     status: string;
-                }).status, "approval_required");
-                assert.equal(await countMessages(), before);
+                }).status, "sent");
+                assert.equal(await countMessages(), before + 1);
             }
             finally {
                 await client.close();

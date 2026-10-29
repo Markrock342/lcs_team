@@ -1,6 +1,6 @@
 # Release checklist: เลขาคิม, client tools และ mute
 
-ผู้ใช้อนุมัติให้ deploy เมื่อเสร็จแล้วเมื่อ 29 ตุลาคม 2026 ตรวจ target metadata และ apply migration ผ่านบน Vercel production build แล้ว การทดสอบส่งข้อความใช้ PostgreSQL สังเคราะห์เท่านั้น การอนุมัติ deploy ไม่ใช่การอนุมัติส่งข้อความเข้าห้องจริง
+ผู้ใช้อนุมัติให้ deploy เมื่อเสร็จแล้วเมื่อ 29 ตุลาคม 2026 ตรวจ target metadata และ apply migration ผ่านบน Vercel production build แล้ว การทดสอบส่งข้อความใช้ PostgreSQL สังเคราะห์เท่านั้น การส่งจริงอนุญาตเฉพาะห้องที่แอดมินเปิดไว้ใน Settings
 
 ## ขออนุมัติก่อนทำ Production
 
@@ -11,7 +11,7 @@
 1. ตรวจ metadata เป้าหมายด้วย `scripts/secretary-kim-preflight.sql` (read-only ไม่อ่านแชทจริง)
 2. เพิ่ม schema mute, Bot, request/audit และ parent_client_id; สร้าง profile BOT ใหม่หนึ่งบัญชี ไม่รับสิทธิ์ห้องอัตโนมัติ ไม่ลบ/เปลี่ยนข้อมูลข้อความและผู้ใช้อื่น
 3. เปิด environment flags ที่ต้องการ และ deploy source บน Vercel
-4. เลือกห้อง **ทดสอบ** และข้อความสังเคราะห์ที่ได้รับอนุมัติแยกก่อนทดสอบส่งจริง ห้ามแทนที่ด้วยห้องใช้งานจริง
+4. เลือกห้องที่อนุญาตให้เลขาคิมส่งได้อย่างชัดเจนใน Settings; เริ่มทดสอบด้วยห้องและข้อความสังเคราะห์ก่อนใช้กับห้องงานจริง
 
 อย่า push branch ไป Git remote หากยังไม่อนุมัติ Preview deployment เพราะ repo นี้มี Git integration ของ Vercel ซึ่งสร้าง Preview เมื่อ push
 
@@ -64,8 +64,8 @@ Deploy ตาม Vercel project ที่ผูกกับ repo รอ validate
 1. Mark ล็อกอิน Settings → เลขาคิม เปิด bot และอนุญาตเฉพาะห้องทดสอบที่ตกลงไว้
 2. Refresh/reconnect MCP ใน ChatGPT แล้วตรวจ tools/list หลัง auth ว่ามีเครื่องมือที่เปิดไว้และ role ที่ถูกต้อง
 3. ใช้ list_channels หา ID ห้ามเดา ID จากชื่อ ถ้าคนชื่อซ้ำให้เลือกผู้รับ
-4. send_message ครั้งแรกต้อง approval_required และยังไม่มีข้อความ
-5. Mark เปิด approval_url อ่านข้อความ กดอนุมัติ แล้ว ChatGPT retry input/key เดิม
+4. send_message ส่งทันทีเฉพาะห้องที่แอดมินอนุญาตไว้ และคืน message_id
+5. เรียกซ้ำด้วย idempotency_key เดิมต้องคืน message_id เดิมโดยไม่สร้างข้อความซ้ำ
 6. ตรวจ result=sent + message_id; หน้าแชทมีชื่อเลขาคิมและ AI Assistant, approved_by=Mark, audit request_id ครบ และ inbox/Push ตาม mute ของผู้รับ
 7. retry key เดิมต้องคืน message_id เดิม ไม่มีข้อความซ้ำ
 8. revoke ห้องแล้วคำขอใหม่ต้องถูกปฏิเสธ และไม่มี DM ใหม่

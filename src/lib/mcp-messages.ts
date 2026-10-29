@@ -56,7 +56,7 @@ async function audit(client: PoolClient, actorId: string, row: RequestRow, actio
     await client.query(`INSERT INTO public.mcp_audit_logs (user_id,tool_name,input_summary,actor_user_id,bot_user_id,channel_id,message_id,request_id)
     VALUES ($1,$2,$3::jsonb,$1,$4,$5,$6,$7)`, [actorId, action, JSON.stringify({ content_hash: row.content_hash, status: row.status }), row.bot_user_id, row.channel_id, messageId ?? row.message_id, row.id]);
 }
-/** First invocation prepares a request; only a separately approved request can send. */
+/** A room grant is the one-time human approval. Each explicit MCP call sends immediately. */
 export async function sendMcpMessage(actorId: string, raw: SendMessageInput) {
     const input = sendMessageSchema.parse(raw);
     const hash = createHash("sha256").update(JSON.stringify([input.channel_id, input.message])).digest("hex");
@@ -71,23 +71,15 @@ export async function sendMcpMessage(actorId: string, raw: SendMessageInput) {
             throw new McpMessageError("idempotency_key นี้ใช้กับข้อความอื่นแล้ว กรุณาสร้างคำขอใหม่");
         if (row?.status === "sent")
             return { status: "sent" as const, replayed: true, message_id: row.message_id, channel_id: row.channel_id, sender: { id: botId, display_name: "เลขาคิม", account_type: "BOT" }, timestamp: row.sent_at, request_id: row.id };
-        if (row && (row.expired || row.status === "denied"))
-            throw new McpMessageError("คำขอหมดอายุหรือถูกปฏิเสธ กรุณาให้ผู้ใช้เริ่มคำขอใหม่ด้วย idempotency_key ใหม่");
+        if (row)
+            throw new McpMessageError("idempotency_key นี้เป็นคำขอเก่าที่ยังไม่เคยส่ง กรุณาใช้คีย์ใหม่");
         if (!row) {
-            const count = await client.query<{
-                count: number;
-            }>(`SELECT count(*)::int AS count FROM public.mcp_message_requests WHERE actor_user_id=$1 AND created_at>NOW()-INTERVAL '1 minute'`, [actorId]);
-            if (count.rows[0].count >= 20)
-                throw new McpMessageError("สร้างคำขอถี่เกินไป กรุณารอหนึ่งนาที");
-            ({ rows } = await client.query<RequestRow>(`INSERT INTO public.mcp_message_requests (actor_user_id,bot_user_id,channel_id,idempotency_key,content,content_hash)
-        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *, false AS expired`, [actorId, botId, input.channel_id, key, input.message, hash]));
+            ({ rows } = await client.query<RequestRow>(`INSERT INTO public.mcp_message_requests
+        (actor_user_id,bot_user_id,channel_id,idempotency_key,content,content_hash,status,approved_at)
+        VALUES ($1,$2,$3,$4,$5,$6,'approved',NOW()) RETURNING *, false AS expired`, [actorId, botId, input.channel_id, key, input.message, hash]));
             row = rows[0];
-            await audit(client, actorId, row, "prepare_message");
+            await audit(client, actorId, row, "authorize_message_by_room_grant");
         }
-        if (row.status !== "approved")
-            return { status: "approval_required" as const, request_id: row.id, idempotency_key: key, channel_id: row.channel_id, message: row.content, expires_at: row.expires_at, approval_path: `/mcp/approve?request=${row.id}` };
-        if (!row.approved_at)
-            throw new McpMessageError("คำขอนี้ยังไม่มีหลักฐานการอนุมัติ");
         const counts = await client.query<{
             minute: number;
             day: number;

@@ -45,15 +45,6 @@ CREATE TABLE IF NOT EXISTS public.workspace_bot_channels (
   granted_at timestamptz NOT NULL DEFAULT NOW(),
   PRIMARY KEY (bot_user_id,channel_id)
 );
-CREATE TABLE IF NOT EXISTS public.workspace_bot_responses (
-  source_message_id uuid PRIMARY KEY REFERENCES public.messages(id) ON DELETE CASCADE,
-  bot_user_id uuid NOT NULL REFERENCES public.profiles(id),
-  status text NOT NULL CHECK (status IN ('processing','completed','failed','cancelled')),
-  response_message_id uuid UNIQUE REFERENCES public.messages(id) ON DELETE SET NULL,
-  created_at timestamptz NOT NULL DEFAULT NOW(),
-  completed_at timestamptz
-);
-CREATE INDEX IF NOT EXISTS idx_workspace_bot_responses_created ON public.workspace_bot_responses(created_at DESC);
 CREATE TABLE IF NOT EXISTS public.mcp_message_requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   actor_user_id uuid NOT NULL REFERENCES public.profiles(id),
