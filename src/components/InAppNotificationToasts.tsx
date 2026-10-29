@@ -15,7 +15,7 @@ export function InAppNotificationToasts() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { incoming, markRead } = useNotifications();
+  const { items, incoming, markRead } = useNotifications();
   const [toasts, setToasts] = useState<AppNotification[]>([]);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const handled = useRef(new Set<string>());
@@ -39,7 +39,7 @@ export function InAppNotificationToasts() {
     const fresh = incoming.filter((item) => {
       if (handled.current.has(item.id)) return false;
       handled.current.add(item.id);
-      return !item.read && !(activeChannel && getChatChannelIdFromLink(item.link) === activeChannel);
+      return !item.read && !item.muted && !item.silent && !(activeChannel && getChatChannelIdFromLink(item.link) === activeChannel);
     });
     if (handled.current.size > 1000) handled.current = new Set([...handled.current].slice(-500));
     if (!fresh.length) return;
@@ -62,7 +62,7 @@ export function InAppNotificationToasts() {
 
   return <section aria-label="การแจ้งเตือนใหม่" aria-live="polite" aria-relevant="additions"
     className="pointer-events-none fixed inset-x-3 top-[calc(4rem+env(safe-area-inset-top))] z-60 flex flex-col gap-2 lg:left-auto lg:right-6 lg:top-20 lg:w-96">
-    {toasts.map((item) => {
+    {toasts.filter((item) => !items.find((current) => current.id === item.id)?.muted).map((item) => {
       const Icon = KIND_ICON[inferNotificationKind(item.title, item.link)];
       return <div key={item.id}
         onMouseEnter={() => pause(item.id)} onMouseLeave={() => resume(item.id)}

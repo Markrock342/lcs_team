@@ -42,3 +42,16 @@ test("missing required tables roll back and nested commits are rejected", async 
   await assert.rejects(runVerifiedMigration(client, "BEGIN; COMMIT; SELECT 1; COMMIT;", async () => ({}), []), /Nested transaction/);
   assert.equal(commands.length, count);
 });
+
+test("a release may explicitly allow exactly one bot profile and no other row changes", async () => {
+  let snapshot=0;
+  await runVerifiedMigration({query:async()=>{}},sql,async()=>++snapshot===1?{profiles:"4",messages:"20"}:{profiles:"5",messages:"20"},[],{profiles:1});
+  snapshot=0;
+  await assert.rejects(runVerifiedMigration({query:async()=>{}},sql,async()=>++snapshot===1?{profiles:"4",messages:"20"}:{profiles:"5",messages:"21"},[],{profiles:1}),/Verification failed/);
+});
+
+test("migration permits PL/pgSQL blocks while still rejecting SQL-level commits", async () => {
+  const block="BEGIN; DO $$ DECLARE value int; BEGIN value:=1; END $$; COMMIT;";
+  await runVerifiedMigration({query:async()=>{}},block,async()=>({profiles:"1"}),[]);
+  await assert.rejects(runVerifiedMigration({query:async()=>{}},"BEGIN; DO $$ BEGIN NULL; END $$; COMMIT; SELECT 1; COMMIT;",async()=>({}),[]),/Nested transaction/);
+});

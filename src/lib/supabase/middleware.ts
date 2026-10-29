@@ -24,6 +24,7 @@ const PROTECTED_PREFIXES = [
   "/templates",
   "/more",
   "/oauth/consent",
+  "/mcp/approve",
 ];
 
 const PUBLIC_PREFIXES = ["/login", "/portal", "/auth", "/sw.js", "/manifest.json", "/clear-sw.html"];

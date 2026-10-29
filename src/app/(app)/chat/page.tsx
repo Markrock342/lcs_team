@@ -19,11 +19,14 @@ import {
   UserRound,
   MessageSquare,
   SmilePlus,
+  BellOff,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { neonRequest } from "@/lib/neon/client";
 import { Button, EmptyState, Input, Modal, PageLoader, Textarea, ProfileRoleBadges } from "@/components/ui";
 import { useActionFeedback } from "@/components/workspace/ActionFeedback";
+import { ChatMuteButton } from "@/components/ChatMuteButton";
+import { isChatMuted, chatMuteLabel } from "@/lib/chat-mute";
 import { ChatDropZone } from "@/components/ChatDropZone";
 import { chatAttachmentError } from "@/lib/chat-attachments";
 import { ChatMessageItem } from "@/components/ChatMessageItem";
@@ -1041,6 +1044,7 @@ function ChatPageContent() {
     ? channelTitle(activeChannel, profiles, currentUser?.id)
     : "";
   const activeIsDm = activeChannel ? isDmChannel(activeChannel) : false;
+  const activeMute = channels.find((channel) => channel.id === activeChannel?.id) ?? {};
 
   let lastDate = "";
 
@@ -1088,6 +1092,7 @@ function ChatPageContent() {
                 >
                   <Hash size={16} className="shrink-0 opacity-60" />
                   <span className="truncate">{ch.name}</span>
+                  {isChatMuted(ch) && <BellOff size={14} className="shrink-0 text-muted" aria-label="ปิดแจ้งเตือน" />}
                   {!!unread[ch.id] && (
                     <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-on-accent">
                       {unread[ch.id] > 99 ? "99+" : unread[ch.id]}
@@ -1122,6 +1127,7 @@ function ChatPageContent() {
                   <span className="truncate">
                     {channelTitle(ch, profiles, currentUser?.id)}
                   </span>
+                  {isChatMuted(ch) && <BellOff size={14} className="shrink-0 text-muted" aria-label="ปิดแจ้งเตือน" />}
                   {!!unread[ch.id] && (
                     <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-on-accent">
                       {unread[ch.id] > 99 ? "99+" : unread[ch.id]}
@@ -1214,7 +1220,10 @@ function ChatPageContent() {
                 {activeIsDm && (
                   <p className="text-xs text-muted truncate">ข้อความส่วนตัว</p>
                 )}
+                {isChatMuted(activeMute) && <p className="truncate text-xs text-(--status-amber-fg)" title={chatMuteLabel(activeMute)}>{chatMuteLabel(activeMute)}</p>}
               </div>
+              <ChatMuteButton key={activeChannel.id} channelId={activeChannel.id} title={activeTitle} preference={activeMute}
+                onUpdated={(preference) => setChannels((previous) => previous.map((channel) => channel.id === activeChannel.id ? { ...channel, ...preference } : channel))} />
               {!activeIsDm && (
               <div className="relative shrink-0">
                 <button

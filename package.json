@@ -13,7 +13,8 @@
     "test": "node --experimental-strip-types --test scripts/tests/*.test.ts",
     "validate": "npm test && npx tsc --noEmit && npm run lint",
     "prelint": "npm run clean:appledouble",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:integration": "node --experimental-strip-types --test scripts/tests/mcp-workspace.integration.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",

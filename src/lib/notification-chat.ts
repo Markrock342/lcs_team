@@ -28,7 +28,7 @@ function channelKind(channels: MessageRow["channels"]): string {
 /** Store the in-app inbox in the same transaction as its message. */
 export async function insertChatMessageNotifications(client: Pick<PoolClient, "query">, messageId: string) {
   await client.query(
-    `INSERT INTO public.notifications (user_id, title, body, link, source_type, source_id, push_sent)
+    `INSERT INTO public.notifications (user_id, title, body, link, source_type, source_id, push_sent, silent)
      SELECT recipient.id,
        CASE
          WHEN recipient.id = ANY(COALESCE(m.mentioned_ids, '{}'::uuid[]))
@@ -39,7 +39,11 @@ export async function insertChatMessageNotifications(client: Pick<PoolClient, "q
        COALESCE(sender.display_name, 'ทีม') || ': ' ||
          COALESCE(NULLIF(LEFT(BTRIM(m.content), 80), ''), m.file_name, 'ส่งไฟล์'),
        '/chat?channel=' || m.channel_id::text || '&msg=' || m.id::text,
-       'message', m.id, FALSE
+       'message', m.id, FALSE, EXISTS (
+         SELECT 1 FROM public.chat_notification_preferences cp
+         WHERE cp.user_id=recipient.id AND cp.channel_id=m.channel_id
+           AND (cp.mute_forever OR cp.muted_until > NOW())
+       )
      FROM public.messages m
      JOIN public.channels c ON c.id = m.channel_id
      LEFT JOIN public.profiles sender ON sender.id = m.sender_id

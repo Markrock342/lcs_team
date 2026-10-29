@@ -45,6 +45,6 @@ export async function authenticateMcpRequest(request: Request): Promise<McpIdent
     [data.user.id],
   );
   const profile = rows[0];
-  if (!profile || profile.role === "guest") return null;
+  if (!profile || profile.role === "guest" || profile.account_type === "BOT") return null;
   return { userId: data.user.id, profile };
 }

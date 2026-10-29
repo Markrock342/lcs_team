@@ -48,7 +48,7 @@ export function NotificationProvider({ userId, children }: { userId?: string; ch
         );
         if (!mounted.current) return;
         const fresh = data.notifications.filter((item) =>
-          !item.read && !seen.current.has(item.id) &&
+          !item.read && !item.muted && !item.silent && !seen.current.has(item.id) &&
           (initialized.current || Date.parse(item.created_at) >= (startedAt.current ?? Date.now())),
         );
         for (const item of data.notifications) seen.current.add(item.id);

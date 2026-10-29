@@ -162,9 +162,10 @@ export function ProfileRoleBadges({
   profile,
   size = "sm",
 }: {
-  profile: Pick<Profile, "role" | "display_roles" | "custom_tags">;
+  profile: Pick<Profile, "role" | "display_roles" | "custom_tags" | "account_type">;
   size?: "sm" | "xs";
 }) {
+  if (profile.account_type === "BOT") return <span className="inline-flex rounded-md bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">AI Assistant</span>;
   const roles = getProfileDisplayRoles(profile);
   const text = size === "xs" ? "text-[10px] px-1.5 py-0" : "text-xs";
   return (

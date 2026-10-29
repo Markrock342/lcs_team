@@ -58,6 +58,8 @@ export interface Profile {
   username: string;
   display_name: string;
   role: TeamRole;
+  account_type?: "HUMAN" | "BOT";
+  bot_description?: string | null;
   display_roles: TeamRole[] | null;
   custom_tags?: string[] | null;
   avatar_url: string | null;
@@ -133,6 +135,7 @@ export interface SalesInteraction {
 }
 
 export interface Client {
+  parent_client_id?: string | null;
   id: string;
   name: string;
   contact_name: string | null;
@@ -187,6 +190,8 @@ export interface Channel {
   created_at: string;
   kind?: "channel" | "dm" | null;
   dm_key?: string | null;
+  mute_forever?: boolean | null;
+  muted_until?: string | null;
 }
 
 export interface ChannelMember {
@@ -201,6 +206,8 @@ export interface MessageRead {
 }
 
 export interface Message {
+  approved_by?: string | null;
+  bot_request_id?: string | null;
   id: string;
   channel_id: string;
   sender_id: string;

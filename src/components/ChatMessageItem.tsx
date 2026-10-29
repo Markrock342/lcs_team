@@ -102,6 +102,7 @@ export function ChatMessageItem({
         {!isOwn && (
           <p className="mb-1 max-w-full truncate px-1 text-xs font-semibold text-muted">
             {msg.sender?.display_name ?? "ไม่มีชื่อ"}
+            {msg.sender?.account_type === "BOT" && <span className="ml-2 inline-flex rounded-md bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">AI Assistant</span>}
           </p>
         )}
         <div

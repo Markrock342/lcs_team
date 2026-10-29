@@ -1,0 +1,11 @@
+CREATE TABLE profiles (id uuid PRIMARY KEY,username text UNIQUE NOT NULL,display_name text NOT NULL,role text NOT NULL DEFAULT 'guest',notify_chat boolean DEFAULT true,notify_mentions boolean DEFAULT true,notify_tasks boolean DEFAULT true,push_enabled boolean DEFAULT false,display_roles text[],avatar_url text,last_seen_at timestamptz,created_at timestamptz DEFAULT NOW());
+CREATE TABLE channels (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),name text NOT NULL,kind text DEFAULT 'channel',created_by uuid REFERENCES profiles(id),created_at timestamptz DEFAULT NOW());
+CREATE TABLE channel_members (channel_id uuid REFERENCES channels(id),user_id uuid REFERENCES profiles(id),PRIMARY KEY(channel_id,user_id));
+CREATE TABLE messages (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),channel_id uuid REFERENCES channels(id),sender_id uuid NOT NULL REFERENCES profiles(id),content text,file_url text,file_name text,file_type text,reply_to_id uuid,linked_task_id uuid,pinned_at timestamptz,pinned_by uuid,edited_at timestamptz,deleted_at timestamptz,mentioned_ids uuid[],thread_id uuid,created_at timestamptz DEFAULT NOW());
+CREATE TABLE notifications (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid REFERENCES profiles(id),title text,body text,link text,read boolean DEFAULT false,source_type text,source_id uuid,push_sent boolean DEFAULT false,created_at timestamptz DEFAULT NOW());
+CREATE UNIQUE INDEX notification_dedupe ON notifications(user_id,source_type,source_id) WHERE source_type IS NOT NULL AND source_id IS NOT NULL;
+
+CREATE TABLE clients (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),name text NOT NULL,company text,contact_name text,contact_phone text,contact_email text,description text,notes text,budget numeric,status text DEFAULT 'lead',project_type text DEFAULT 'other',created_by uuid REFERENCES profiles(id),created_at timestamptz DEFAULT NOW(),updated_at timestamptz DEFAULT NOW());
+
+CREATE TABLE message_reads (message_id uuid REFERENCES messages(id),user_id uuid REFERENCES profiles(id),read_at timestamptz DEFAULT NOW(),PRIMARY KEY(message_id,user_id));
+CREATE TABLE message_reactions (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),message_id uuid REFERENCES messages(id),user_id uuid REFERENCES profiles(id),emoji text);

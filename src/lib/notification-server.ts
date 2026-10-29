@@ -49,30 +49,41 @@ export async function deliverNotifications(items: NotificationPayload[]) {
   });
   if (!eligible.length) return { inserted: 0, pushed: 0 };
 
+  const messageIds = eligible.filter((item) => item.sourceType === "message" && item.sourceId).map((item) => item.sourceId!);
+  const muted = new Set<string>();
+  if (messageIds.length) {
+    const { rows } = await queryNeon<{ user_id: string; source_id: string }>(
+      `SELECT cp.user_id, m.id AS source_id FROM public.chat_notification_preferences cp
+       JOIN public.messages m ON m.channel_id=cp.channel_id
+       WHERE cp.user_id=ANY($1::uuid[]) AND m.id::text=ANY($2::text[])
+         AND (cp.mute_forever OR cp.muted_until > NOW())`, [userIds, messageIds],
+    );
+    rows.forEach((row) => muted.add(`${row.user_id}:${row.source_id}`));
+  }
   const toPush: NotificationPayload[] = [];
   let inserted = 0;
   for (const item of eligible) {
-    const { rows } = await queryNeon<{ id: string; push_sent: boolean }>(
+    const { rows } = await queryNeon<{ id: string; push_sent: boolean; silent: boolean }>(
       `INSERT INTO public.notifications
-       (user_id,title,body,link,source_type,source_id,push_sent)
-       VALUES ($1,$2,$3,$4,$5,$6,FALSE)
+       (user_id,title,body,link,source_type,source_id,push_sent,silent)
+       VALUES ($1,$2,$3,$4,$5,$6,FALSE,$7)
        ON CONFLICT (user_id,source_type,source_id)
        WHERE source_type IS NOT NULL AND source_id IS NOT NULL
-       DO NOTHING RETURNING id,push_sent`,
-      [item.userId, item.title, item.body, item.link ?? null, item.sourceType ?? null, item.sourceId ?? null],
+       DO NOTHING RETURNING id,push_sent,silent`,
+      [item.userId, item.title, item.body, item.link ?? null, item.sourceType ?? null, item.sourceId ?? null, muted.has(`${item.userId}:${item.sourceId}`)],
     );
     if (rows[0]) {
       inserted += 1;
-      toPush.push(item);
+      if (!rows[0].silent && !muted.has(`${item.userId}:${item.sourceId}`)) toPush.push(item);
       continue;
     }
     if (item.sourceType && item.sourceId) {
-      const existing = await queryNeon<{ push_sent: boolean }>(
-        `SELECT push_sent FROM public.notifications
+      const existing = await queryNeon<{ push_sent: boolean; silent: boolean }>(
+        `SELECT push_sent,silent FROM public.notifications
          WHERE user_id=$1 AND source_type=$2 AND source_id=$3 LIMIT 1`,
         [item.userId, item.sourceType, item.sourceId],
       );
-      if (existing.rows[0] && !existing.rows[0].push_sent) toPush.push(item);
+      if (existing.rows[0] && !existing.rows[0].push_sent && !existing.rows[0].silent && !muted.has(`${item.userId}:${item.sourceId}`)) toPush.push(item);
     }
   }
   if (!toPush.length) return { inserted, pushed: 0 };
@@ -98,11 +109,21 @@ export async function deliverNotifications(items: NotificationPayload[]) {
       const profile = profileMap.get(userId);
       const subscriptionsForUser = subsByUser.get(userId);
       if (!profile || profile.push_enabled === false || !subscriptionsForUser?.length) return;
-      await sendPushToUser(subscriptionsForUser, {
+      if (item.sourceType === "message" && item.sourceId) {
+        const { rows } = await queryNeon<{ muted: boolean }>(
+          `SELECT EXISTS (SELECT 1 FROM public.chat_notification_preferences cp
+           JOIN public.messages m ON m.channel_id=cp.channel_id
+           WHERE cp.user_id=$1 AND m.id::text=$2 AND (cp.mute_forever OR cp.muted_until > NOW())) AS muted`,
+          [userId, item.sourceId],
+        );
+        if (rows[0]?.muted) return;
+      }
+      const delivery = await sendPushToUser(subscriptionsForUser, {
         title: item.title,
         body: item.body,
         link: item.link,
       });
+      if (!delivery?.sent) return;
       pushed += 1;
       if (item.sourceType && item.sourceId) {
         await queryNeon(

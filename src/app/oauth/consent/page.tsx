@@ -117,6 +117,7 @@ export default function OAuthConsentPage() {
                     { icon: FolderKanban, text: "อ่านโปรเจกต์และงานที่เกี่ยวข้องกับบัญชีคุณ" },
                     { icon: MessageSquareText, text: "อ่านข้อความในช่องทีมที่คุณมีสิทธิ์เข้าถึง" },
                     { icon: Code2, text: "อ่าน source code จาก repository ที่ LCS อนุญาต" },
+                    { icon: Bot, text: "เมื่อเปิดใช้เลขาคิม: ส่งข้อความในแชทที่แอดมินอนุญาต หลังคุณตรวจและอนุมัติข้อความนั้นบนเว็บ LCS" },
                     { icon: ShieldCheck, text: "Admin/PM สร้างงานได้หลังยืนยันงานนั้นโดยชัดเจน พร้อมบันทึก audit log" },
                   ].map(({ icon: Icon, text }) => (
                     <div key={text} className="flex min-h-14 items-center gap-3 py-3">

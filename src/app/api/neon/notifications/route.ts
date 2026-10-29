@@ -23,9 +23,14 @@ export async function GET(request: Request) {
     const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 100) : 50;
     const [{ rows }, unread] = await Promise.all([
       queryNeon<AppNotification>(
-      `SELECT * FROM public.notifications
-       WHERE user_id = $1 ${unreadOnly ? "AND read = FALSE" : ""}
-       ORDER BY created_at DESC LIMIT $2`,
+      `SELECT n.*, (n.silent OR EXISTS (
+         SELECT 1 FROM public.messages m JOIN public.chat_notification_preferences cp ON cp.channel_id=m.channel_id
+         WHERE n.source_type='message' AND m.id=n.source_id AND cp.user_id=n.user_id
+           AND (cp.mute_forever OR cp.muted_until > NOW())
+       )) AS muted
+       FROM public.notifications n
+       WHERE n.user_id = $1 ${unreadOnly ? "AND n.read = FALSE" : ""}
+       ORDER BY n.created_at DESC LIMIT $2`,
       [auth.context.userId, limit],
       ),
       queryNeon<{ count: number }>(

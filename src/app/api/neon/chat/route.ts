@@ -76,7 +76,9 @@ export async function GET(request: Request) {
 
     if (mode === "channels") {
       const { rows } = await queryNeon(
-        `SELECT c.* FROM public.channels c WHERE ${ACCESS_SQL} ORDER BY c.created_at`,
+        `SELECT c.*, COALESCE(cp.mute_forever, FALSE) AS mute_forever, cp.muted_until
+           FROM public.channels c LEFT JOIN public.chat_notification_preferences cp ON cp.channel_id=c.id AND cp.user_id=$1
+           WHERE ${ACCESS_SQL} ORDER BY c.created_at`,
         [userId]
       );
       return NextResponse.json({ channels: rows });
@@ -84,7 +86,9 @@ export async function GET(request: Request) {
     if (mode === "sidebar") {
       const [channels, unread] = await Promise.all([
         queryNeon(
-          `SELECT c.* FROM public.channels c WHERE ${ACCESS_SQL} ORDER BY c.created_at`,
+          `SELECT c.*, COALESCE(cp.mute_forever, FALSE) AS mute_forever, cp.muted_until
+           FROM public.channels c LEFT JOIN public.chat_notification_preferences cp ON cp.channel_id=c.id AND cp.user_id=$1
+           WHERE ${ACCESS_SQL} ORDER BY c.created_at`,
           [userId],
         ),
         queryNeon<{ channel_id: string; count: number }>(

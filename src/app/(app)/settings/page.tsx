@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Bot, Check, Copy, Moon, Sun, Bell, Download, Smartphone, Shield, User, Camera, Wallet, PenLine, Plug } from "lucide-react";
 import { PageHeader, PageShell } from "@/components/mobile-ui";
 import { Button, Input, Select, Avatar, ProfileRoleBadges, PageLoader, ErrorState } from "@/components/ui";
+import { WorkspaceBotSettings } from "@/components/WorkspaceBotSettings";
 import { TeamTagEditor } from "@/components/TeamTagEditor";
 import { SystemHealthPanel } from "@/components/workspace/SystemHealthPanel";
 import { useTheme } from "@/components/ThemeProvider";
@@ -635,6 +636,8 @@ export default function SettingsPage() {
           </div>
         </section>
       )}
+
+      {profile && isAdmin(profile.role) && <WorkspaceBotSettings />}
 
       <section className="ticket-card divide-y divide-border overflow-hidden">
         <div className="flex min-h-20 items-center justify-between gap-4 p-5">

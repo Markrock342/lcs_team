@@ -16,6 +16,8 @@ export interface ActivityLog {
 }
 
 export interface AppNotification {
+  silent?: boolean;
+  muted?: boolean;
   id: string;
   user_id: string;
   title: string;

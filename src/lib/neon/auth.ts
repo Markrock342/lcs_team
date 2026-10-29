@@ -30,6 +30,7 @@ export async function getNeonAuthContext(): Promise<
     return { ok: false, status: 403, error: "ไม่พบโปรไฟล์สมาชิกใน Neon" };
   }
 
+  if (profile.account_type === "BOT") return { ok: false, status: 403, error: "บัญชี Bot ไม่สามารถเข้าสู่ระบบแบบสมาชิกได้" };
   return { ok: true, context: { userId: user.id, profile } };
 }
 

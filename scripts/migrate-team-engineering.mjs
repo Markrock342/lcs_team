@@ -4,7 +4,7 @@ import process from "node:process";
 import pg from "pg";
 import { runVerifiedMigration } from "./verified-migration.mjs";
 
-const requiredTables = ["ai_conversations", "ai_messages", "mcp_audit_logs"];
+const requiredTables = ["ai_conversations", "ai_messages", "mcp_audit_logs", "chat_notification_preferences"];
 
 function databaseUrl() {
   const raw = process.env.DATABASE_URL?.trim();
@@ -107,11 +107,29 @@ try {
   await verifyChatNotificationSchema(client);
   const engineeringSql = fs.readFileSync(new URL("./neon-team-engineering-workspace.sql", import.meta.url), "utf8");
   const tagsSql = fs.readFileSync(new URL("./neon-custom-team-tags.sql", import.meta.url), "utf8");
-  const sql = engineeringSql.replace(/COMMIT;\s*$/i, `${tagsSql}\nCOMMIT;\n`);
+  const muteSql = fs.readFileSync(new URL("./neon-chat-mutes.sql", import.meta.url), "utf8");
+  const sql = engineeringSql.replace(/COMMIT;\s*$/i, `${tagsSql}\n${muteSql}\nCOMMIT;\n`);
   const checked = await runVerifiedMigration(client, sql, exactCounts, requiredTables);
   console.log(
     `[neon-migration] Ready: checked ${checked} existing tables in one snapshot; all existing row counts preserved; required tables present`,
   );
+  if (process.env.LCS_MCP_APPLY_WRITE_MIGRATIONS === "true") {
+    const { rows: schema } = await client.query(`SELECT table_name,column_name,data_type,is_nullable
+      FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('profiles','messages','clients','channels','channel_members','notifications')
+      ORDER BY table_name,ordinal_position`);
+    const { rows: constraints } = await client.query(`SELECT conrelid::regclass::text AS table_name,conname,pg_get_constraintdef(oid) AS definition
+      FROM pg_constraint WHERE conrelid IN ('public.profiles'::regclass,'public.messages'::regclass,'public.clients'::regclass) AND contype='f'`);
+    console.log("[kim/preflight] Target schema metadata:", JSON.stringify({ columns:schema,foreignKeys:constraints }));
+    const { rows: existing } = await client.query(`SELECT count(*)::int AS count FROM public.profiles WHERE username='secretary-kim'`);
+    const botSql = fs.readFileSync(new URL("./neon-secretary-kim.sql", import.meta.url), "utf8");
+    const clientsSql = fs.readFileSync(new URL("./neon-mcp-client-writes.sql", import.meta.url), "utf8");
+    const unwrap = (source) => source.replace(/^\s*BEGIN;\s*/i, "").replace(/\s*COMMIT;\s*$/i, "");
+    const releaseSql = `BEGIN;\n${unwrap(botSql)}\n${unwrap(clientsSql)}\nCOMMIT;`;
+    const verified = await runVerifiedMigration(client, releaseSql, exactCounts,
+      ["workspace_bots","workspace_bot_channels","mcp_message_requests","mcp_business_requests"],
+      { profiles: existing[0].count === 0 ? 1 : 0 });
+    console.log(`[kim/migration] Ready: verified ${verified} existing tables; only the explicitly approved bot profile insert allowed; permissions disabled by default`);
+  }
 } finally {
   client.release();
   await pool.end();
