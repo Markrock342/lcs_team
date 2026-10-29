@@ -59,6 +59,7 @@ function chatRoute(failInbox = false, allow = true) {
       insertChatMessageNotifications: chatNotifications.insertChatMessageNotifications,
       processChatMessageNotifications: async () => { assert.equal(state.committed, true); state.pushed = true; },
     },
+    "@/lib/secretary-kim-auto-reply": { respondAsSecretaryKim: async () => {} },
   });
   return { route, state, jobs };
 }
@@ -73,8 +74,8 @@ test("message success includes a durable inbox before responding; push can finis
   assert.equal(response.status, 201);
   assert.deepEqual(state, { message: true, inbox: true, committed: true, pushed: false });
   assert.equal((await response.json()).message.content, "one\ntwo");
-  assert.equal(jobs.length, 1);
-  await jobs[0]();
+  assert.equal(jobs.length, 2);
+  await Promise.all(jobs.map((job) => job()));
   assert.equal(state.pushed, true);
 });
 

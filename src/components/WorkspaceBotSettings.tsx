@@ -40,7 +40,7 @@ export function WorkspaceBotSettings() {
  {error && <p role="alert" className="text-sm text-(--status-red-fg)">{error}</p>}
  {!config && !error && <p role="status" className="text-sm text-muted">กำลังโหลด…</p>}
  {config && !config.configured && <p className="text-sm text-muted">ยังไม่ได้เปิดใช้งานเลขาคิมบนเซิร์ฟเวอร์</p>}
- {config?.configured && config.bot && <><p className="text-sm leading-relaxed text-muted">เลขาคิมส่งได้เฉพาะแชทที่อนุญาตด้านล่าง และต้องมีผู้ใช้อนุมัติข้อความแต่ละครั้งในหน้า LCS ก่อนส่งจริง การเลือกห้อง DM เป็นการอนุญาตให้ Bot ร่วมส่งข้อความในห้องเดิม</p>
+ {config?.configured && config.bot && <><p className="text-sm leading-relaxed text-muted">อนุญาตห้องครั้งเดียวแล้วเรียก <strong>@เลขาคิม</strong> เพื่อให้ AI ตอบในห้องนั้นได้ทันที ไม่ต้องอนุมัติทุกคำตอบ ส่วนการสั่งส่งข้อความผ่าน ChatGPT Connector ยังใช้หน้าตรวจสอบก่อนส่งเพื่อป้องกันการส่งผิดห้อง</p>
  <Button variant="secondary" disabled={busy} onClick={() => void save({ enabled: !config.bot!.enabled })}>{config.bot.enabled ? "ระงับการส่งของเลขาคิม" : "เปิดใช้เลขาคิม"}</Button>
  <div className="divide-y divide-border">{config.channels?.map(channel => <label key={channel.id} className="flex min-h-14 items-center justify-between gap-3 py-3"><span className="min-w-0 break-words text-sm">{channel.kind === "dm" ? "DM · " : "#"}{channel.name}</span><input type="checkbox" aria-label={`อนุญาตเลขาคิมใน ${channel.name}`} checked={channel.allowed} disabled={busy} onChange={event => void save({ channel_id: channel.id, allowed: event.target.checked })} className="h-5 w-5 shrink-0 accent-accent"/></label>)}</div></>}
  </section>;

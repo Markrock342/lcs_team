@@ -131,7 +131,7 @@ try {
     const unwrap = (source) => source.replace(/^\s*BEGIN;\s*/i, "").replace(/\s*COMMIT;\s*$/i, "");
     const releaseSql = `BEGIN;\n${unwrap(botSql)}\n${unwrap(clientsSql)}\nCOMMIT;`;
     const verified = await runVerifiedMigration(client, releaseSql, exactCounts,
-      ["workspace_bots","workspace_bot_channels","mcp_message_requests","mcp_business_requests"],
+      ["workspace_bots","workspace_bot_channels","workspace_bot_responses","mcp_message_requests","mcp_business_requests"],
       { profiles: existing[0].count === 0 ? 1 : 0 });
     console.log(`[kim/migration] Ready: verified ${verified} existing tables; only the explicitly approved bot profile insert allowed; permissions disabled by default`);
   }

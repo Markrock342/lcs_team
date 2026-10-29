@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { loadSource } from "./helpers-load-source.ts";
 const infra = { "@/lib/neon/server": {}, "@/lib/notification-chat": {} };
@@ -14,6 +15,14 @@ test("new MCP writes are opt-in and never enabled by labels or caller-provided r
     assert.equal(messages.messagingEnabled("sale", { LCS_MCP_ENABLE_BOT_MESSAGING: "true" }), false);
     assert.equal(messages.messagingEnabled("admin", { LCS_MCP_ENABLE_BOT_MESSAGING: "TRUE" }), false);
     assert.equal(business.clientWritesEnabled("sale", { LCS_MCP_ENABLE_CLIENT_WRITES: "true" }), true);
+});
+test("เลขาคิม auto reply requires a granted room, an explicit mention, idempotency and rate limits", () => {
+    const source = readFileSync(new URL("../../src/lib/secretary-kim-auto-reply.ts", import.meta.url), "utf8");
+    assert.match(source, /JOIN public\.workspace_bot_channels/);
+    assert.equal(source.includes("@(เลขาคิม|secretary-kim)"), true);
+    assert.match(source, /ON CONFLICT DO NOTHING/);
+    assert.equal(source.includes("minute_count ?? 0) >= 5"), true);
+    assert.equal(source.includes("day_count ?? 0) >= 100"), true);
 });
 test("strict schemas reject self-approval and prevent partial updates from resetting omitted client fields", () => {
     assert.equal(messages.sendMessageSchema.safeParse({ channel_id: actor, message: "Hi", confirm: true }).success, false);

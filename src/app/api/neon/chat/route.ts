@@ -3,9 +3,11 @@ import { getNeonAuthContext } from "@/lib/neon/auth";
 import { queryNeon, withNeonTransaction } from "@/lib/neon/server";
 
 import { insertChatMessageNotifications, processChatMessageNotifications } from "@/lib/notification-chat";
+import { respondAsSecretaryKim } from "@/lib/secretary-kim-auto-reply";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type Row = Record<string, unknown>;
@@ -241,6 +243,10 @@ export async function POST(request: Request) {
       after(async () => {
         try { await processChatMessageNotifications(message.id); }
         catch (error) { console.error("[chat/push-notifications]", error); }
+      });
+      after(async () => {
+        try { await respondAsSecretaryKim(message.id); }
+        catch (error) { console.error("[chat/secretary-kim]", error); }
       });
       return NextResponse.json({ message }, { status: 201 });
     }
