@@ -1054,7 +1054,7 @@ function ChatPageContent() {
       <aside
         className={`${
           showMobileChannels ? "flex" : "hidden"
-        } min-h-0 w-full shrink-0 flex-col overflow-y-auto overscroll-contain scroll-touch bg-surface-soft lg:flex lg:w-64 lg:overflow-hidden lg:border-r lg:border-border`}
+        } h-full min-h-0 w-full flex-col overflow-y-auto overscroll-contain scroll-touch bg-surface-soft lg:flex lg:w-64 lg:shrink-0 lg:overflow-hidden lg:border-r lg:border-border`}
       >
         <div className="sticky top-0 z-10 flex min-h-16 shrink-0 items-center justify-between border-b border-border bg-surface-soft px-4 lg:static">
           <div>
