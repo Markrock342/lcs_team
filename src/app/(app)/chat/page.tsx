@@ -1054,9 +1054,9 @@ function ChatPageContent() {
       <aside
         className={`${
           showMobileChannels ? "flex" : "hidden"
-        } min-h-0 w-full shrink-0 flex-col bg-surface-soft lg:flex lg:w-64 lg:border-r lg:border-border`}
+        } min-h-0 w-full shrink-0 flex-col overflow-y-auto overscroll-contain scroll-touch bg-surface-soft lg:flex lg:w-64 lg:overflow-hidden lg:border-r lg:border-border`}
       >
-        <div className="flex min-h-16 items-center justify-between border-b border-border px-4">
+        <div className="sticky top-0 z-10 flex min-h-16 shrink-0 items-center justify-between border-b border-border bg-surface-soft px-4 lg:static">
           <div>
             <p className="ticket-kicker">ทีม · แชท</p>
             <h2 className="mt-0.5 font-semibold">ช่องสนทนา</h2>
@@ -1071,7 +1071,7 @@ function ChatPageContent() {
           </button>
         </div>
 
-        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-touch p-2 space-y-3">
+        <nav className="shrink-0 space-y-3 p-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:scroll-touch">
           <div className="space-y-0.5">
             <p className="px-3 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
               ช่อง
@@ -1140,14 +1140,14 @@ function ChatPageContent() {
         </nav>
 
         {/* Team presence */}
-        <div className="border-t border-border p-4">
+        <div className="shrink-0 border-t border-border p-3 lg:p-4">
           <p className="mb-3 flex items-center gap-1.5 text-xs font-medium text-muted">
             <Users size={12} /> ทีม — {profiles.length}
             <span className="normal-case tracking-normal">
               · {profiles.filter((p) => onlineIds.has(p.id) || isOnline(p.last_seen_at)).length} ออนไลน์
             </span>
           </p>
-          <div className="max-h-40 space-y-3 overflow-y-auto overscroll-contain scroll-touch">
+          <div className="space-y-1 lg:max-h-40 lg:space-y-3 lg:overflow-y-auto lg:overscroll-contain lg:scroll-touch">
             {profiles.map((p) => {
               const online = onlineIds.has(p.id) || isOnline(p.last_seen_at);
               const isSelf = p.id === currentUser?.id;

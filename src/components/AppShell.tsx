@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Search } from "lucide-react";
+import { LogOut, Menu, Search } from "lucide-react";
 import { Suspense, useState, useRef, useEffect } from "react";
 import { InAppNotificationToasts } from "./InAppNotificationToasts";
 import { CommandPalette } from "./CommandPalette";
 import { ActionFeedbackProvider } from "./workspace/ActionFeedback";
 import { createClient } from "@/lib/supabase/client";
-import { Avatar, ProfileRoleBadges } from "./ui";
+import { Avatar, Drawer, ProfileRoleBadges } from "./ui";
 import { Logo } from "./Logo";
 import { NotificationProvider } from "./NotificationProvider";
 import { ThemeToggle } from "./ThemeToggle";
@@ -16,7 +16,7 @@ import { NotificationBell } from "./NotificationBell";
 import { getPageTitle } from "./mobile-ui";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 import { useChatUnreadTotal } from "@/hooks/useChatUnread";
-import { MAIN_NAV, DESKTOP_SECONDARY_NAV, MOBILE_NAV, isNavActive, filterNavByAccess } from "@/lib/nav";
+import { MAIN_NAV, EXTRA_NAV, DESKTOP_SECONDARY_NAV, MOBILE_NAV, isNavActive, filterNavByAccess } from "@/lib/nav";
 import { RoleProvider } from "./RoleProvider";
 import { canViewFinance } from "@/lib/permissions";
 import type { Profile } from "@/lib/types";
@@ -25,10 +25,12 @@ function NavLinks({
   items,
   pathname,
   chatUnread = 0,
+  onNavigate,
 }: {
   items: typeof MAIN_NAV;
   pathname: string;
   chatUnread?: number;
+  onNavigate?: () => void;
 }) {
   return (
     <>
@@ -39,7 +41,8 @@ function NavLinks({
           <Link
             key={href}
             href={href}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+            onClick={onNavigate}
+            className={`flex min-h-11 items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
               active
                 ? "bg-accent/10 text-accent"
                 : "text-muted hover:text-foreground hover:bg-card-hover"
@@ -70,6 +73,7 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const isConversation = pathname === "/chat" || pathname.startsWith("/chat/") || pathname === "/assistant";
@@ -78,6 +82,7 @@ export function AppShell({
   const access = { canViewFinance: financeAccess, isGuest: profile?.role === "guest" };
   const mainNav = filterNavByAccess(MAIN_NAV, access);
   const extraNav = filterNavByAccess(DESKTOP_SECONDARY_NAV, access);
+  const allExtraNav = filterNavByAccess(EXTRA_NAV, access);
   const mobileNav = filterNavByAccess(MOBILE_NAV, access);
   const chatUnread = useChatUnreadTotal();
 
@@ -182,7 +187,15 @@ export function AppShell({
       <header className="lg:hidden fixed top-0 inset-x-0 z-40 bg-sidebar border-b border-border pt-safe">
         <div className="flex items-center justify-between gap-2 px-3 h-14 max-w-[100vw]">
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            <Logo size="xs" />
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover hover:text-foreground"
+              aria-label="เปิดเมนูทั้งหมด"
+              aria-expanded={mobileMenuOpen}
+            >
+              <Menu size={20} />
+            </button>
             <span className="font-semibold text-sm truncate">{getPageTitle(pathname)}</span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -194,12 +207,14 @@ export function AppShell({
             >
               <Search size={18} />
             </button>
-            <ThemeToggle />
+            <div className="hidden min-[420px]:block">
+              <ThemeToggle />
+            </div>
             <Suspense fallback={null}>
               <NotificationBell />
             </Suspense>
             {profile && (
-              <div className="relative" ref={profileRef}>
+              <div className="relative hidden min-[360px]:block" ref={profileRef}>
                 <button
                   type="button"
                   onClick={() => setProfileOpen(!profileOpen)}
@@ -307,6 +322,50 @@ export function AppShell({
           })}
         </div>
       </nav>
+
+      <Drawer open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} title="เมนูทั้งหมด">
+        <div className="space-y-6 pb-safe">
+          <div className="flex items-center gap-3 rounded-2xl bg-surface-soft p-3">
+            <Logo size="sm" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold">Limit Code Studio</p>
+              <p className="text-sm text-muted">พื้นที่ทำงานทีม</p>
+            </div>
+            <ThemeToggle />
+          </div>
+
+          {profile && (
+            <div className="flex items-center gap-3 px-1">
+              <Avatar name={profile.display_name} src={profile.avatar_url} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{profile.display_name}</p>
+                <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                  <p className="truncate text-xs text-muted">@{profile.username}</p>
+                  <ProfileRoleBadges profile={profile} size="xs" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <nav aria-label="เมนูหลักบนมือถือ" className="space-y-1">
+            <p className="px-3 pb-1 text-xs font-semibold text-muted">ใช้บ่อย</p>
+            <NavLinks items={mainNav} pathname={pathname} chatUnread={chatUnread} onNavigate={() => setMobileMenuOpen(false)} />
+          </nav>
+
+          <nav aria-label="เครื่องมือทั้งหมดบนมือถือ" className="space-y-1 border-t border-border pt-4">
+            <p className="px-3 pb-1 text-xs font-semibold text-muted">เครื่องมือทั้งหมด</p>
+            <NavLinks items={allExtraNav} pathname={pathname} chatUnread={chatUnread} onNavigate={() => setMobileMenuOpen(false)} />
+          </nav>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-(--status-red-fg) hover:bg-(--status-red-bg)"
+          >
+            <LogOut size={20} /> ออกจากระบบ
+          </button>
+        </div>
+      </Drawer>
 
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>

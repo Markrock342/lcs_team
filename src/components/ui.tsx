@@ -517,7 +517,7 @@ export function Drawer({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="relative flex h-full w-full max-w-lg flex-col bg-card shadow-(--shadow-float) animate-slide-up"
+        className="relative flex h-dvh w-full max-w-lg flex-col bg-card pt-safe pb-safe shadow-(--shadow-float) animate-slide-up"
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-lg font-semibold">{title}</h2>

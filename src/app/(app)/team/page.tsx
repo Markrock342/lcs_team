@@ -114,7 +114,7 @@ export default function TeamPage() {
 
       {error && <ErrorState description={error} onRetry={() => { setLoading(true); void load(); }} />}
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-3">
         <MetricTile label="สมาชิก" value={`${members.length} คน`} icon={<UsersRound size={18} />} />
         <MetricTile label="ออนไลน์" value={`${onlineCount} คน`} />
         <MetricTile label="งานค้าง" value={`${openTaskCount} งาน`} />
@@ -138,7 +138,7 @@ export default function TeamPage() {
             const online = isOnline(member.last_seen_at);
             const openTasks = openByMember[member.id] ?? 0;
             return (
-              <article key={member.id} className="flex items-start gap-4 p-5">
+              <article key={member.id} className="flex items-start gap-3 p-4 sm:gap-4 sm:p-5">
                 <Avatar name={member.display_name} src={member.avatar_url} size="lg" />
                 <div className="min-w-0 flex-1 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
