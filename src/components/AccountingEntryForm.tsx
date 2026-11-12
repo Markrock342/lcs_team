@@ -126,8 +126,7 @@ export function AccountingEntryForm({
       />
 
       <FormDisclosure
-        title="รายละเอียดเพิ่มเติม"
-        hint="VAT · สมาชิก · ลูกค้า · หมายเหตุ"
+        title="VAT · สมาชิก · ลูกค้า · หมายเหตุ"
         defaultOpen={hasExtra}
       >
         <Input

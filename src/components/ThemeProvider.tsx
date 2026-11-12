@@ -12,11 +12,14 @@ function validTheme(value: unknown): value is ThemeMode {
   return value === "dark" || value === "light";
 }
 
+// ค่าเริ่มต้นคือธีมสว่างเสมอ — ธีมมืดเปิดเมื่อผู้ใช้กดสลับเองบนเครื่องนั้นเท่านั้น
+// (ค่า theme ในโปรไฟล์เคยมี default เป็น dark จึงไม่ใช้เป็นตัวตัดสินอีก)
+const THEME_CHOICE_KEY = "lcs-theme-choice";
+
 function syncThemeDocument(theme: ThemeMode) {
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme;
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#141619" : "#f5f6f8");
-  try { localStorage.setItem("lcs-theme", theme); } catch { /* Theme still works when storage is unavailable. */ }
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -24,27 +27,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const revision = useRef(0);
 
   useEffect(() => {
-    let cancelled = false;
     const initial = document.documentElement.dataset.theme;
     const selected = validTheme(initial) ? initial : "light";
     syncThemeDocument(selected);
     // Synchronize the persisted preference installed before hydration.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setThemeState(selected);
-    const version = revision.current;
-    void neonRequest<{ profile: { theme?: ThemeMode | null } }>("/api/neon/profiles?me=1", { cache: "no-store" })
-      .then(({ profile }) => {
-        if (cancelled || revision.current !== version || !validTheme(profile.theme)) return;
-        setThemeState(profile.theme);
-        syncThemeDocument(profile.theme);
-      }).catch(() => {});
-    return () => { cancelled = true; };
   }, []);
 
   function setTheme(next: ThemeMode) {
     revision.current += 1;
     setThemeState(next);
     syncThemeDocument(next);
+    try { localStorage.setItem(THEME_CHOICE_KEY, next); } catch { /* Theme still works when storage is unavailable. */ }
     void neonRequest("/api/neon/profiles", { method: "PATCH", body: JSON.stringify({ data: { theme: next } }) }).catch(() => {});
   }
 

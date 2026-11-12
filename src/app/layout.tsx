@@ -38,7 +38,7 @@ export default function RootLayout({
   return (
     <html lang="th" className="h-full" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: `(function(){var t="light";try{var s=localStorage.getItem("lcs-theme");if(s==="light"||s==="dark")t=s;else if(window.matchMedia("(prefers-color-scheme: dark)").matches)t="dark";}catch(e){}document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;})();` }} />
+        <script dangerouslySetInnerHTML={{ __html: `(function(){var t="light";try{var s=localStorage.getItem("lcs-theme-choice");if(s==="light"||s==="dark")t=s;}catch(e){}document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;})();` }} />
       </head>
       <body className="min-h-full antialiased bg-background text-foreground">
         <ThemeProvider>

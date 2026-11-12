@@ -207,7 +207,7 @@ export function AppShell({
             >
               <Search size={18} />
             </button>
-            <div className="hidden min-[420px]:block">
+            <div className="hidden min-[390px]:block">
               <ThemeToggle />
             </div>
             <Suspense fallback={null}>

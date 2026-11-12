@@ -358,9 +358,7 @@ export default function ClientsPage() {
       <PageHeader
         title="ลูกค้า"
         description={
-          canEdit
-            ? "ติดตามสถานะ ผู้ติดต่อ งาน และพอร์ทัลของลูกค้า"
-            : "โหมดดูอย่างเดียว (Guest)"
+          canEdit ? undefined : "โหมดดูอย่างเดียว (Guest)"
         }
         action={
           canEdit ? (
@@ -550,13 +548,7 @@ export default function ClientsPage() {
       >
         <form onSubmit={handleSave} className="space-y-7">
           <FormError message={uploadError} />
-          {!editing && (
-            <p className="text-[0.9375rem] leading-snug text-muted">
-              กรอกแค่ชื่อก็บันทึกได้ ส่วนที่เหลือกลับมาเติมทีหลังได้
-            </p>
-          )}
-
-          <FormSection step={1} title="ลูกค้าและงาน" hint="ชื่อที่ทีมใช้เรียก และประเภทงานที่รับ">
+          <FormSection step={1} title="ลูกค้าและงาน">
             <Input
               label="ชื่อลูกค้า / โปรเจกต์ *"
               value={form.name}
@@ -569,7 +561,6 @@ export default function ClientsPage() {
               label="บริษัท / หน่วยงาน"
               value={form.company}
               onChange={(e) => setForm({ ...form, company: e.target.value })}
-              placeholder="เช่น บริษัท เอบีซี จำกัด"
               autoComplete="organization"
               enterKeyHint="next"
             />
@@ -593,12 +584,11 @@ export default function ClientsPage() {
             />
           </FormSection>
 
-          <FormSection step={2} title="ผู้ติดต่อ" hint="คนที่ทีมต้องโทรหรือส่งอีเมลหา">
+          <FormSection step={2} title="ผู้ติดต่อ">
             <Input
               label="ชื่อผู้ติดต่อ"
               value={form.contact_name}
               onChange={(e) => setForm({ ...form, contact_name: e.target.value })}
-              placeholder="เช่น คุณสมชาย"
               autoComplete="name"
               enterKeyHint="next"
             />
@@ -628,9 +618,9 @@ export default function ClientsPage() {
             </div>
           </FormSection>
 
-          <FormSection step={3} title="รายละเอียดงาน" hint="ขอบเขตงานและงบที่คุยกันไว้">
+          <FormSection step={3} title="รายละเอียดงาน">
             <Textarea
-              label="ลูกค้าต้องการอะไร"
+              label="รายละเอียด"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               rows={3}
@@ -641,14 +631,12 @@ export default function ClientsPage() {
               required={false}
               value={form.budget}
               onChange={(budget) => setForm({ ...form, budget })}
-              hint={form.budget ? undefined : "เว้นว่างได้ถ้ายังไม่สรุป"}
             />
             <Textarea
-              label="หมายเหตุภายในทีม"
+              label="หมายเหตุ"
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
               rows={2}
-              placeholder="เช่น ลูกค้าสะดวกคุยช่วงบ่าย"
             />
           </FormSection>
 
@@ -661,7 +649,6 @@ export default function ClientsPage() {
             <Link2 size={20} className="shrink-0 text-accent" />
             <span className="min-w-0 flex-1">
               <span className="block text-base font-medium leading-snug">ลิงก์โปรเจกต์ · ภาพปก{editing ? " · พอร์ทัล · ไฟล์" : ""}</span>
-              <span className="block text-sm leading-snug text-muted">ไม่บังคับ</span>
             </span>
             <ChevronDown size={18} className={`shrink-0 text-muted transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
           </button>
@@ -803,7 +790,7 @@ export default function ClientsPage() {
             </button>
           )}
 
-          <FormActions summary={form.name.trim() ? undefined : "ใส่ชื่อลูกค้าก่อนบันทึก"}>
+          <FormActions>
             <Button type="submit" loading={saving}>
               {editing ? "บันทึกการแก้ไข" : "เพิ่มลูกค้า"}
             </Button>

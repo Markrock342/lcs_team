@@ -170,7 +170,7 @@ export default function PortalPage({ params }: { params: Promise<{ token: string
                     <div className="h-full bg-accent rounded-full" style={{ width: `${t.progress}%` }} />
                   </div>
                   {!authorName.trim() && (
-                    <p className="mt-3 text-sm text-muted">กรอกชื่อของคุณในช่องแสดงความคิดเห็นด้านล่างก่อน จึงจะอนุมัติหรือขอแก้ไขได้</p>
+                    <p className="mt-3 text-sm text-muted">กรอกชื่อด้านล่างก่อนอนุมัติ</p>
                   )}
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <button

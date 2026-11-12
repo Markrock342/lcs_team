@@ -1,6 +1,5 @@
 "use client";
 
-import { PiggyBank } from "lucide-react";
 import { Button, Input, Textarea } from "@/components/ui";
 import {
   AmountField,
@@ -45,13 +44,8 @@ export function QuickFundForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
-      <p className="flex items-start gap-2.5 rounded-2xl bg-surface-soft p-4 text-[0.9375rem] leading-snug">
-        <PiggyBank size={20} className="mt-0.5 shrink-0 text-(--status-green-fg)" />
-        เงินที่สมาชิกจ่ายเข้ากองกลาง ระบบจะนับเป็นเงินเข้าของทีม
-      </p>
-
       <PersonPicker
-        label="ใครจ่ายเข้ากองกลาง"
+        label="ใครจ่าย"
         value={form.contributor_id}
         onChange={(contributor_id) => onChange({ ...form, contributor_id })}
         people={members.map((m) => ({
@@ -88,7 +82,7 @@ export function QuickFundForm({
 
       <SlipField label="สลิป (ไม่บังคับ)" file={slipFile} onChange={onSlipChange} />
 
-      <FormDisclosure title="หมายเหตุ" hint="ไม่บังคับ" defaultOpen={!!form.notes}>
+      <FormDisclosure title="หมายเหตุ" defaultOpen={!!form.notes}>
         <Textarea
           aria-label="หมายเหตุ"
           value={form.notes}
@@ -101,7 +95,7 @@ export function QuickFundForm({
         summary={
           contributor
             ? `${contributor.display_name} จ่ายเข้ากองกลาง${validAmount ? ` · ${formatBaht(amount)}` : ""}`
-            : "เลือกคนจ่ายก่อนบันทึก"
+            : undefined
         }
       >
         <Button type="submit" loading={saving} disabled={!form.contributor_id}>

@@ -140,13 +140,13 @@ export function PageHeader({ title, description, action, kicker }: PageHeaderPro
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="ticket-kicker">{stamp}</p>
-        <div className="ticket-rule mt-2 mb-3" />
-        <h1 className="text-[1.65rem] sm:text-[1.85rem] font-semibold leading-snug">
+        <p className="ticket-kicker max-sm:hidden">{stamp}</p>
+        <div className="ticket-rule mt-2 mb-3 max-sm:hidden" />
+        <h1 className="text-2xl sm:text-[1.85rem] font-semibold leading-snug">
           {title}
         </h1>
         {description && (
-          <p className="text-muted mt-1.5 text-[0.9375rem] leading-relaxed max-w-2xl">
+          <p className="text-muted mt-1.5 text-[0.9375rem] leading-relaxed max-w-2xl max-sm:hidden">
             {description}
           </p>
         )}

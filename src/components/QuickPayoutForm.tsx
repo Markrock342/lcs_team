@@ -121,7 +121,7 @@ export function QuickPayoutForm({
 
       <SlipField label="สลิปการโอน" file={slipFile} onChange={onSlipChange} />
 
-      <FormDisclosure title="หมายเหตุ" hint="ไม่บังคับ" defaultOpen={!!form.notes}>
+      <FormDisclosure title="หมายเหตุ" defaultOpen={!!form.notes}>
         <Textarea
           aria-label="หมายเหตุ"
           value={form.notes}
@@ -134,7 +134,7 @@ export function QuickPayoutForm({
         summary={
           selectedPayee
             ? `โอนให้ ${selectedPayee.display_name}${validAmount ? ` · ${formatBaht(amount)}` : ""}`
-            : "เลือกคนรับโอนก่อนบันทึก"
+            : undefined
         }
       >
         <Button type="submit" loading={saving} disabled={!form.payee_id}>

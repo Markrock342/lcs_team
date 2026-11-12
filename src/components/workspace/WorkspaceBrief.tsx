@@ -209,7 +209,7 @@ export function WorkspaceBrief() {
             }}
           />
           <div className="mt-2 flex items-center justify-between gap-3">
-            <p className="text-sm text-muted">
+            <p className="text-sm text-muted max-sm:invisible">
               <CornerDownLeft size={14} className="mr-1 inline align-[-2px]" />
               Enter เพื่อสรุป
             </p>

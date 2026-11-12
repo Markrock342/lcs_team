@@ -124,7 +124,6 @@ export function QuickIncomeForm({ onDone }: Props) {
         <div className="space-y-4 py-6 text-center">
           <FormError message={error} />
           <p className="text-base">ไม่มีใบแจ้งหนี้ค้างชำระ</p>
-          <p className="text-sm text-muted">รับเงินลูกค้าได้เมื่อมีใบแจ้งหนี้ที่ยังไม่ปิดยอด</p>
           <Link
             href="/invoices"
             className="inline-flex min-h-11 items-center justify-center rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent"
@@ -147,7 +146,7 @@ export function QuickIncomeForm({ onDone }: Props) {
     return (
       <div className="space-y-3">
         <FormError message={error} />
-        <p className="text-[0.9375rem] text-muted">เลือกใบแจ้งหนี้ที่ลูกค้าจ่ายเงินเข้ามา</p>
+        <p className="text-sm font-medium text-muted">เลือกใบแจ้งหนี้</p>
         {invoices.length > 5 && (
           <Input
             aria-label="ค้นหาใบแจ้งหนี้"

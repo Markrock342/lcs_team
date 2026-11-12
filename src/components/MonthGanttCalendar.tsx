@@ -187,7 +187,6 @@ export function MonthGanttCalendar({
         <div className="border-t border-border bg-surface-raised">
           <div className="px-4 pb-2 pt-4">
             <p className="text-base font-semibold text-foreground">งานที่มีกำหนด ({scheduled.length})</p>
-            <p className="text-sm text-muted">แตะแถบสีหรือชื่องานเพื่อดูว่าอยู่ช่วงไหนของปฏิทิน</p>
           </div>
           <ul className="divide-y divide-border">
             {scheduled.map((t) => {

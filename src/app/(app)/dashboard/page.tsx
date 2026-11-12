@@ -185,10 +185,6 @@ export default function DashboardPage() {
         }
       />
 
-      <WorkspaceBrief />
-
-      <PressFeatureCard />
-
       <QuickActionGrid
         actions={[
           {
@@ -479,6 +475,9 @@ export default function DashboardPage() {
           />
         </Link>
       </Card>
+      <WorkspaceBrief />
+
+      <PressFeatureCard />
     </PageShell>
   );
 }

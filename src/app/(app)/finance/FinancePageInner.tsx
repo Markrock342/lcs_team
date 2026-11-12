@@ -188,7 +188,7 @@ function ActionTile({
     <button
       type="button"
       onClick={onClick}
-      className="ticket-card flex min-h-28 flex-col items-start gap-2.5 p-4 text-left transition-colors hover:bg-card-hover active:scale-[0.99] touch-manipulation"
+      className="ticket-card flex min-h-24 flex-col items-start gap-2 p-4 text-left transition-colors hover:bg-card-hover active:scale-[0.99] touch-manipulation"
     >
       <span className={`flex size-10 items-center justify-center rounded-xl ${ACTION_TONES[tone]}`}>
         {icon}
@@ -696,13 +696,6 @@ export default function FinancePageInner() {
             >
               {signedMoney(summary.net)}
             </p>
-            <p className="mt-1 text-sm text-muted">
-              {flowTotal === 0
-                ? "ยังไม่มีรายการในช่วงนี้"
-                : summary.net >= 0
-                  ? "เงินเข้ามากกว่าเงินออก"
-                  : "เงินออกมากกว่าเงินเข้า"}
-            </p>
           </div>
 
           {flowTotal > 0 && (
@@ -759,14 +752,14 @@ export default function FinancePageInner() {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <ActionTile
             label="รับเงินลูกค้า"
-            hint="เงินเข้า · ตามใบแจ้งหนี้"
+            hint="เงินเข้า"
             tone="green"
             icon={<ArrowDownLeft size={20} />}
             onClick={() => setIncomeOpen(true)}
           />
           <ActionTile
             label="จ่ายเพื่อน"
-            hint="เงินออก · โอนให้ทีม"
+            hint="เงินออก"
             tone="red"
             icon={<ArrowUpRight size={20} />}
             onClick={() => {
@@ -776,7 +769,7 @@ export default function FinancePageInner() {
           />
           <ActionTile
             label="เก็บกองกลาง"
-            hint="เงินเข้า · จากสมาชิก"
+            hint="เงินเข้า"
             tone="amber"
             icon={<PiggyBank size={20} />}
             onClick={() => {
@@ -786,7 +779,7 @@ export default function FinancePageInner() {
           />
           <ActionTile
             label="รายการอื่น"
-            hint="รายรับ/รายจ่ายทั่วไป"
+            hint="เข้า / ออก"
             tone="blue"
             icon={<Plus size={20} />}
             onClick={() => openManualEntry("expense")}
@@ -799,9 +792,7 @@ export default function FinancePageInner() {
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-base font-semibold">รายการบัญชี</h2>
-              <p className="text-sm text-muted">
-                {filteredTransactions.length} รายการ · {periodLabel(period)}
-              </p>
+              <p className="text-sm text-muted">{filteredTransactions.length} รายการ</p>
             </div>
             <Link
               href="/invoices"
@@ -951,16 +942,9 @@ export default function FinancePageInner() {
                               {money(entry.amount)}
                             </span>
                           </span>
-                          <span className="mt-0.5 block text-sm leading-snug text-muted line-clamp-2">
-                            {entry.subtitle}
-                          </span>
-                          <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.8125rem] text-muted">
-                            <span>{sourceLabel(transaction.source_type)}</span>
-                            {transaction.slip_url && (
-                              <span className="inline-flex items-center gap-1 text-accent">
-                                <Paperclip size={13} /> มีสลิป
-                              </span>
-                            )}
+                          <span className="mt-0.5 flex items-center gap-1.5 text-sm leading-snug text-muted">
+                            <span className="min-w-0 truncate">{entry.subtitle}</span>
+                            {transaction.slip_url && <Paperclip size={14} className="shrink-0 text-accent" aria-label="มีสลิป" />}
                           </span>
                         </span>
                       </button>

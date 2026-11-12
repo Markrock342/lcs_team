@@ -108,7 +108,7 @@ export function CardHeader({
           {icon}
           <span className="line-clamp-2 wrap-anywhere">{title}</span>
         </h2>
-        {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
+        {description && <p className="mt-0.5 text-sm text-muted max-sm:hidden">{description}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </header>
