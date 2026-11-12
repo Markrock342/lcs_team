@@ -27,6 +27,18 @@ export function PWARegister() {
   const router = useRouter();
 
   useEffect(() => {
+    // แอปที่ติดตั้งแล้ว (Android) ล็อกแนวตั้งได้จริง — เบราว์เซอร์ทั่วไปจะปฏิเสธ ซึ่งไม่เป็นไร
+    const orientation = screen.orientation as ScreenOrientation & {
+      lock?: (orientation: "portrait") => Promise<void>;
+    };
+    try {
+      void orientation?.lock?.("portrait")?.catch(() => {});
+    } catch {
+      /* ไม่รองรับการล็อก — ใช้แผ่นบังแนวนอนใน globals.css แทน */
+    }
+  }, []);
+
+  useEffect(() => {
     if ("serviceWorker" in navigator) {
       if (process.env.NODE_ENV === "development") {
         navigator.serviceWorker.getRegistrations().then((regs) => {
