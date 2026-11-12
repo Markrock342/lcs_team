@@ -134,6 +134,7 @@ function ChatPageContent() {
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [slashNotice, setSlashNotice] = useState("");
   const [composerEmojiOpen, setComposerEmojiOpen] = useState(false);
+  const [composerToolsOpen, setComposerToolsOpen] = useState(false);
   const [gifPickerOpen, setGifPickerOpen] = useState(false);
   const recentGifs = useMemo(() => recentChatGifs(
     [...messages, ...threadMessages]
@@ -1508,7 +1509,7 @@ function ChatPageContent() {
                 <select
                   value={linkedTaskId}
                   onChange={(e) => setLinkedTaskId(e.target.value)}
-                  className="mb-2 min-h-11 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm max-[380px]:min-h-10 max-[380px]:py-1"
+                  className="mb-2 min-h-11 w-full rounded-xl border border-border bg-background px-3 py-2 text-base sm:text-sm"
                   aria-label="แนบลิงก์งาน"
                 >
                   <option value="">แนบลิงก์งาน (ไม่บังคับ)</option>
@@ -1519,7 +1520,19 @@ function ChatPageContent() {
                   ))}
                 </select>
               )}
-              <div className="flex items-end gap-1 rounded-xl border border-border bg-background p-1.5 focus-within:border-accent sm:gap-2">
+              <div className="relative flex items-end gap-1 rounded-xl border border-border bg-background p-1.5 focus-within:border-accent sm:gap-2">
+                <button
+                  type="button"
+                  onClick={() => setComposerToolsOpen((open) => !open)}
+                  className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-card-hover hover:text-foreground sm:hidden"
+                  aria-label="แนบไฟล์ อิโมจิ หรือ GIF"
+                  aria-expanded={composerToolsOpen}
+                >
+                  <Plus size={20} className={`transition-transform ${composerToolsOpen ? "rotate-45" : ""}`} />
+                </button>
+                <div
+                  className={`${composerToolsOpen ? "max-sm:flex" : "max-sm:hidden"} max-sm:absolute max-sm:bottom-full max-sm:left-0 max-sm:z-20 max-sm:mb-2 max-sm:gap-1 max-sm:rounded-xl max-sm:border max-sm:border-border max-sm:bg-card max-sm:p-1 max-sm:shadow-(--shadow-float) sm:contents`}
+                >
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -1528,6 +1541,7 @@ function ChatPageContent() {
                   onChange={(e) => {
                     selectAttachment(Array.from(e.target.files ?? []));
                     e.target.value = "";
+                    setComposerToolsOpen(false);
                   }}
                 />
                 <button
@@ -1556,13 +1570,15 @@ function ChatPageContent() {
                     onPick={(emoji) => {
                       mentionInputRef.current?.insertAtCursor(emoji);
                       setComposerEmojiOpen(false);
+                      setComposerToolsOpen(false);
                     }}
                   />
                 </div>
                 <button type="button" disabled={sending || !!editingMessage}
-                  onClick={() => { setComposerEmojiOpen(false); setGifPickerOpen(true); }}
+                  onClick={() => { setComposerEmojiOpen(false); setComposerToolsOpen(false); setGifPickerOpen(true); }}
                   aria-label="เลือก GIF" aria-haspopup="dialog"
                   className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-muted hover:bg-card-hover hover:text-foreground disabled:opacity-40">GIF</button>
+                </div>
                 <ChatMentionInput
                   ref={mentionInputRef}
                   value={content}
@@ -1608,7 +1624,7 @@ function ChatPageContent() {
                   {sending ? <X size={18} /> : <Send size={18} />}
                 </button>
               </div>
-              <p id="chat-composer-hint" className="mt-2 px-1 text-xs text-muted max-[380px]:hidden">
+              <p id="chat-composer-hint" className="mt-2 hidden px-1 text-xs text-muted sm:block">
                 Enter เพื่อส่ง · Shift+Enter เพื่อขึ้นบรรทัดใหม่
                 <span className="hidden sm:inline"> · ลากไฟล์มาวางเพื่อแนบ</span>
               </p>

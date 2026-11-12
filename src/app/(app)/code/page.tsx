@@ -366,12 +366,12 @@ export default function CodeWorkspacePage() {
             <>
               <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-3 sm:px-4">
                 <button type="button" onClick={() => setMobilePane("files")} className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-card-hover lg:hidden" aria-label="กลับไปรายการไฟล์"><ArrowLeft size={18} /></button>
-                <FileText size={17} className="shrink-0 text-accent" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{file.path}</p>
-                  <p className="text-xs text-muted">{languageFromPath(file.path)} · {(file.size / 1024).toFixed(1)} KB</p>
+                <FileText size={17} className="hidden shrink-0 text-accent sm:block" />
+                <div className="order-last min-w-0 basis-full sm:order-none sm:flex-1 sm:basis-0">
+                  <p className="text-[0.9375rem] font-semibold leading-snug wrap-anywhere sm:truncate sm:text-sm">{file.path}</p>
+                  <p className="text-[0.8125rem] text-muted">{languageFromPath(file.path)} · {(file.size / 1024).toFixed(1)} KB</p>
                 </div>
-                <button type="button" onClick={() => void copyCode()} className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm text-muted hover:bg-card-hover hover:text-foreground" aria-label="คัดลอกโค้ด">
+                <button type="button" onClick={() => void copyCode()} className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-xl px-3 text-sm text-muted hover:bg-card-hover hover:text-foreground max-sm:ml-auto" aria-label="คัดลอกโค้ด">
                   {copied ? <Check size={16} className="text-(--status-green-fg)" /> : <Clipboard size={16} />}
                   <span className="hidden sm:inline">{copied ? "คัดลอกแล้ว" : "คัดลอก"}</span>
                 </button>

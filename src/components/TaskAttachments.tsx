@@ -164,7 +164,7 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
       />
 
       {dbError && <p className="text-xs text-amber-400">{dbError}</p>}
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-(--status-red-fg)">{error}</p>}
 
       {items.length > 0 && (
         <div className={compact ? "flex flex-wrap gap-2" : "space-y-1"}>
@@ -247,22 +247,24 @@ export function TaskAttachments({ taskId, currentUserId, compact, onChange }: Pr
                   type="button"
                   onClick={() => handleDownload(att)}
                   disabled={downloadingId === att.id}
-                  className="p-1 rounded text-muted hover:text-accent touch-manipulation shrink-0 disabled:opacity-50"
+                  className="flex size-11 items-center justify-center rounded-xl text-muted hover:text-accent touch-manipulation shrink-0 disabled:opacity-50"
                   title="ดาวน์โหลด"
+                  aria-label="ดาวน์โหลดไฟล์"
                 >
                   {downloadingId === att.id ? (
-                    <Loader2 size={13} className="animate-spin" />
+                    <Loader2 size={16} className="animate-spin" />
                   ) : (
-                    <Download size={13} />
+                    <Download size={16} />
                   )}
                 </button>
                 {canEdit && (
                   <button
                     type="button"
                     onClick={() => removeItem(att.id)}
-                    className="p-1 rounded text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 touch-manipulation shrink-0"
+                    aria-label="ลบไฟล์แนบ"
+                    className="flex size-11 items-center justify-center rounded-xl text-muted hover:text-(--status-red-fg) sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 touch-manipulation shrink-0"
                   >
-                    <Trash2 size={13} />
+                    <Trash2 size={16} />
                   </button>
                 )}
               </div>

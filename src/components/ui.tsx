@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { ChevronDown } from "lucide-react";
 import { useEffect, useId, useRef, useState, type HTMLAttributes, type RefObject } from "react";
 import type {
   ClientStatus,
@@ -60,6 +61,9 @@ function useDialogFocus(open: boolean, onClose: () => void, dialogRef: RefObject
     if (!open) return;
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     dialogRef.current?.focus();
+    // ล็อกการเลื่อนของหน้าหลังขณะเปิด dialog (กันพื้นหลังไหลบนมือถือ)
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onCloseRef.current();
       if (dialogRef.current) trapFocus(dialogRef.current, event);
@@ -67,6 +71,7 @@ function useDialogFocus(open: boolean, onClose: () => void, dialogRef: RefObject
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
       previousFocusRef.current?.focus();
     };
   }, [open, dialogRef]);
@@ -101,7 +106,7 @@ export function CardHeader({
       <div className="min-w-0">
         <h2 className="flex items-center gap-2 text-base font-semibold">
           {icon}
-          <span className="truncate">{title}</span>
+          <span className="line-clamp-2 wrap-anywhere">{title}</span>
         </h2>
         {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
       </div>
@@ -167,7 +172,7 @@ export function ProfileRoleBadges({
 }) {
   if (profile.account_type === "BOT") return <span className="inline-flex rounded-md bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">AI Assistant</span>;
   const roles = getProfileDisplayRoles(profile);
-  const text = size === "xs" ? "text-[10px] px-1.5 py-0" : "text-xs";
+  const text = size === "xs" ? "text-xs px-1.5 py-0.5" : "text-[0.8125rem] px-2 py-0.5";
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
       {roles.map((role) => (
@@ -180,7 +185,7 @@ export function ProfileRoleBadges({
       ))}
       {(profile.custom_tags ?? []).map((tag) => (
         <span key={`custom-${tag}`} title="ป้ายทีมกำหนดเอง"
-          className={`inline-flex max-w-full items-center break-words rounded-md bg-surface-soft px-2 py-0.5 font-medium text-muted ${text}`}>
+          className={`inline-flex max-w-full items-center break-words rounded-md bg-surface-soft font-medium text-muted ${text}`}>
           {tag}
         </span>
       ))}
@@ -315,7 +320,7 @@ export function MetricTile({
         <p className="text-sm">{label}</p>
         {icon}
       </div>
-      <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
+      <p className="mt-2 text-xl sm:text-2xl font-semibold leading-tight tabular-nums wrap-anywhere">{value}</p>
     </div>
   );
 }
@@ -326,21 +331,24 @@ export function ListRow({
   leading,
   trailing,
   className,
+  stack = false,
 }: {
   title: React.ReactNode;
   description?: React.ReactNode;
   leading?: React.ReactNode;
   trailing?: React.ReactNode;
   className?: string;
+  /** มือถือ: ย้าย trailing ลงบรรทัดใหม่เต็มความกว้าง ไม่ให้บีบข้อความ */
+  stack?: boolean;
 }) {
   return (
-    <div className={classes("flex min-h-16 items-center gap-3 px-4 py-3", className)}>
+    <div className={classes("flex min-h-16 items-center gap-3 px-4 py-3", stack && "max-sm:flex-wrap", className)}>
       {leading && <div className="shrink-0">{leading}</div>}
-      <div className="min-w-0 flex-1">
+      <div className={classes("min-w-0 flex-1", stack && "max-sm:basis-[calc(100%-4rem)]")}>
         <div className="font-medium">{title}</div>
         {description && <div className="mt-0.5 text-sm text-muted">{description}</div>}
       </div>
-      {trailing && <div className="shrink-0">{trailing}</div>}
+      {trailing && <div className={classes("shrink-0", stack && "max-sm:flex max-sm:basis-full max-sm:justify-end")}>{trailing}</div>}
     </div>
   );
 }
@@ -373,20 +381,20 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="relative w-full sm:max-w-lg max-h-[92dvh] overflow-y-auto bg-card rounded-t-2xl sm:rounded-2xl animate-slide-up pb-safe shadow-(--shadow-float)"
+        className="relative w-full sm:max-w-lg max-h-[92dvh] overflow-y-auto overscroll-contain bg-card rounded-t-2xl sm:rounded-2xl animate-slide-up shadow-(--shadow-float)"
       >
-        <div className="sticky top-0 bg-card border-b border-border px-5 py-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{title}</h2>
+        <div className="sticky top-0 z-10 bg-card border-b border-border pl-5 pr-3 py-2.5 flex items-center justify-between gap-3">
+          <h2 className="min-w-0 text-lg font-semibold leading-snug">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="ปิด"
-            className="w-11 h-11 rounded-xl hover:bg-card-hover active:scale-[0.98] flex items-center justify-center text-muted hover:text-foreground transition-colors"
+            className="w-11 h-11 shrink-0 rounded-xl hover:bg-card-hover active:scale-[0.98] flex items-center justify-center text-muted hover:text-foreground transition-colors"
           >
             ✕
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="sheet-body">{children}</div>
       </div>
     </div>
   );
@@ -406,7 +414,7 @@ export function Input({
       <input
         {...props}
         id={id}
-        className={`w-full min-h-11 px-3.5 py-2.5 bg-background border border-border rounded-xl text-base placeholder:text-muted/70 focus-visible:border-accent transition-colors ${props.className ?? ""}`}
+        className={`w-full min-h-11 px-3.5 py-2.5 bg-background border border-border rounded-xl text-base placeholder:text-muted focus-visible:border-accent transition-colors ${props.className ?? ""}`}
       />
     </div>
   );
@@ -424,13 +432,20 @@ export function Select({
       {label && (
         <label htmlFor={id} className="block text-sm font-medium text-muted">{label}</label>
       )}
-      <select
-        {...props}
-        id={id}
-        className={`w-full min-h-11 px-3.5 py-2.5 bg-background border border-border rounded-xl text-base focus-visible:border-accent transition-colors appearance-none ${props.className ?? ""}`}
-      >
-        {children}
-      </select>
+      <div className="relative">
+        <select
+          {...props}
+          id={id}
+          className={`w-full min-h-11 pl-3.5 pr-10 py-2.5 bg-background border border-border rounded-xl text-base focus-visible:border-accent transition-colors appearance-none ${props.className ?? ""}`}
+        >
+          {children}
+        </select>
+        <ChevronDown
+          size={18}
+          aria-hidden="true"
+          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted"
+        />
+      </div>
     </div>
   );
 }
@@ -469,7 +484,7 @@ export function Button({
       "bg-accent hover:bg-accent-dim text-on-accent font-semibold shadow-sm",
     secondary:
       "bg-card hover:bg-card-hover border border-border text-foreground",
-    danger: "bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30",
+    danger: "bg-(--status-red-bg) hover:brightness-95 text-(--status-red-fg) border border-(--status-red-fg)/30",
     ghost: "hover:bg-card-hover text-muted hover:text-foreground",
   };
 

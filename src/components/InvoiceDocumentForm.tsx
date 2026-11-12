@@ -142,9 +142,11 @@ export function InvoiceDocumentForm({
                 placeholder="ค่าพัฒนาโปรแกรม"
               />
             </div>
-            <div className="col-span-4 sm:col-span-2">
+            <div className="col-span-6 sm:col-span-2">
               <Input
                 label={i === 0 ? "จำนวน" : undefined}
+                aria-label="จำนวน"
+                inputMode="decimal"
                 type="number"
                 min="1"
                 value={item.quantity}
@@ -153,16 +155,20 @@ export function InvoiceDocumentForm({
                 }
               />
             </div>
-            <div className="col-span-4 sm:col-span-2">
+            <div className="col-span-6 sm:col-span-2">
               <Input
                 label={i === 0 ? "หน่วย" : undefined}
+                aria-label="หน่วย"
                 value={item.unit}
                 onChange={(e) => updateLine(i, { unit: e.target.value })}
               />
             </div>
-            <div className="col-span-3 sm:col-span-2">
+            <div className="col-span-9 sm:col-span-2">
               <Input
                 label={i === 0 ? "ราคา" : undefined}
+                aria-label="ราคาต่อหน่วย"
+                placeholder="ราคา"
+                inputMode="decimal"
                 type="number"
                 min="0"
                 step="0.01"
@@ -172,14 +178,14 @@ export function InvoiceDocumentForm({
                 }
               />
             </div>
-            <div className="col-span-1 flex justify-end pb-2">
+            <div className="col-span-3 flex justify-end sm:col-span-1">
               <button
                 type="button"
                 onClick={() => removeLine(i)}
-                className="flex min-h-11 min-w-11 items-center justify-center text-red-400 hover:bg-red-500/10 rounded-lg"
+                className="flex min-h-11 min-w-11 items-center justify-center text-(--status-red-fg) hover:bg-(--status-red-bg) rounded-xl"
                 aria-label="ลบรายการ"
               >
-                <Trash2 size={14} />
+                <Trash2 size={18} />
               </button>
             </div>
           </div>

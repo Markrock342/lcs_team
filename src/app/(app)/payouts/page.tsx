@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Building2, ChevronRight, Plus, ReceiptText, Users } from "lucide-react";
+import { ArrowRight, Building2, Check, ChevronRight, Copy, Plus, ReceiptText, Users } from "lucide-react";
 import { neonRequest } from "@/lib/neon/client";
 import {
   Avatar,
@@ -32,6 +32,17 @@ export default function PayoutsPage() {
   const [members, setMembers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  async function copyAccount(memberId: string, value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedId(memberId);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      setCopiedId(null);
+    }
+  }
 
   useEffect(() => {
     if (!canViewFinance) {
@@ -93,19 +104,30 @@ export default function PayoutsPage() {
           {members.map((member) => (
             <ListRow
               key={member.id}
+              stack
               leading={<Avatar name={member.display_name} src={member.avatar_url} />}
               title={
-                <div className="flex items-center gap-2">
-                  <span className="truncate">{member.display_name}</span>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="min-w-0 wrap-anywhere">{member.display_name}</span>
                   <StatusStamp label={hasBankInfo(member) ? "พร้อมรับโอน" : "ยังไม่ตั้งบัญชี"} tone={hasBankInfo(member) ? "green" : "amber"} />
                 </div>
               }
               description={`@${member.username}`}
               trailing={
                 hasBankInfo(member) ? (
-                  <div className="max-w-52 text-right">
-                    <p className="font-mono font-semibold tracking-wide tabular-nums">{member.bank_account_number}</p>
-                    <p className="truncate text-xs text-muted">{member.bank_name} · {member.bank_account_name}</p>
+                  <div className="flex w-full items-center gap-3 rounded-xl bg-surface-soft px-3 py-2 sm:w-auto sm:bg-transparent sm:p-0">
+                    <div className="min-w-0 flex-1 sm:max-w-52 sm:text-right">
+                      <p className="select-all font-mono text-lg font-semibold tabular-nums sm:text-base">{member.bank_account_number}</p>
+                      <p className="text-sm text-muted wrap-anywhere">{member.bank_name} · {member.bank_account_name}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => copyAccount(member.id, member.bank_account_number ?? "")}
+                      className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-sm font-medium hover:bg-card-hover touch-manipulation"
+                    >
+                      {copiedId === member.id ? <Check size={16} /> : <Copy size={16} />}
+                      {copiedId === member.id ? "คัดลอกแล้ว" : "คัดลอก"}
+                    </button>
                   </div>
                 ) : undefined
               }
@@ -129,14 +151,14 @@ export default function PayoutsPage() {
               key={payout.id}
               leading={<span className="flex size-9 items-center justify-center rounded-xl bg-surface-soft text-muted"><ReceiptText size={18} /></span>}
               title={
-                <span className="flex items-center gap-2">
-                  <span className="truncate">{payout.payer?.display_name}</span>
-                  <ArrowRight size={13} className="shrink-0 text-muted" />
-                  <span className="truncate">{payout.payee?.display_name}</span>
+                <span className="flex flex-wrap items-center gap-x-2">
+                  <span className="wrap-anywhere">{payout.payer?.display_name}</span>
+                  <ArrowRight size={16} className="shrink-0 text-muted" />
+                  <span className="wrap-anywhere">{payout.payee?.display_name}</span>
                 </span>
               }
-              description={format(new Date(payout.paid_at), "d MMM yyyy", { locale: th })}
-              trailing={<span className="text-right font-semibold tabular-nums text-(--status-red-fg)">{formatBaht(payout.amount)}</span>}
+              description={`${payout.description ? `${payout.description} · ` : ""}${format(new Date(payout.paid_at), "d MMM yyyy", { locale: th })}`}
+              trailing={<span className="text-right font-semibold tabular-nums text-(--status-red-fg)"><span className="sr-only">จ่ายออก </span>-{formatBaht(payout.amount)}</span>}
             />
           ))}
           {payouts.length === 0 && (

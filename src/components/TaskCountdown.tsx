@@ -36,26 +36,26 @@ export function TaskCountdown({
     status,
   });
 
-  const pad = size === "sm" ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs";
+  const pad = size === "sm" ? "px-2.5 py-1 text-[0.8125rem]" : "px-3 py-1 text-sm";
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span
         className={`inline-flex items-center gap-1 rounded-lg border font-semibold ${pad} ${COUNTDOWN_TONE_CLASS[info.tone]}`}
       >
-        <Clock size={size === "sm" ? 11 : 13} />
+        <Clock size={14} />
         {info.label}
       </span>
       {showDates && (startDate || dueDate) && (
-        <span className="inline-flex items-center gap-1 text-muted bg-background/60 border border-border rounded-lg px-2 py-0.5 text-[11px]">
-          <CalendarDays size={11} />
+        <span className="inline-flex items-center gap-1 text-muted bg-background/60 border border-border rounded-lg px-2.5 py-1 text-[0.8125rem]">
+          <CalendarDays size={14} />
           {startDate ? formatTaskDate(startDate) : "—"}
-          {startDate && dueDate && <span className="opacity-50">→</span>}
+          {startDate && dueDate && <span>→</span>}
           {dueDate ? formatTaskDate(dueDate) : startDate ? "—" : ""}
         </span>
       )}
       {info.detail && info.tone !== "muted" && !showDates && (
-        <span className="text-[11px] text-muted">{info.detail}</span>
+        <span className="text-[0.8125rem] text-muted">{info.detail}</span>
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { addMonths, subMonths } from "date-fns";
 import { th } from "date-fns/locale";
@@ -14,7 +15,7 @@ import {
   isToday,
   format,
 } from "@/lib/calendar-utils";
-import { Avatar } from "@/components/ui";
+import { formatTaskDate } from "@/lib/task-schedule";
 
 const DAY_LABELS = ["จ", "อ", "พ", "พฤ", "ศ", "ส", "อา"];
 const BAR_H = 24;
@@ -31,6 +32,7 @@ export function MonthGanttCalendar({
   tasks,
   onMonthChange,
 }: MonthGanttCalendarProps) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const weeks = getMonthWeeks(month);
   const scheduled = tasks.filter(
     (t) => t.start_date && t.due_date && t.status !== "done"
@@ -68,7 +70,7 @@ export function MonthGanttCalendar({
         {DAY_LABELS.map((d) => (
           <div
             key={d}
-            className="py-3 text-center text-xs font-semibold text-muted"
+            className="py-3 text-center text-[0.8125rem] font-semibold text-muted"
           >
             {d}
           </div>
@@ -102,10 +104,10 @@ export function MonthGanttCalendar({
                     <span
                       className={`inline-flex items-center justify-center w-8 h-8 text-sm font-semibold rounded-full ${
                         today
-                          ? "bg-accent text-on-accent ring-2 ring-accent/35 ring-offset-2 ring-offset-card"
+                          ? "bg-accent text-on-accent ring-2 ring-accent/35 ring-offset-1 ring-offset-card"
                           : inMonth
                             ? "text-foreground"
-                            : "text-muted/50"
+                            : "text-muted/70"
                       }`}
                     >
                       {format(day, "d")}
@@ -136,25 +138,29 @@ export function MonthGanttCalendar({
                 {segments.map((seg) => {
                   const color = TASK_BAR_COLORS[seg.colorIndex];
                   const isSub = !!seg.task.parent_id;
+                  const active = selectedId === seg.task.id;
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={`${seg.task.id}-${wi}`}
-                      className={`absolute mx-0.5 flex items-center gap-1 truncate border px-2 text-xs font-semibold ${color.bg} ${color.text} ${color.border} ${
+                      onClick={() => setSelectedId(active ? null : seg.task.id)}
+                      aria-pressed={active}
+                      aria-label={`${seg.task.title} ${formatTaskDate(seg.task.start_date)} ถึง ${formatTaskDate(seg.task.due_date)}`}
+                      className={`absolute mx-0.5 flex items-center gap-1 overflow-hidden border px-1.5 text-left text-xs font-semibold sm:px-2 ${color.bg} ${color.text} ${color.border} ${
                         seg.continuesBefore ? "rounded-l-sm" : "rounded-l-lg"
-                      } ${seg.continuesAfter ? "rounded-r-sm" : "rounded-r-lg"} rounded-lg shadow-sm`}
+                      } ${seg.continuesAfter ? "rounded-r-sm" : "rounded-r-lg"} shadow-sm ${
+                        active ? "ring-2 ring-foreground ring-offset-1 ring-offset-card" : ""
+                      } ${selectedId && !active ? "opacity-45" : ""}`}
                       style={{
                         left: `calc(${(seg.colStart / 7) * 100}% + 2px)`,
                         width: `calc(${(seg.colSpan / 7) * 100}% - 4px)`,
                         top: seg.lane * (BAR_H + LANE_GAP) + 5,
-                        height: isSub ? 20 : BAR_H,
+                        height: isSub ? 22 : BAR_H,
                         zIndex: seg.lane + 1,
                       }}
-                      title={`${seg.task.title}\n${seg.task.start_date} → ${seg.task.due_date}${seg.task.assignee ? `\n@${seg.task.assignee.display_name}` : ""}`}
                     >
-                      {!seg.continuesBefore && (
-                        <span className="truncate drop-shadow-sm">{seg.task.title}</span>
-                      )}
-                    </div>
+                      <span className="truncate">{seg.task.title}</span>
+                    </button>
                   );
                 })}
               </div>
@@ -176,37 +182,44 @@ export function MonthGanttCalendar({
         </div>
       )}
 
-      {/* Legend */}
+      {/* รายการงาน — แตะเพื่อไฮไลต์แถบในปฏิทิน */}
       {hasTasks && (
-        <div className="space-y-3 border-t border-border bg-surface-raised px-4 py-4">
-          <p className="text-sm font-semibold text-foreground">งานในเดือนนี้</p>
-          <div className="flex flex-wrap gap-2">
+        <div className="border-t border-border bg-surface-raised">
+          <div className="px-4 pb-2 pt-4">
+            <p className="text-base font-semibold text-foreground">งานที่มีกำหนด ({scheduled.length})</p>
+            <p className="text-sm text-muted">แตะแถบสีหรือชื่องานเพื่อดูว่าอยู่ช่วงไหนของปฏิทิน</p>
+          </div>
+          <ul className="divide-y divide-border">
             {scheduled.map((t) => {
               const tl = taskLanes.find((x) => x.task.id === t.id);
               const color = TASK_BAR_COLORS[tl?.colorIndex ?? 0];
+              const active = selectedId === t.id;
               return (
-                <div
-                  key={t.id}
-                  className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs"
-                >
-                  <div className={`w-3 h-3 rounded-sm border ${color.bg} ${color.border}`} />
-                  <span className="max-w-[120px] truncate text-foreground">{t.title}</span>
-                  {t.parent_id && (
-                    <span className="text-xs text-muted">(ย่อย)</span>
-                  )}
-                  {t.assignee && (
-                    <Avatar name={t.assignee.display_name} src={t.assignee.avatar_url} size="sm" />
-                  )}
-                  <span className="text-xs text-muted">
-                    {t.start_date?.slice(5)}–{t.due_date?.slice(5)}
-                  </span>
-                </div>
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(active ? null : t.id)}
+                    aria-pressed={active}
+                    className={`flex min-h-14 w-full items-start gap-3 px-4 py-3 text-left touch-manipulation ${
+                      active ? "bg-accent/10" : "hover:bg-card-hover"
+                    }`}
+                  >
+                    <span className={`mt-1 size-4 shrink-0 rounded border ${color.bg} ${color.border}`} aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-base font-medium leading-snug wrap-anywhere">
+                        {t.title}
+                        {t.parent_id && <span className="font-normal text-muted"> (งานย่อย)</span>}
+                      </span>
+                      <span className="mt-0.5 block text-sm text-muted">
+                        {formatTaskDate(t.start_date)} → {formatTaskDate(t.due_date)}
+                        {t.assignee ? ` · ${t.assignee.display_name}` : ""}
+                      </span>
+                    </span>
+                  </button>
+                </li>
               );
             })}
-          </div>
-          <p className="text-xs text-muted">
-            งานทับกันแสดงคนละแถว · สีสว่าง = งาน · แถบบาง = งานย่อย
-          </p>
+          </ul>
         </div>
       )}
     </section>

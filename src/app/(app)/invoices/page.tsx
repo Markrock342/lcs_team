@@ -22,6 +22,7 @@ import { useRole } from "@/components/RoleProvider";
 import { useActionFeedback } from "@/components/workspace/ActionFeedback";
 import { formatBaht } from "@/lib/money";
 import { LCSDocumentPreview, printDocument } from "@/components/LCSDocumentPreview";
+import { DocumentScaler } from "@/components/DocumentScaler";
 import { InvoiceDocumentForm } from "@/components/InvoiceDocumentForm";
 import {
   INVOICE_STATUS_LABELS,
@@ -534,16 +535,18 @@ export default function InvoicesPage() {
           return (
             <ListRow
               key={inv.id}
-              leading={<span className="flex size-9 items-center justify-center rounded-xl bg-surface-soft text-muted"><FileText size={18} /></span>}
+              stack
+              leading={<span className="hidden size-9 items-center justify-center rounded-xl bg-surface-soft text-muted sm:flex"><FileText size={18} /></span>}
               title={
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <span className="truncate">{inv.title}</span>
+                  <span className="basis-full line-clamp-2 wrap-anywhere sm:basis-auto">{inv.title}</span>
                   <StatusStamp label={DOCUMENT_TYPE_LABELS[docType]} tone="blue" />
                   <StatusStamp label={INVOICE_STATUS_LABELS[inv.status]} tone={invoiceStatusTone(inv.status)} />
                 </div>
               }
               description={
-                <span className="block truncate">
+                <span className="block wrap-anywhere">
+                  <span className="mb-0.5 block text-base font-semibold tabular-nums text-foreground sm:hidden">{formatBaht(inv.total_amount)}</span>
                   {[inv.doc_number, inv.client?.name, linkedReceipt?.doc_number ? `ใบเสร็จ ${linkedReceipt.doc_number}` : null].filter(Boolean).join(" · ")}
                   {paid > 0 ? ` · ชำระแล้ว ${formatBaht(paid)}` : ""}
                 </span>
@@ -567,12 +570,12 @@ export default function InvoicesPage() {
                         className="px-3"
                       >
                         <DollarSign size={16} />
-                        <span className="hidden ml-1.5 lg:inline">รับเงิน</span>
+                        <span className="ml-1.5 sm:hidden lg:inline">รับเงิน</span>
                       </Button>
                     )}
                   <Button variant="secondary" onClick={() => openPreview(inv)} className="px-3">
                     <Eye size={16} />
-                    <span className="hidden sm:inline ml-1.5">ดู</span>
+                    <span className="ml-1.5">ดู</span>
                   </Button>
                   {canEdit && (
                   <div className="relative">
@@ -581,8 +584,9 @@ export default function InvoicesPage() {
                       onClick={() =>
                         setMenuOpenId(menuOpenId === inv.id ? null : inv.id)
                       }
-                      className="p-2.5 rounded-xl border border-border hover:bg-card-hover text-muted touch-manipulation"
+                      className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-border hover:bg-card-hover text-muted touch-manipulation"
                       title="เมนู"
+                      aria-label="เมนูเอกสาร"
                     >
                       <MoreHorizontal size={18} />
                     </button>
@@ -736,6 +740,7 @@ export default function InvoicesPage() {
             className="rounded-xl overflow-hidden border border-border max-h-[65vh] overflow-y-auto"
           >
             {previewData && (
+              <DocumentScaler>
               <div id="document-pdf-root">
                 <LCSDocumentPreview
                   data={{
@@ -749,6 +754,7 @@ export default function InvoicesPage() {
                   client={previewData.client}
                 />
               </div>
+              </DocumentScaler>
             )}
           </div>
         </div>

@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { neonRequest } from "@/lib/neon/client";
+import { ChevronLeft, ChevronRight, ReceiptText } from "lucide-react";
 import { Button, Input } from "@/components/ui";
+import { AmountField, FormActions, FormError } from "@/components/form-ui";
 import { syncInvoicePaymentToLedger } from "@/lib/accounting";
 import type { Invoice } from "@/lib/extras-types";
 import { formatBaht } from "@/lib/money";
@@ -19,6 +21,8 @@ export function QuickIncomeForm({ onDone }: Props) {
     null
   );
   const [amount, setAmount] = useState("");
+  const [paidAt, setPaidAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -61,7 +65,6 @@ export function QuickIncomeForm({ onDone }: Props) {
     setSaving(true);
     setError("");
     const payAmount = parseFloat(amount);
-    const paidAt = new Date().toISOString().slice(0, 10);
     let payment: { id: string };
     try {
       const result = await neonRequest<{ payment: { id: string } }>(
@@ -109,8 +112,8 @@ export function QuickIncomeForm({ onDone }: Props) {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-8">
-        <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      <div className="flex justify-center py-10" role="status" aria-label="กำลังโหลดใบแจ้งหนี้">
+        <div className="w-7 h-7 border-2 border-accent border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -118,73 +121,155 @@ export function QuickIncomeForm({ onDone }: Props) {
   if (!selected) {
     if (invoices.length === 0) {
       return (
-        <div className="text-center py-6 space-y-3">
-          <p className="text-sm text-muted">ไม่มีใบแจ้งหนี้ค้างชำระ</p>
-          <Link href="/invoices" className="text-sm text-accent hover:underline">
-            ไปสร้างใบแจ้งหนี้ →
+        <div className="space-y-4 py-6 text-center">
+          <FormError message={error} />
+          <p className="text-base">ไม่มีใบแจ้งหนี้ค้างชำระ</p>
+          <p className="text-sm text-muted">รับเงินลูกค้าได้เมื่อมีใบแจ้งหนี้ที่ยังไม่ปิดยอด</p>
+          <Link
+            href="/invoices"
+            className="inline-flex min-h-11 items-center justify-center rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent"
+          >
+            ไปสร้างใบแจ้งหนี้
           </Link>
         </div>
       );
     }
 
+    const q = query.trim().toLowerCase();
+    const visible = q
+      ? invoices.filter(
+          (inv) =>
+            inv.title.toLowerCase().includes(q) ||
+            (inv.client?.name?.toLowerCase().includes(q) ?? false)
+        )
+      : invoices;
+
     return (
-      <div className="space-y-2 max-h-[55vh] overflow-y-auto">
-        <p className="text-xs text-muted mb-2">เลือกใบที่ลูกค้าจ่ายแล้ว</p>
-        {invoices.map((inv) => {
-          const paid = inv.payments?.reduce((s, p) => s + p.amount, 0) ?? 0;
-          const remaining = inv.total_amount - paid;
-          return (
-            <button
-              key={inv.id}
-              type="button"
-              onClick={() => selectInvoice(inv)}
-              className="w-full text-left p-3 rounded-xl border border-border hover:border-emerald-500/40 hover:bg-emerald-500/5 transition-colors touch-manipulation"
-            >
-              <p className="font-medium text-sm truncate">{inv.title}</p>
-              <p className="text-xs text-muted mt-0.5">
-                {inv.client?.name} · คงเหลือ{" "}
-                <span className="text-emerald-300 font-semibold">
-                  {formatBaht(remaining)}
-                </span>
-              </p>
-            </button>
-          );
-        })}
+      <div className="space-y-3">
+        <FormError message={error} />
+        <p className="text-[0.9375rem] text-muted">เลือกใบแจ้งหนี้ที่ลูกค้าจ่ายเงินเข้ามา</p>
+        {invoices.length > 5 && (
+          <Input
+            aria-label="ค้นหาใบแจ้งหนี้"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="ค้นหาชื่อลูกค้าหรือชื่อใบ"
+          />
+        )}
+        <ul className="space-y-2">
+          {visible.map((inv) => {
+            const paid = inv.payments?.reduce((s, p) => s + p.amount, 0) ?? 0;
+            const remaining = Math.max(inv.total_amount - paid, 0);
+            const percent = inv.total_amount > 0 ? Math.min((paid / inv.total_amount) * 100, 100) : 0;
+            return (
+              <li key={inv.id}>
+                <button
+                  type="button"
+                  onClick={() => selectInvoice(inv)}
+                  className="flex w-full items-center gap-3 rounded-xl border border-border bg-background p-3.5 text-left transition-colors hover:bg-card-hover touch-manipulation"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-muted">{inv.client?.name ?? "ไม่ระบุลูกค้า"}</p>
+                    <p className="text-base font-medium leading-snug line-clamp-2">{inv.title}</p>
+                    <p className="mt-1.5 text-sm text-muted">
+                      ค้างรับ{" "}
+                      <span className="text-base font-semibold tabular-nums text-(--status-green-fg)">
+                        {formatBaht(remaining)}
+                      </span>
+                      {paid > 0 && (
+                        <span className="tabular-nums"> · จ่ายแล้ว {formatBaht(paid)}</span>
+                      )}
+                    </p>
+                    {paid > 0 && (
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-raised" aria-hidden="true">
+                        <div className="h-full rounded-full bg-(--status-green-fg)" style={{ width: `${percent}%` }} />
+                      </div>
+                    )}
+                  </div>
+                  <ChevronRight size={18} className="shrink-0 text-muted" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        {visible.length === 0 && (
+          <p className="py-6 text-center text-[0.9375rem] text-muted">ไม่พบใบแจ้งหนี้ที่ค้นหา</p>
+        )}
       </div>
     );
   }
 
+  const selectedPaid = selected.payments?.reduce((s, p) => s + p.amount, 0) ?? 0;
+  const selectedRemaining = Math.max(selected.total_amount - selectedPaid, 0);
+  const payNow = parseFloat(amount);
+  const validAmount = Number.isFinite(payNow) && payNow > 0;
+  const leftAfter = validAmount ? selectedRemaining - payNow : selectedRemaining;
+
   return (
-    <form onSubmit={handleSave} className="space-y-4">
-      {error && (
-        <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-          {error}
-        </div>
-      )}
+    <form onSubmit={handleSave} className="space-y-5">
+      <FormError message={error} />
       <button
         type="button"
         onClick={() => setSelected(null)}
-        className="text-xs text-accent hover:underline"
+        className="-ml-2 inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-sm font-medium text-accent hover:bg-card-hover"
       >
-        ← เลือกใบอื่น
+        <ChevronLeft size={18} /> เลือกใบอื่น
       </button>
-      <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-        <p className="font-medium text-sm">{selected.title}</p>
-        <p className="text-xs text-muted">{selected.client?.name}</p>
+
+      <div className="flex items-start gap-3 rounded-2xl bg-surface-soft p-4">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-(--status-green-bg) text-(--status-green-fg)">
+          <ReceiptText size={20} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-muted">{selected.client?.name ?? "ไม่ระบุลูกค้า"}</p>
+          <p className="text-base font-medium leading-snug">{selected.title}</p>
+          <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5 text-sm">
+            <dt className="text-muted">ยอดทั้งใบ</dt>
+            <dd className="text-right tabular-nums">{formatBaht(selected.total_amount)}</dd>
+            <dt className="text-muted">ค้างรับ</dt>
+            <dd className="text-right font-semibold tabular-nums">{formatBaht(selectedRemaining)}</dd>
+          </dl>
+        </div>
       </div>
-      <Input
-        label="รับเงิน (บาท)"
-        type="number"
-        min="0.01"
-        step="0.01"
-        inputMode="decimal"
+
+      <AmountField
+        label="รับเงินครั้งนี้"
+        tone="income"
         value={amount}
-        onChange={(e) => setAmount(e.target.value)}
+        onChange={setAmount}
+        shortcuts={
+          selectedRemaining > 0
+            ? [
+                { label: "เต็มจำนวน", value: selectedRemaining },
+                { label: "ครึ่งหนึ่ง", value: Math.round((selectedRemaining / 2) * 100) / 100 },
+              ]
+            : undefined
+        }
+        hint={
+          validAmount
+            ? leftAfter > 0
+              ? `เหลือค้างรับ ${formatBaht(leftAfter)}`
+              : leftAfter < 0
+                ? `เกินยอดค้าง ${formatBaht(-leftAfter)}`
+                : "ปิดยอดใบนี้พอดี"
+            : undefined
+        }
+      />
+
+      <Input
+        label="วันที่รับเงิน"
+        type="date"
+        value={paidAt}
+        onChange={(e) => setPaidAt(e.target.value)}
         required
       />
-      <Button type="submit" loading={saving} className="w-full">
-        บันทึกรายรับ
-      </Button>
+
+      <FormActions>
+        <Button type="submit" loading={saving}>
+          บันทึกรับเงิน{validAmount ? ` ${formatBaht(payNow)}` : ""}
+        </Button>
+      </FormActions>
     </form>
   );
 }

@@ -61,10 +61,16 @@ export async function exportDocumentPdf(
     scrollParent.style.overflow = "visible";
   }
 
+  // แผ่นเอกสารถูกย่อบนจอเล็ก — จับภาพที่ขนาดจริงเสมอ เพื่อให้ PDF เหมือนกันทุกอุปกรณ์
+  const scaler = root.closest<HTMLElement>(".doc-scaler");
+  const prevZoom = scaler?.style.getPropertyValue("--doc-zoom") ?? "";
+  scaler?.style.setProperty("--doc-zoom", "1");
+
   try {
     const canvas = await captureElement(root);
     canvasToPdf(canvas, filename);
   } finally {
+    if (scaler) scaler.style.setProperty("--doc-zoom", prevZoom || "1");
     if (scrollParent) {
       scrollParent.style.maxHeight = prevMaxHeight;
       scrollParent.style.overflow = prevOverflow;

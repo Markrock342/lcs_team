@@ -204,7 +204,7 @@ function TaskRow({
           <StatusBadge status={task.status} />
           <PriorityBadge priority={task.priority} />
         </div>
-        <h3 className="truncate text-lg font-semibold leading-snug">{task.title}</h3>
+        <h3 className="line-clamp-2 wrap-anywhere text-lg font-semibold leading-snug">{task.title}</h3>
         <p className="mt-1 text-sm text-muted">
           {task.client?.name ?? "ไม่ระบุลูกค้า"}
           {!task.start_date && !task.due_date && (
@@ -937,6 +937,7 @@ export default function TasksPage() {
         <KanbanBoard
           tasks={tasks}
           onStatusChange={canEdit ? quickStatusChange : () => {}}
+          readOnly={!canEdit}
         />
       ) : visibleParents.length === 0 ? (
         <EmptyState
@@ -970,7 +971,7 @@ export default function TasksPage() {
                         <ListTree size={16} className="opacity-40" />
                       )}
                     </button>
-                    <div className="flex-1">
+                    <div className="min-w-0 flex-1">
                       <TaskRow
                         task={parent}
                         currentUserId={currentUserId}

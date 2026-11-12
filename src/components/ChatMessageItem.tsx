@@ -325,7 +325,7 @@ export function ChatMessageItem({
                     <button
                       type="button"
                       onClick={() => onDelete(msg)}
-                      className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-red-500/10 text-muted hover:text-red-400 touch-manipulation"
+                      className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-red-500/10 text-muted hover:text-(--status-red-fg) touch-manipulation"
                       title="ลบข้อความ"
                       aria-label="ลบข้อความ"
                     >

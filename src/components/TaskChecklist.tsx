@@ -140,7 +140,7 @@ export function TaskChecklist({ taskId, onProgressChange }: Props) {
               <button
                 type="button"
                 onClick={() => removeItem(item.id)}
-                className="flex min-h-11 min-w-11 items-center justify-center rounded text-muted hover:text-red-400 touch-manipulation"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded text-muted hover:text-(--status-red-fg) touch-manipulation"
                 aria-label={`ลบ ${item.title}`}
               >
                 <Trash2 size={14} />

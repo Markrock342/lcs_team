@@ -42,7 +42,7 @@ function NavLinks({
             key={href}
             href={href}
             onClick={onNavigate}
-            className={`flex min-h-11 items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+            className={`flex min-h-11 items-center gap-3 px-3 py-2.5 rounded-xl text-[0.9375rem] font-medium transition-colors ${
               active
                 ? "bg-accent/10 text-accent"
                 : "text-muted hover:text-foreground hover:bg-card-hover"
@@ -52,7 +52,7 @@ function NavLinks({
             <Icon size={20} />
             <span className="flex-1 truncate">{label}</span>
             {showUnread && (
-              <span className="min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-on-accent">
+              <span className="min-w-6 rounded-full bg-accent px-1.5 py-0.5 text-center text-xs font-semibold text-on-accent">
                 {chatUnread > 99 ? "99+" : chatUnread}
               </span>
             )}
@@ -196,7 +196,7 @@ export function AppShell({
             >
               <Menu size={20} />
             </button>
-            <span className="font-semibold text-sm truncate">{getPageTitle(pathname)}</span>
+            <span className="font-semibold text-base truncate">{getPageTitle(pathname)}</span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <button
@@ -225,7 +225,7 @@ export function AppShell({
                   <Avatar name={profile.display_name} src={profile.avatar_url} size="sm" />
                 </button>
                 {profileOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-48 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
+                  <div className="absolute right-0 top-full mt-2 w-60 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
                     <div className="px-4 py-3 border-b border-border">
                       <p className="text-sm font-medium truncate">{profile.display_name}</p>
                       <div className="flex flex-wrap items-center gap-1 mt-0.5">
@@ -233,9 +233,9 @@ export function AppShell({
                         <ProfileRoleBadges profile={profile} size="xs" />
                       </div>
                     </div>
-                    <Link href="/settings" onClick={() => setProfileOpen(false)} className="block px-4 py-2.5 text-sm hover:bg-card-hover">ตั้งค่า</Link>
-                    <Link href="/more" onClick={() => setProfileOpen(false)} className="block px-4 py-2.5 text-sm hover:bg-card-hover">เครื่องมือทั้งหมด</Link>
-                    <button onClick={handleLogout} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-400 hover:bg-card-hover">
+                    <Link href="/settings" onClick={() => setProfileOpen(false)} className="flex min-h-11 items-center px-4 text-[0.9375rem] hover:bg-card-hover">ตั้งค่า</Link>
+                    <Link href="/more" onClick={() => setProfileOpen(false)} className="flex min-h-11 items-center px-4 text-[0.9375rem] hover:bg-card-hover">เครื่องมือทั้งหมด</Link>
+                    <button onClick={handleLogout} className="flex min-h-11 items-center gap-2 w-full px-4 text-[0.9375rem] text-(--status-red-fg) hover:bg-card-hover">
                       <LogOut size={16} /> ออกจากระบบ
                     </button>
                   </div>
@@ -311,12 +311,12 @@ export function AppShell({
                 <span className="relative">
                   <Icon size={22} strokeWidth={active ? 2.5 : 2} />
                   {showUnread && (
-                    <span className="absolute -right-2.5 -top-1 min-w-4 rounded-full bg-accent px-1 text-center text-[9px] font-semibold leading-4 text-on-accent">
+                    <span className="absolute -right-3 -top-1.5 min-w-5 rounded-full bg-accent px-1 text-center text-[11px] font-bold leading-5 text-on-accent">
                       {chatUnread > 99 ? "99+" : chatUnread}
                     </span>
                   )}
                 </span>
-                <span className="text-[10px] font-medium">{label}</span>
+                <span className="text-xs font-medium leading-tight">{label}</span>
               </Link>
             );
           })}
@@ -324,7 +324,7 @@ export function AppShell({
       </nav>
 
       <Drawer open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} title="เมนูทั้งหมด">
-        <div className="space-y-6 pb-safe">
+        <div className="space-y-6">
           <div className="flex items-center gap-3 rounded-2xl bg-surface-soft p-3">
             <Logo size="sm" />
             <div className="min-w-0 flex-1">
@@ -338,9 +338,9 @@ export function AppShell({
             <div className="flex items-center gap-3 px-1">
               <Avatar name={profile.display_name} src={profile.avatar_url} size="sm" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{profile.display_name}</p>
+                <p className="truncate text-base font-semibold">{profile.display_name}</p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                  <p className="truncate text-xs text-muted">@{profile.username}</p>
+                  <p className="truncate text-sm text-muted">@{profile.username}</p>
                   <ProfileRoleBadges profile={profile} size="xs" />
                 </div>
               </div>
@@ -348,12 +348,12 @@ export function AppShell({
           )}
 
           <nav aria-label="เมนูหลักบนมือถือ" className="space-y-1">
-            <p className="px-3 pb-1 text-xs font-semibold text-muted">ใช้บ่อย</p>
+            <p className="px-3 pb-1 text-sm font-semibold text-muted">ใช้บ่อย</p>
             <NavLinks items={mainNav} pathname={pathname} chatUnread={chatUnread} onNavigate={() => setMobileMenuOpen(false)} />
           </nav>
 
           <nav aria-label="เครื่องมือทั้งหมดบนมือถือ" className="space-y-1 border-t border-border pt-4">
-            <p className="px-3 pb-1 text-xs font-semibold text-muted">เครื่องมือทั้งหมด</p>
+            <p className="px-3 pb-1 text-sm font-semibold text-muted">เครื่องมือทั้งหมด</p>
             <NavLinks items={allExtraNav} pathname={pathname} chatUnread={chatUnread} onNavigate={() => setMobileMenuOpen(false)} />
           </nav>
 

@@ -121,7 +121,7 @@ export function TextFilePreviewModal({
             </div>
           )}
           {error && (
-            <p className="text-sm text-red-400 text-center py-8">{error}</p>
+            <p className="text-sm text-(--status-red-fg) text-center py-8">{error}</p>
           )}
           {!loading && !error && (
             <pre className="whitespace-pre-wrap wrap-break-word text-sm leading-relaxed text-foreground font-mono">

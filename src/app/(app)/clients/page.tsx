@@ -11,12 +11,18 @@ import {
   ListRow,
   Modal,
   Input,
-  Select,
   Textarea,
   EmptyState,
   PageLoader,
 } from "@/components/ui";
 import { PageHeader, FilterTabs, PageShell } from "@/components/mobile-ui";
+import {
+  AmountField,
+  ChoiceChips,
+  FormActions,
+  FormError,
+  FormSection,
+} from "@/components/form-ui";
 import { SavedViewsBar } from "@/components/workspace/SavedViewsBar";
 import { useRole } from "@/components/RoleProvider";
 import { useActionFeedback } from "@/components/workspace/ActionFeedback";
@@ -377,8 +383,9 @@ export default function ClientsPage() {
         aria-label="ค้นหาลูกค้า"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
+        type="search"
         placeholder="ค้นหาชื่อลูกค้า, บริษัท, ผู้ติดต่อ..."
-        className="w-full px-3 py-2.5 rounded-xl bg-card border border-border text-sm"
+        className="w-full min-h-12 px-4 rounded-xl bg-card border border-border text-base placeholder:text-muted"
       />
 
       <FilterTabs
@@ -428,7 +435,7 @@ export default function ClientsPage() {
 
               <div className="flex flex-1 flex-col">
                 {client.description && (
-                  <p className="px-4 pt-3 text-sm leading-relaxed text-muted line-clamp-3">
+                  <p className="px-4 pt-3 text-[0.9375rem] leading-relaxed text-muted line-clamp-3">
                     {client.description}
                   </p>
                 )}
@@ -480,11 +487,11 @@ export default function ClientsPage() {
                         href={client[f.key as keyof Client] as string}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-surface-soft px-2.5 py-1.5 text-xs font-medium text-accent hover:bg-card-hover"
+                        className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-surface-soft px-3 text-sm font-medium text-accent hover:bg-card-hover"
                       >
-                        <Link2 size={12} />
+                        <Link2 size={14} />
                         {f.label}
-                        <ExternalLink size={11} />
+                        <ExternalLink size={13} />
                       </a>
                     ))}
                   </div>
@@ -527,14 +534,6 @@ export default function ClientsPage() {
                       >
                         <Pencil size={16} /> แก้ไข
                       </Button>
-                      <Button
-                        type="button"
-                        variant="danger"
-                        onClick={() => handleDelete(client.id)}
-                        className="col-span-2 px-3"
-                      >
-                        <Trash2 size={16} /> ลบลูกค้า
-                      </Button>
                     </>
                   )}
                 </div>
@@ -549,102 +548,122 @@ export default function ClientsPage() {
         onClose={() => setModalOpen(false)}
         title={editing ? "แก้ไขลูกค้า" : "เพิ่มลูกค้าใหม่"}
       >
-        <form onSubmit={handleSave} className="space-y-4">
-          {uploadError && (
-            <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-              {uploadError}
-            </div>
+        <form onSubmit={handleSave} className="space-y-7">
+          <FormError message={uploadError} />
+          {!editing && (
+            <p className="text-[0.9375rem] leading-snug text-muted">
+              กรอกแค่ชื่อก็บันทึกได้ ส่วนที่เหลือกลับมาเติมทีหลังได้
+            </p>
           )}
-          <Input
-            label="ชื่อลูกค้า / โปรเจกต์ *"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="เช่น แอพสั่งอาหาร ABC"
-            required
-          />
-          <Input
-            label="ชื่อผู้ติดต่อ"
-            value={form.contact_name}
-            onChange={(e) => setForm({ ...form, contact_name: e.target.value })}
-            placeholder="คุณสมชาย"
-          />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+          <FormSection step={1} title="ลูกค้าและงาน" hint="ชื่อที่ทีมใช้เรียก และประเภทงานที่รับ">
             <Input
-              label="เบอร์โทร"
-              value={form.contact_phone}
-              onChange={(e) => setForm({ ...form, contact_phone: e.target.value })}
-              placeholder="08x-xxx-xxxx"
+              label="ชื่อลูกค้า / โปรเจกต์ *"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="เช่น แอพสั่งอาหาร ABC"
+              enterKeyHint="next"
+              required
             />
             <Input
-              label="อีเมล"
-              type="email"
-              value={form.contact_email}
-              onChange={(e) => setForm({ ...form, contact_email: e.target.value })}
+              label="บริษัท / หน่วยงาน"
+              value={form.company}
+              onChange={(e) => setForm({ ...form, company: e.target.value })}
+              placeholder="เช่น บริษัท เอบีซี จำกัด"
+              autoComplete="organization"
+              enterKeyHint="next"
             />
-          </div>
-          <Input
-            label="บริษัท"
-            value={form.company}
-            onChange={(e) => setForm({ ...form, company: e.target.value })}
-          />
-          <Select
-            label="ประเภทงาน"
-            value={form.project_type}
-            onChange={(e) =>
-              setForm({ ...form, project_type: e.target.value as ProjectType })
-            }
-          >
-            {Object.entries(PROJECT_TYPE_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </Select>
-          <Textarea
-            label="รายละเอียดงาน"
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            rows={3}
-            placeholder="ทำแอพ iOS/Android, ระบบ admin, API..."
-          />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              label="งบประมาณ (บาท)"
-              type="number"
-              value={form.budget}
-              onChange={(e) => setForm({ ...form, budget: e.target.value })}
+            <ChoiceChips
+              label="ประเภทงาน"
+              value={form.project_type}
+              onChange={(project_type) => setForm({ ...form, project_type })}
+              options={Object.entries(PROJECT_TYPE_LABELS).map(([value, label]) => ({
+                value: value as ProjectType,
+                label,
+              }))}
             />
-            <Select
+            <ChoiceChips
               label="สถานะ"
               value={form.status}
-              onChange={(e) =>
-                setForm({ ...form, status: e.target.value as ClientStatus })
-              }
-            >
-              {Object.entries(CLIENT_STATUS_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <Textarea
-            label="หมายเหตุ"
-            value={form.notes}
-            onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            rows={2}
-          />
+              onChange={(status) => setForm({ ...form, status })}
+              options={Object.entries(CLIENT_STATUS_LABELS).map(([value, label]) => ({
+                value: value as ClientStatus,
+                label,
+              }))}
+            />
+          </FormSection>
+
+          <FormSection step={2} title="ผู้ติดต่อ" hint="คนที่ทีมต้องโทรหรือส่งอีเมลหา">
+            <Input
+              label="ชื่อผู้ติดต่อ"
+              value={form.contact_name}
+              onChange={(e) => setForm({ ...form, contact_name: e.target.value })}
+              placeholder="เช่น คุณสมชาย"
+              autoComplete="name"
+              enterKeyHint="next"
+            />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Input
+                label="เบอร์โทร"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={form.contact_phone}
+                onChange={(e) => setForm({ ...form, contact_phone: e.target.value })}
+                placeholder="08x-xxx-xxxx"
+                enterKeyHint="next"
+              />
+              <Input
+                label="อีเมล"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={form.contact_email}
+                onChange={(e) => setForm({ ...form, contact_email: e.target.value })}
+                placeholder="name@example.com"
+                enterKeyHint="next"
+              />
+            </div>
+          </FormSection>
+
+          <FormSection step={3} title="รายละเอียดงาน" hint="ขอบเขตงานและงบที่คุยกันไว้">
+            <Textarea
+              label="ลูกค้าต้องการอะไร"
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              rows={3}
+              placeholder="เช่น ทำแอพ iOS/Android, ระบบ admin, API..."
+            />
+            <AmountField
+              label="งบประมาณ"
+              required={false}
+              value={form.budget}
+              onChange={(budget) => setForm({ ...form, budget })}
+              hint={form.budget ? undefined : "เว้นว่างได้ถ้ายังไม่สรุป"}
+            />
+            <Textarea
+              label="หมายเหตุภายในทีม"
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              rows={2}
+              placeholder="เช่น ลูกค้าสะดวกคุยช่วงบ่าย"
+            />
+          </FormSection>
 
           <button
             type="button"
             onClick={() => setShowAdvanced((v) => !v)}
-            className="w-full flex items-center justify-between py-2 text-sm text-muted hover:text-foreground touch-manipulation"
+            aria-expanded={showAdvanced}
+            className="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-border px-4 py-3 text-left touch-manipulation"
           >
-            <span className="flex items-center gap-2">
-              <Link2 size={16} className="text-accent" />
-              ลิงก์โปรเจกต์ · รูป · พอร์ทัล
+            <Link2 size={20} className="shrink-0 text-accent" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-base font-medium leading-snug">ลิงก์โปรเจกต์ · ภาพปก{editing ? " · พอร์ทัล · ไฟล์" : ""}</span>
+              <span className="block text-sm leading-snug text-muted">ไม่บังคับ</span>
             </span>
-            <ChevronDown size={16} className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+            <ChevronDown size={18} className={`shrink-0 text-muted transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
           </button>
 
           {showAdvanced && (
@@ -704,29 +723,30 @@ export default function ClientsPage() {
                       <p className="flex items-center gap-2 text-sm font-medium text-foreground">
                         <Share2 size={16} className="text-accent" /> พอร์ทัลลูกค้า
                       </p>
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <label className="flex min-h-11 items-center gap-2.5 text-[0.9375rem] cursor-pointer">
                         <input
                           type="checkbox"
                           checked={portalEnabled}
                           onChange={(e) => togglePortal(e.target.checked)}
-                          className="rounded border-border"
+                          className="size-5 rounded border-border"
                         />
                         เปิดใช้งาน
                       </label>
                     </div>
                     {portalEnabled && (editing as Client & { portal_token?: string }).portal_token && (
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 [&>div:first-child]:min-w-0 [&>div:first-child]:flex-1">
                         <Input
-                          label=""
+                          aria-label="ลิงก์พอร์ทัลลูกค้า"
                           readOnly
                           value={`${typeof window !== "undefined" ? window.location.origin : ""}/portal/${(editing as Client & { portal_token: string }).portal_token}`}
                         />
                         <button
                           type="button"
                           onClick={() => copyPortalLink(editing as Client & { portal_token: string })}
-                          className="mt-auto p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 shrink-0"
+                          aria-label="คัดลอกลิงก์พอร์ทัล"
+                          className="mt-auto flex size-11 items-center justify-center rounded-xl bg-accent/10 text-accent hover:bg-accent/20 shrink-0"
                         >
-                          {copiedPortal === editing.id ? <Check size={16} /> : <Copy size={16} />}
+                          {copiedPortal === editing.id ? <Check size={18} /> : <Copy size={18} />}
                         </button>
                       </div>
                     )}
@@ -752,12 +772,12 @@ export default function ClientsPage() {
                     {clientFiles.length > 0 && (
                       <ul className="space-y-2">
                         {clientFiles.map((f) => (
-                          <li key={f.id} className="flex items-center gap-2 text-sm bg-background rounded-lg px-3 py-2">
-                            <a href={f.file_url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-accent hover:underline">
+                          <li key={f.id} className="flex items-center gap-2 text-[0.9375rem] bg-background rounded-xl pl-3 pr-1">
+                            <a href={f.file_url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 py-2.5 wrap-anywhere text-accent hover:underline">
                               {f.name}
                             </a>
-                            <button type="button" onClick={() => deleteClientFile(f.id)} className="text-red-400 hover:text-red-300">
-                              <Trash2 size={14} />
+                            <button type="button" onClick={() => deleteClientFile(f.id)} aria-label={`ลบไฟล์ ${f.name}`} className="flex size-11 shrink-0 items-center justify-center rounded-xl text-(--status-red-fg) hover:bg-(--status-red-bg)">
+                              <Trash2 size={18} />
                             </button>
                           </li>
                         ))}
@@ -769,9 +789,25 @@ export default function ClientsPage() {
             </>
           )}
 
-          <Button type="submit" loading={saving} className="w-full">
-            {editing ? "บันทึก" : "เพิ่มลูกค้า"}
-          </Button>
+          {editing && canEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                const id = editing.id;
+                setModalOpen(false);
+                void handleDelete(id);
+              }}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-medium text-(--status-red-fg) hover:bg-(--status-red-bg)"
+            >
+              <Trash2 size={16} /> ลบลูกค้ารายนี้
+            </button>
+          )}
+
+          <FormActions summary={form.name.trim() ? undefined : "ใส่ชื่อลูกค้าก่อนบันทึก"}>
+            <Button type="submit" loading={saving}>
+              {editing ? "บันทึกการแก้ไข" : "เพิ่มลูกค้า"}
+            </Button>
+          </FormActions>
         </form>
       </Modal>
     </PageShell>

@@ -13,6 +13,7 @@ import {
   StatusStamp,
 } from "@/components/ui";
 import { LCSDocumentPreview, printDocument } from "@/components/LCSDocumentPreview";
+import { DocumentScaler } from "@/components/DocumentScaler";
 import { DOCUMENT_KITS, type DocumentKit } from "@/lib/document-kits";
 import {
   computeAmountInWords,
@@ -194,7 +195,9 @@ export function DocumentKitList({
               </Button>
             </div>
             <div id="document-print-area" className="max-h-[70vh] overflow-auto rounded-xl border border-border">
-              <LCSDocumentPreview data={{ ...form, client_id: clientId }} client={selectedClient} />
+              <DocumentScaler>
+                <LCSDocumentPreview data={{ ...form, client_id: clientId }} client={selectedClient} />
+              </DocumentScaler>
             </div>
           </div>
         )}

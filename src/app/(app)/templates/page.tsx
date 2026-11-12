@@ -284,7 +284,7 @@ export default function TemplatesPage() {
                       <Pencil size={16} /> แก้ไข
                     </Button>
                     <Button variant="ghost" onClick={() => deleteTemplate(tpl.id)}>
-                      <Trash2 size={16} className="text-red-400" /> ลบ
+                      <Trash2 size={16} className="text-(--status-red-fg)" /> ลบ
                     </Button>
                   </>
                 )}

@@ -1,7 +1,16 @@
 "use client";
 
-import { Building2, Wallet } from "lucide-react";
-import { Button, Input, Textarea, Avatar } from "@/components/ui";
+import { useState } from "react";
+import { Building2, Check, Copy } from "lucide-react";
+import { Button, Input, Textarea } from "@/components/ui";
+import {
+  AmountField,
+  FormActions,
+  FormDisclosure,
+  PersonPicker,
+  SlipField,
+} from "@/components/form-ui";
+import { formatBaht } from "@/lib/money";
 import { hasBankInfo } from "@/lib/team-banks";
 import type { Profile } from "@/lib/types";
 
@@ -32,62 +41,65 @@ export function QuickPayoutForm({
   onSlipChange,
   onSubmit,
 }: Props) {
+  const [copied, setCopied] = useState(false);
   const selectedPayee = members.find((m) => m.id === form.payee_id);
+  const amount = parseFloat(form.amount);
+  const validAmount = Number.isFinite(amount) && amount > 0;
+
+  async function copyAccount(value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div>
-        <p className="text-sm font-medium mb-2">โอนให้ใคร?</p>
-        <div className="grid grid-cols-2 gap-2">
-          {members.map((m) => {
-            const active = form.payee_id === m.id;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => onChange({ ...form, payee_id: m.id })}
-                className={`flex items-center gap-2 p-3 rounded-xl border text-left transition-colors touch-manipulation ${
-                  active
-                    ? "border-accent bg-accent/10"
-                    : "border-border hover:border-accent/30"
-                }`}
-              >
-                <Avatar name={m.display_name} src={m.avatar_url} size="sm" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{m.display_name}</p>
-                  <p className="text-[10px] text-muted truncate">
-                    {hasBankInfo(m) ? m.bank_name : "ยังไม่มีบัญชี"}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+    <form onSubmit={onSubmit} className="space-y-5">
+      <PersonPicker
+        label="โอนให้ใคร"
+        value={form.payee_id}
+        onChange={(payee_id) => {
+          setCopied(false);
+          onChange({ ...form, payee_id });
+        }}
+        people={members.map((m) => ({
+          id: m.id,
+          name: m.display_name,
+          avatarUrl: m.avatar_url,
+          detail: hasBankInfo(m) ? (m.bank_name ?? undefined) : "ยังไม่ตั้งบัญชีรับโอน",
+          warning: !hasBankInfo(m),
+        }))}
+      />
 
       {selectedPayee && hasBankInfo(selectedPayee) && (
-        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3 text-sm">
-          <p className="text-xs font-medium text-emerald-300 flex items-center gap-1 mb-1">
-            <Building2 size={14} /> คัดลอกเลขบัญชีนี้
+        <div className="rounded-2xl bg-surface-soft p-4">
+          <p className="flex items-center gap-1.5 text-sm text-muted">
+            <Building2 size={16} /> {selectedPayee.bank_name} · {selectedPayee.bank_account_name}
           </p>
-          <p className="font-mono text-base tracking-wide">
-            {selectedPayee.bank_account_number}
-          </p>
-          <p className="text-muted text-xs mt-0.5">
-            {selectedPayee.bank_name} · {selectedPayee.bank_account_name}
-          </p>
+          <div className="mt-1 flex items-center gap-3">
+            <p className="min-w-0 flex-1 font-mono text-xl font-semibold tabular-nums wrap-anywhere">
+              {selectedPayee.bank_account_number}
+            </p>
+            <button
+              type="button"
+              onClick={() => copyAccount(selectedPayee.bank_account_number ?? "")}
+              className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-sm font-medium hover:bg-card-hover touch-manipulation"
+            >
+              {copied ? <Check size={16} /> : <Copy size={16} />}
+              {copied ? "คัดลอกแล้ว" : "คัดลอก"}
+            </button>
+          </div>
         </div>
       )}
 
-      <Input
-        label="จำนวนเงิน (บาท)"
-        type="number"
-        min="0.01"
-        step="0.01"
-        inputMode="decimal"
+      <AmountField
+        label="จำนวนเงินที่โอน"
+        tone="expense"
         value={form.amount}
-        onChange={(e) => onChange({ ...form, amount: e.target.value })}
-        required
+        onChange={(amount) => onChange({ ...form, amount })}
       />
 
       <Input
@@ -95,6 +107,7 @@ export function QuickPayoutForm({
         value={form.description}
         onChange={(e) => onChange({ ...form, description: e.target.value })}
         placeholder="เช่น ค่าจ้างออกแบบ, ค่า dev"
+        enterKeyHint="next"
         required
       />
 
@@ -106,37 +119,28 @@ export function QuickPayoutForm({
         required
       />
 
-      <div>
-        <p className="text-sm font-medium mb-1.5">แนบสลิป</p>
-        <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-accent/40">
-          <Wallet size={20} className="text-muted" />
-          <span className="text-sm text-muted">
-            {slipFile ? slipFile.name : "แตะเลือกรูปสลิป"}
-          </span>
-          <input
-            type="file"
-            accept="image/*,.pdf,image/heic,image/heif"
-            className="hidden"
-            onChange={(e) => onSlipChange(e.target.files?.[0] ?? null)}
-          />
-        </label>
-      </div>
+      <SlipField label="สลิปการโอน" file={slipFile} onChange={onSlipChange} />
 
-      <Textarea
-        label="หมายเหตุ (ไม่บังคับ)"
-        value={form.notes}
-        onChange={(e) => onChange({ ...form, notes: e.target.value })}
-        rows={2}
-      />
+      <FormDisclosure title="หมายเหตุ" hint="ไม่บังคับ" defaultOpen={!!form.notes}>
+        <Textarea
+          aria-label="หมายเหตุ"
+          value={form.notes}
+          onChange={(e) => onChange({ ...form, notes: e.target.value })}
+          rows={2}
+        />
+      </FormDisclosure>
 
-      <Button
-        type="submit"
-        loading={saving}
-        disabled={!form.payee_id}
-        className="w-full"
+      <FormActions
+        summary={
+          selectedPayee
+            ? `โอนให้ ${selectedPayee.display_name}${validAmount ? ` · ${formatBaht(amount)}` : ""}`
+            : "เลือกคนรับโอนก่อนบันทึก"
+        }
       >
-        บันทึกการโอน
-      </Button>
+        <Button type="submit" loading={saving} disabled={!form.payee_id}>
+          บันทึกการโอน
+        </Button>
+      </FormActions>
     </form>
   );
 }

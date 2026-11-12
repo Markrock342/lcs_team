@@ -93,7 +93,7 @@ export function TimeTracker({
           <span className="text-sm font-mono text-accent">{fmt(elapsed)}</span>
           <button
             onClick={stop}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-500/20 text-(--status-red-fg) text-xs hover:bg-red-500/30"
           >
             <Square size={12} /> หยุด
           </button>

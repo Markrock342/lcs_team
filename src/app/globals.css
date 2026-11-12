@@ -169,9 +169,8 @@ button:disabled,
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.6875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
-  text-transform: uppercase;
   color: var(--muted);
 }
 
@@ -327,6 +326,52 @@ button:disabled,
 
 input, select, textarea {
   font-family: inherit;
+}
+
+/* มือถือ: ช่องกรอกต้อง >= 16px ไม่งั้น iOS Safari จะซูมหน้าจอเองตอนแตะ */
+@media (max-width: 63.99rem) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 1rem;
+  }
+}
+
+.amount-input {
+  font-size: 1.875rem !important;
+  line-height: 1.2;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.amount-input::-webkit-outer-spin-button,
+.amount-input::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+/* แผ่นเอกสาร: กว้างคงที่แล้วย่อให้พอดีจอ (ดู DocumentScaler) */
+@media screen {
+  .doc-scaler {
+    width: var(--doc-width, 100%);
+    zoom: var(--doc-zoom, 1);
+  }
+}
+
+/* เนื้อหาใน Modal + แถบปุ่มบันทึกติดล่าง (ใช้คู่กัน) */
+.sheet-body {
+  padding: 1.25rem;
+  padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+}
+
+.sheet-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin: 0 -1.25rem calc(-1.25rem - env(safe-area-inset-bottom, 0px));
+  padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  background: var(--card);
+  border-top: 1px solid var(--border);
 }
 
 @keyframes fade-in {

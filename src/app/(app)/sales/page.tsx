@@ -988,16 +988,16 @@ function SalesPageInner() {
             <option value="">ยังไม่ผูก</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </Select>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input label="บริษัท" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
             <Input label="ผู้ติดต่อ" value={form.contact_name} onChange={(e) => setForm({ ...form, contact_name: e.target.value })} />
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Input label="เบอร์โทร" value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Input label="เบอร์โทร" type="tel" inputMode="tel" autoComplete="tel" value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} />
             <Input label="อีเมล" type="email" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} />
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Input label="มูลค่าโดยประมาณ" type="number" min="0" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Input label="มูลค่าโดยประมาณ" type="number" min="0" inputMode="decimal" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} />
             <Input label="นัดติดตาม" type="date" value={form.next_follow_up} onChange={(e) => setForm({ ...form, next_follow_up: e.target.value })} />
           </div>
           <div className="grid grid-cols-2 gap-2">

@@ -169,22 +169,25 @@ export default function PortalPage({ params }: { params: Promise<{ token: string
                   <div className="h-1 bg-background rounded-full mt-2 overflow-hidden">
                     <div className="h-full bg-accent rounded-full" style={{ width: `${t.progress}%` }} />
                   </div>
-                  <div className="flex gap-2 mt-3">
+                  {!authorName.trim() && (
+                    <p className="mt-3 text-sm text-muted">กรอกชื่อของคุณในช่องแสดงความคิดเห็นด้านล่างก่อน จึงจะอนุมัติหรือขอแก้ไขได้</p>
+                  )}
+                  <div className="mt-3 grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       disabled={sending || !authorName.trim()}
                       onClick={() => submitFeedback(t.id, "approved")}
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-300 text-xs disabled:opacity-40"
+                      className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-(--status-green-bg) px-3 text-sm font-semibold text-(--status-green-fg) disabled:opacity-50"
                     >
-                      <ThumbsUp size={12} /> อนุมัติ
+                      <ThumbsUp size={16} /> อนุมัติ
                     </button>
                     <button
                       type="button"
                       disabled={sending || !authorName.trim()}
                       onClick={() => setFeedbackTask(feedbackTask === t.id ? null : t.id)}
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/10 text-amber-300 text-xs disabled:opacity-40"
+                      className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-(--status-amber-bg) px-3 text-sm font-semibold text-(--status-amber-fg) disabled:opacity-50"
                     >
-                      <ThumbsDown size={12} /> ขอแก้ไข
+                      <ThumbsDown size={16} /> ขอแก้ไข
                     </button>
                   </div>
                   {feedbackTask === t.id && (
@@ -193,21 +196,21 @@ export default function PortalPage({ params }: { params: Promise<{ token: string
                         value={feedbackComment}
                         onChange={(e) => setFeedbackComment(e.target.value)}
                         placeholder="ระบุสิ่งที่ต้องการแก้ไข..."
-                        className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-background border border-border text-base"
                         rows={2}
                       />
                       <button
                         type="button"
                         disabled={sending}
                         onClick={() => submitFeedback(t.id, "changes_requested")}
-                        className="text-xs text-accent"
+                        className="min-h-11 w-full rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent disabled:opacity-50"
                       >
                         ส่งคำขอแก้ไข
                       </button>
                     </div>
                   )}
                   {taskFeedback.length > 0 && (
-                    <div className="mt-2 text-[11px] text-muted">
+                    <div className="mt-2 text-sm font-medium text-muted">
                       {taskFeedback[0].status === "approved" ? "✓ อนุมัติแล้ว" : "↻ ขอแก้ไข"}
                     </div>
                   )}
@@ -267,21 +270,23 @@ export default function PortalPage({ params }: { params: Promise<{ token: string
               value={authorName}
               onChange={(e) => setAuthorName(e.target.value)}
               placeholder="ชื่อของคุณ"
-              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm"
+              aria-label="ชื่อของคุณ"
+              autoComplete="name"
+              className="w-full min-h-11 px-3.5 rounded-xl bg-background border border-border text-base"
               required
             />
             <textarea
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="พิมพ์ความคิดเห็นหรือคำถาม..."
-              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-background border border-border text-base"
               rows={3}
               required
             />
             <button
               type="submit"
               disabled={sending}
-              className="w-full py-2.5 rounded-xl bg-accent text-background font-medium text-sm disabled:opacity-50"
+              className="w-full min-h-11 rounded-xl bg-accent text-on-accent font-semibold text-sm disabled:opacity-50"
             >
               ส่งความคิดเห็น
             </button>

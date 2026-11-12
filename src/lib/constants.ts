@@ -100,14 +100,14 @@ export const ROLE_ASSIGN_LABELS: Record<TeamRole, string> = {
 };
 
 export const ROLE_COLORS: Record<TeamRole, string> = {
-  admin: "bg-red-500/20 text-red-300",
-  pm: "bg-orange-500/20 text-orange-300",
-  accounting: "bg-teal-500/20 text-teal-200",
-  backend: "bg-sky-500/20 text-sky-300",
-  frontend: "bg-fuchsia-500/20 text-fuchsia-300",
-  design: "bg-pink-500/20 text-pink-300",
-  sale: "bg-emerald-500/20 text-emerald-300",
-  guest: "bg-zinc-500/20 text-zinc-300",
+  admin: "bg-(--status-red-bg) text-(--status-red-fg)",
+  pm: "bg-(--status-amber-bg) text-(--status-amber-fg)",
+  accounting: "bg-(--status-green-bg) text-(--status-green-fg)",
+  backend: "bg-(--status-blue-bg) text-(--status-blue-fg)",
+  frontend: "bg-(--status-violet-bg) text-(--status-violet-fg)",
+  design: "bg-(--timeline-pink-bg) text-(--timeline-pink-fg)",
+  sale: "bg-(--timeline-green-bg) text-(--timeline-green-fg)",
+  guest: "bg-(--status-slate-bg) text-(--status-slate-fg)",
 };
 
 export const SALES_STAGE_LABELS: Record<SalesStage, string> = {

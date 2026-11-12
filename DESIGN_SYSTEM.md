@@ -50,7 +50,11 @@
 - Search/⌘K: one palette; results open the exact task, prospect, deal, or chat message
 - Notifications: the bell count is unread only
 - Sales prospects: category → region → province → court cards; never dump a full import as one grid
-- Modal: focused task sheet on mobile, dialog on desktop, Escape close and focus restoration
+- Modal: focused task sheet on mobile, dialog on desktop, Escape close and focus restoration; body uses `.sheet-body`, background scroll is locked while open
+- Forms (`src/components/form-ui.tsx`): `FormSection` (numbered groups), `FormDisclosure` (optional fields), `ChoiceChips` (tap instead of dropdown), `AmountField` (large ฿ field, decimal keypad, shortcuts), `PersonPicker`, `SlipField` (preview + remove), `FormActions` (sticky save bar with summary). Layout reference: Material Design 3 forms/text fields/segmented buttons/bottom sheets (Apache-2.0); LCS tokens and branding only
+- Finance: balance hero with period switch → 4 action tiles labelled เงินเข้า/เงินออก → day-grouped ledger; tap a row for the detail sheet (slip, edit, delete)
+- `ListRow stack`: on mobile the trailing block drops to its own full-width line instead of squeezing Thai text
+- Mobile inputs are always ≥16px (global rule in `globals.css`) so iOS never zooms on focus; role badges and danger buttons use status tokens, never hard-coded pastel reds
 
 ## 7. Card and section style
 - Job Jacket radius: 16px; sections: 20px; controls: 12px

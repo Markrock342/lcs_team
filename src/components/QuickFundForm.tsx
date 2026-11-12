@@ -1,7 +1,15 @@
 "use client";
 
-import { PiggyBank, Wallet } from "lucide-react";
-import { Avatar, Button, Input, Textarea } from "@/components/ui";
+import { PiggyBank } from "lucide-react";
+import { Button, Input, Textarea } from "@/components/ui";
+import {
+  AmountField,
+  FormActions,
+  FormDisclosure,
+  PersonPicker,
+  SlipField,
+} from "@/components/form-ui";
+import { formatBaht } from "@/lib/money";
 import type { Profile } from "@/lib/types";
 
 export type QuickFundFormData = {
@@ -31,50 +39,34 @@ export function QuickFundForm({
   onSlipChange,
   onSubmit,
 }: Props) {
+  const contributor = members.find((m) => m.id === form.contributor_id);
+  const amount = parseFloat(form.amount);
+  const validAmount = Number.isFinite(amount) && amount > 0;
+
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div>
-        <p className="text-sm font-medium mb-2">ใครจ่ายเข้ากองกลาง?</p>
-        <div className="grid grid-cols-2 gap-2">
-          {members.map((m) => {
-            const active = form.contributor_id === m.id;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => onChange({ ...form, contributor_id: m.id })}
-                className={`flex items-center gap-2 p-3 rounded-xl border text-left transition-colors touch-manipulation ${
-                  active
-                    ? "border-emerald-400 bg-emerald-500/10"
-                    : "border-border hover:border-emerald-400/30"
-                }`}
-              >
-                <Avatar name={m.display_name} src={m.avatar_url} size="sm" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{m.display_name}</p>
-                  <p className="text-[10px] text-muted truncate">@{m.username}</p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+    <form onSubmit={onSubmit} className="space-y-5">
+      <p className="flex items-start gap-2.5 rounded-2xl bg-surface-soft p-4 text-[0.9375rem] leading-snug">
+        <PiggyBank size={20} className="mt-0.5 shrink-0 text-(--status-green-fg)" />
+        เงินที่สมาชิกจ่ายเข้ากองกลาง ระบบจะนับเป็นเงินเข้าของทีม
+      </p>
 
-      <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3 text-sm">
-        <p className="text-xs font-medium text-emerald-300 flex items-center gap-1">
-          <PiggyBank size={14} /> รายการนี้จะนับเป็นรายรับกองกลาง
-        </p>
-      </div>
+      <PersonPicker
+        label="ใครจ่ายเข้ากองกลาง"
+        value={form.contributor_id}
+        onChange={(contributor_id) => onChange({ ...form, contributor_id })}
+        people={members.map((m) => ({
+          id: m.id,
+          name: m.display_name,
+          avatarUrl: m.avatar_url,
+          detail: `@${m.username}`,
+        }))}
+      />
 
-      <Input
-        label="จำนวนเงิน (บาท)"
-        type="number"
-        min="0.01"
-        step="0.01"
-        inputMode="decimal"
+      <AmountField
+        label="จำนวนเงินที่เก็บ"
+        tone="income"
         value={form.amount}
-        onChange={(e) => onChange({ ...form, amount: e.target.value })}
-        required
+        onChange={(amount) => onChange({ ...form, amount })}
       />
 
       <Input
@@ -82,6 +74,7 @@ export function QuickFundForm({
         value={form.description}
         onChange={(e) => onChange({ ...form, description: e.target.value })}
         placeholder="เช่น เก็บเงินกองกลาง, เติมเงินทีม"
+        enterKeyHint="next"
         required
       />
 
@@ -93,37 +86,28 @@ export function QuickFundForm({
         required
       />
 
-      <div>
-        <p className="text-sm font-medium mb-1.5">แนบสลิป (ไม่บังคับ)</p>
-        <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-accent/40">
-          <Wallet size={20} className="text-muted" />
-          <span className="text-sm text-muted">
-            {slipFile ? slipFile.name : "แตะเลือกรูปสลิป"}
-          </span>
-          <input
-            type="file"
-            accept="image/*,.pdf,image/heic,image/heif"
-            className="hidden"
-            onChange={(e) => onSlipChange(e.target.files?.[0] ?? null)}
-          />
-        </label>
-      </div>
+      <SlipField label="สลิป (ไม่บังคับ)" file={slipFile} onChange={onSlipChange} />
 
-      <Textarea
-        label="หมายเหตุ (ไม่บังคับ)"
-        value={form.notes}
-        onChange={(e) => onChange({ ...form, notes: e.target.value })}
-        rows={2}
-      />
+      <FormDisclosure title="หมายเหตุ" hint="ไม่บังคับ" defaultOpen={!!form.notes}>
+        <Textarea
+          aria-label="หมายเหตุ"
+          value={form.notes}
+          onChange={(e) => onChange({ ...form, notes: e.target.value })}
+          rows={2}
+        />
+      </FormDisclosure>
 
-      <Button
-        type="submit"
-        loading={saving}
-        disabled={!form.contributor_id}
-        className="w-full"
+      <FormActions
+        summary={
+          contributor
+            ? `${contributor.display_name} จ่ายเข้ากองกลาง${validAmount ? ` · ${formatBaht(amount)}` : ""}`
+            : "เลือกคนจ่ายก่อนบันทึก"
+        }
       >
-        บันทึกเข้ากองกลาง
-      </Button>
+        <Button type="submit" loading={saving} disabled={!form.contributor_id}>
+          บันทึกเข้ากองกลาง
+        </Button>
+      </FormActions>
     </form>
   );
 }

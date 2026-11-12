@@ -13,19 +13,18 @@ import {
   Pencil,
   PiggyBank,
   Plus,
+  SlidersHorizontal,
   Trash2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { neonRequest } from "@/lib/neon/client";
-import { PageShell, PageHeader, FilterTabs, RowMenu } from "@/components/mobile-ui";
+import { PageShell, PageHeader, FilterTabs } from "@/components/mobile-ui";
 import { SavedViewsBar } from "@/components/workspace/SavedViewsBar";
 import {
+  Button,
   Card,
-  CardHeader,
   EmptyState,
   ErrorState,
-  ListRow,
-  MetricTile,
   Modal,
   PageLoader,
   StatusStamp,
@@ -153,6 +152,55 @@ function money(value: number) {
   return formatBaht(value);
 }
 
+/** แสดงยอดติดลบเป็น -฿1,000 (ไม่ใช่ ฿-1,000) — withPlus ใส่ + หน้ายอดบวก */
+function signedMoney(value: number, withPlus = false) {
+  const sign = value < 0 ? "-" : withPlus && value > 0 ? "+" : "";
+  return `${sign}${formatBaht(Math.abs(value))}`;
+}
+
+const PERIOD_OPTIONS = [
+  { key: "month", label: "เดือนนี้" },
+  { key: "year", label: "ปีนี้" },
+  { key: "all", label: "ทั้งหมด" },
+];
+
+const ACTION_TONES = {
+  green: "bg-(--status-green-bg) text-(--status-green-fg)",
+  red: "bg-(--status-red-bg) text-(--status-red-fg)",
+  amber: "bg-(--status-amber-bg) text-(--status-amber-fg)",
+  blue: "bg-(--status-blue-bg) text-(--status-blue-fg)",
+};
+
+function ActionTile({
+  label,
+  hint,
+  icon,
+  tone,
+  onClick,
+}: {
+  label: string;
+  hint: string;
+  icon: React.ReactNode;
+  tone: keyof typeof ACTION_TONES;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="ticket-card flex min-h-28 flex-col items-start gap-2.5 p-4 text-left transition-colors hover:bg-card-hover active:scale-[0.99] touch-manipulation"
+    >
+      <span className={`flex size-10 items-center justify-center rounded-xl ${ACTION_TONES[tone]}`}>
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-base font-semibold leading-snug">{label}</span>
+        <span className="mt-0.5 block text-sm leading-snug text-muted">{hint}</span>
+      </span>
+    </button>
+  );
+}
+
 function sourceLabel(sourceType: string | null) {
   if (sourceType === "invoice_payment") return "จากใบแจ้งหนี้";
   if (sourceType === "team_payout") return "จ่ายเพื่อน";
@@ -198,6 +246,8 @@ export default function FinancePageInner() {
   } | null>(null);
   const [saving, setSaving] = useState(false);
   const [dbError, setDbError] = useState("");
+  const [detail, setDetail] = useState<AccountingTransaction | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -582,181 +632,429 @@ export default function FinancePageInner() {
     return <PageLoader label="กำลังโหลดบัญชี..." />;
   }
 
+  const sortedTransactions = [...filteredTransactions].sort((x, y) =>
+    y.transaction_date.localeCompare(x.transaction_date)
+  );
+  const dayGroups: { date: string; items: AccountingTransaction[]; net: number }[] = [];
+  for (const transaction of sortedTransactions) {
+    const key = transaction.transaction_date.slice(0, 10);
+    let group = dayGroups[dayGroups.length - 1];
+    if (!group || group.date !== key) {
+      group = { date: key, items: [], net: 0 };
+      dayGroups.push(group);
+    }
+    group.items.push(transaction);
+    group.net += transaction.type === "income" ? transaction.amount : -transaction.amount;
+  }
+  const flowTotal = summary.income + summary.expense;
+  const incomeShare = flowTotal > 0 ? (summary.income / flowTotal) * 100 : 0;
+  const activeFilterCount = [categoryFilter, memberFilter, clientFilter].filter(
+    (value) => value !== "all"
+  ).length;
+  const selectClass =
+    "min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base";
+
   return (
     <PageShell width="wide">
       <PageHeader
         title="บัญชีทีม"
-        description="สรุปเงินเข้า เงินออก กองกลาง และ VAT"
-      />
-
-      <SavedViewsBar
-        page="finance"
-        filters={{ view, period }}
-        onApply={(filters) => {
-          if (filters.tab === "receivable" || filters.view === "receivable") setView("income");
-          if (filters.view && filters.view !== "receivable") setView(filters.view);
-          if (filters.period) setPeriod(filters.period);
-        }}
+        description="เงินเข้า เงินออก และยอดคงเหลือของทีม"
       />
 
       {dbError && <ErrorState title="เกิดข้อผิดพลาดด้านบัญชี" description={dbError} onRetry={load} />}
 
       <Card>
-        <CardHeader
-          title={`ยอดรวม · ${periodLabel(period)}`}
-          description="ยอดตามช่วงเวลาที่เลือก"
-          icon={<FileText size={18} />}
-        />
-        <div className="grid grid-cols-2 gap-3 p-4 lg:grid-cols-5">
-          <MetricTile
-            label="คงเหลือ"
-            value={<span className={summary.net >= 0 ? "text-(--status-green-fg)" : "text-(--status-red-fg)"}>{money(summary.net)}</span>}
-          />
-          <MetricTile label="เงินเข้า" value={money(summary.income)} icon={<ArrowDownLeft size={18} />} />
-          <MetricTile label="เงินออก" value={money(summary.expense)} icon={<ArrowUpRight size={18} />} />
-          <MetricTile label="กองกลาง" value={money(summary.fund)} icon={<PiggyBank size={18} />} />
-          <MetricTile label="VAT" value={money(summary.vat)} />
-        </div>
-      </Card>
-
-      <Card>
-        <CardHeader title="บันทึกรายการ" description="เลือกประเภทที่ต้องการบันทึก" />
-        <div className="grid grid-cols-2 divide-x divide-y divide-border lg:grid-cols-4 lg:divide-y-0">
-          <button type="button" onClick={() => setIncomeOpen(true)} className="flex min-h-20 items-center gap-3 px-4 py-3 text-left hover:bg-card-hover">
-            <ArrowDownLeft size={20} className="text-(--status-green-fg)" />
-            <span className="text-sm font-semibold">รับเงินลูกค้า</span>
-          </button>
-          <button type="button" onClick={() => { setPayoutOpen(true); setDbError(""); }} className="flex min-h-20 items-center gap-3 px-4 py-3 text-left hover:bg-card-hover">
-            <ArrowUpRight size={20} className="text-(--status-red-fg)" />
-            <span className="text-sm font-semibold">จ่ายเพื่อน</span>
-          </button>
-          <button type="button" onClick={() => { setFundOpen(true); setDbError(""); }} className="flex min-h-20 items-center gap-3 px-4 py-3 text-left hover:bg-card-hover">
-            <PiggyBank size={20} className="text-(--status-amber-fg)" />
-            <span className="text-sm font-semibold">เก็บกองกลาง</span>
-          </button>
-          <button type="button" onClick={() => openManualEntry("expense")} className="flex min-h-20 items-center gap-3 px-4 py-3 text-left hover:bg-card-hover">
-            <Plus size={20} className="text-accent" />
-            <span className="text-sm font-semibold">เพิ่มรายการ</span>
-          </button>
-        </div>
-      </Card>
-
-      <Card>
-        <CardHeader
-          title="ตัวกรองและรายงาน"
-          action={
-            <div className="flex items-center gap-1">
-              <Link href="/invoices" className="inline-flex min-h-10 items-center gap-1 px-2 text-sm font-medium text-accent hover:underline">
-                เอกสาร <ChevronRight size={15} />
-              </Link>
-              <button type="button" onClick={exportCsv} className="min-h-10 p-2 text-muted hover:text-foreground" aria-label="ส่งออก CSV"><Download size={17} /></button>
-              <button type="button" onClick={exportPdf} className="min-h-10 p-2 text-muted hover:text-foreground" aria-label="ส่งออก PDF"><FileText size={17} /></button>
-            </div>
-          }
-        />
-        <div className="space-y-4 p-4">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <select value={period} onChange={(e) => setPeriod(e.target.value)} className="min-h-11 rounded-xl border border-border bg-background px-3 text-sm">
-              <option value="month">เดือนนี้</option><option value="year">ปีนี้</option><option value="all">ทั้งหมด</option>
-            </select>
-            <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="min-h-11 rounded-xl border border-border bg-background px-3 text-sm">
-              <option value="all">ทุกหมวด</option>
-              {sortedCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-            </select>
-            <select value={memberFilter} onChange={(e) => setMemberFilter(e.target.value)} className="min-h-11 rounded-xl border border-border bg-background px-3 text-sm">
-              <option value="all">ทุกสมาชิก</option>
-              {members.map((member) => <option key={member.id} value={member.id}>{member.display_name}</option>)}
-            </select>
-            <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="min-h-11 rounded-xl border border-border bg-background px-3 text-sm">
-              <option value="all">ทุกลูกค้า</option>
-              {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
-            </select>
+        <div className="space-y-4 p-4 sm:p-5">
+          <div
+            role="group"
+            aria-label="ช่วงเวลา"
+            className="grid grid-cols-3 gap-1 rounded-xl bg-surface-soft p-1"
+          >
+            {PERIOD_OPTIONS.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                aria-pressed={period === option.key}
+                onClick={() => setPeriod(option.key)}
+                className={`min-h-11 rounded-lg px-2 text-[0.9375rem] font-medium transition-colors touch-manipulation ${
+                  period === option.key
+                    ? "bg-card text-foreground shadow-(--shadow-card)"
+                    : "text-muted hover:text-foreground"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
+
+          <div>
+            <p className="text-[0.9375rem] text-muted">ยอดคงเหลือ · {periodLabel(period)}</p>
+            <p
+              className={`mt-1 text-[2rem] font-semibold leading-tight tabular-nums wrap-anywhere sm:text-4xl ${
+                summary.net >= 0 ? "text-(--status-green-fg)" : "text-(--status-red-fg)"
+              }`}
+            >
+              {signedMoney(summary.net)}
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              {flowTotal === 0
+                ? "ยังไม่มีรายการในช่วงนี้"
+                : summary.net >= 0
+                  ? "เงินเข้ามากกว่าเงินออก"
+                  : "เงินออกมากกว่าเงินเข้า"}
+            </p>
+          </div>
+
+          {flowTotal > 0 && (
+            <div
+              className="flex h-2.5 gap-0.5 overflow-hidden rounded-full"
+              role="img"
+              aria-label={`เงินเข้า ${Math.round(incomeShare)}% เงินออก ${100 - Math.round(incomeShare)}%`}
+            >
+              <span className="rounded-full bg-(--status-green-fg)" style={{ width: `${incomeShare}%` }} />
+              <span className="flex-1 rounded-full bg-(--status-red-fg)" />
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-surface-soft p-3.5">
+              <p className="flex items-center gap-1.5 text-sm text-muted">
+                <ArrowDownLeft size={16} className="text-(--status-green-fg)" /> เงินเข้า
+              </p>
+              <p className="mt-1 text-lg font-semibold leading-tight tabular-nums wrap-anywhere sm:text-xl">
+                {money(summary.income)}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-surface-soft p-3.5">
+              <p className="flex items-center gap-1.5 text-sm text-muted">
+                <ArrowUpRight size={16} className="text-(--status-red-fg)" /> เงินออก
+              </p>
+              <p className="mt-1 text-lg font-semibold leading-tight tabular-nums wrap-anywhere sm:text-xl">
+                {money(summary.expense)}
+              </p>
+            </div>
+          </div>
+
+          <dl className="divide-y divide-border border-t border-border text-[0.9375rem]">
+            <div className="flex items-center justify-between gap-3 py-2.5">
+              <dt className="flex items-center gap-2 text-muted">
+                <PiggyBank size={16} /> กองกลาง
+              </dt>
+              <dd className="font-semibold tabular-nums">{signedMoney(summary.fund)}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3 pt-2.5">
+              <dt className="flex items-center gap-2 text-muted">
+                <FileText size={16} /> VAT รวม
+              </dt>
+              <dd className="font-semibold tabular-nums">{money(summary.vat)}</dd>
+            </div>
+          </dl>
+        </div>
+      </Card>
+
+      <section aria-labelledby="finance-actions-title" className="space-y-3">
+        <h2 id="finance-actions-title" className="text-base font-semibold">
+          บันทึกรายการ
+        </h2>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <ActionTile
+            label="รับเงินลูกค้า"
+            hint="เงินเข้า · ตามใบแจ้งหนี้"
+            tone="green"
+            icon={<ArrowDownLeft size={20} />}
+            onClick={() => setIncomeOpen(true)}
+          />
+          <ActionTile
+            label="จ่ายเพื่อน"
+            hint="เงินออก · โอนให้ทีม"
+            tone="red"
+            icon={<ArrowUpRight size={20} />}
+            onClick={() => {
+              setPayoutOpen(true);
+              setDbError("");
+            }}
+          />
+          <ActionTile
+            label="เก็บกองกลาง"
+            hint="เงินเข้า · จากสมาชิก"
+            tone="amber"
+            icon={<PiggyBank size={20} />}
+            onClick={() => {
+              setFundOpen(true);
+              setDbError("");
+            }}
+          />
+          <ActionTile
+            label="รายการอื่น"
+            hint="รายรับ/รายจ่ายทั่วไป"
+            tone="blue"
+            icon={<Plus size={20} />}
+            onClick={() => openManualEntry("expense")}
+          />
+        </div>
+      </section>
+
+      <Card>
+        <div className="space-y-3 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold">รายการบัญชี</h2>
+              <p className="text-sm text-muted">
+                {filteredTransactions.length} รายการ · {periodLabel(period)}
+              </p>
+            </div>
+            <Link
+              href="/invoices"
+              className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-xl px-2 text-sm font-medium text-accent hover:bg-card-hover"
+            >
+              เอกสาร <ChevronRight size={16} />
+            </Link>
+          </div>
+
           <FilterTabs
             active={view}
             onChange={setView}
             tabs={[
               { key: "all", label: "ทั้งหมด", count: periodTransactions.length },
-              { key: "income", label: "รายรับ", count: periodTransactions.filter((t) => t.type === "income").length },
-              { key: "expense", label: "รายจ่าย", count: periodTransactions.filter((t) => t.type === "expense").length },
+              { key: "income", label: "เงินเข้า", count: periodTransactions.filter((t) => t.type === "income").length },
+              { key: "expense", label: "เงินออก", count: periodTransactions.filter((t) => t.type === "expense").length },
             ]}
           />
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((value) => !value)}
+              aria-expanded={filtersOpen}
+              className={`inline-flex min-h-11 items-center gap-2 rounded-xl border px-3.5 text-sm font-medium touch-manipulation ${
+                activeFilterCount > 0
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-border bg-card hover:bg-card-hover"
+              }`}
+            >
+              <SlidersHorizontal size={16} />
+              ตัวกรอง{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+            </button>
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-card px-3.5 text-sm font-medium hover:bg-card-hover touch-manipulation"
+            >
+              <Download size={16} /> CSV
+            </button>
+            <button
+              type="button"
+              onClick={exportPdf}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-card px-3.5 text-sm font-medium hover:bg-card-hover touch-manipulation"
+            >
+              <FileText size={16} /> PDF
+            </button>
+          </div>
+
+          {filtersOpen && (
+            <div className="grid grid-cols-1 gap-3 rounded-2xl bg-surface-soft p-3 sm:grid-cols-3">
+              <label className="space-y-1.5">
+                <span className="block text-sm font-medium text-muted">หมวด</span>
+                <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className={selectClass}>
+                  <option value="all">ทุกหมวด</option>
+                  {sortedCategories.map((category) => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-1.5">
+                <span className="block text-sm font-medium text-muted">สมาชิก</span>
+                <select value={memberFilter} onChange={(e) => setMemberFilter(e.target.value)} className={selectClass}>
+                  <option value="all">ทุกสมาชิก</option>
+                  {members.map((member) => (
+                    <option key={member.id} value={member.id}>{member.display_name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-1.5">
+                <span className="block text-sm font-medium text-muted">ลูกค้า</span>
+                <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className={selectClass}>
+                  <option value="all">ทุกลูกค้า</option>
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>{client.name}</option>
+                  ))}
+                </select>
+              </label>
+              {activeFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCategoryFilter("all");
+                    setMemberFilter("all");
+                    setClientFilter("all");
+                  }}
+                  className="min-h-11 justify-self-start rounded-xl px-2 text-sm font-medium text-accent hover:bg-card-hover"
+                >
+                  ล้างตัวกรอง
+                </button>
+              )}
+            </div>
+          )}
+
+          <SavedViewsBar
+            page="finance"
+            filters={{ view, period }}
+            onApply={(filters) => {
+              if (filters.tab === "receivable" || filters.view === "receivable") setView("income");
+              if (filters.view && filters.view !== "receivable") setView(filters.view);
+              if (filters.period) setPeriod(filters.period);
+            }}
+          />
+        </div>
+
+        <div className="border-t border-border">
+          {dayGroups.map((group) => (
+            <section key={group.date} aria-label={formatDate(group.date)}>
+              <div className="flex items-center justify-between gap-3 bg-surface-soft px-4 py-2 text-sm">
+                <h3 className="font-semibold">{formatDate(group.date)}</h3>
+                <span className="tabular-nums text-muted">
+                  รวม {signedMoney(group.net, true)}
+                </span>
+              </div>
+              <ul className="divide-y divide-border">
+                {group.items.map((transaction) => {
+                  const entry = accountingTransactionToEntry(transaction);
+                  const income = entry.type === "income";
+                  return (
+                    <li key={transaction.id}>
+                      <button
+                        type="button"
+                        onClick={() => setDetail(transaction)}
+                        className="flex w-full items-start gap-3 px-4 py-3.5 text-left hover:bg-card-hover touch-manipulation"
+                      >
+                        <span
+                          className={`mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl ${
+                            income
+                              ? "bg-(--status-green-bg) text-(--status-green-fg)"
+                              : "bg-(--status-red-bg) text-(--status-red-fg)"
+                          }`}
+                        >
+                          {income ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-start justify-between gap-3">
+                            <span className="min-w-0 text-base font-medium leading-snug line-clamp-2">
+                              {entry.title}
+                            </span>
+                            <span
+                              className={`shrink-0 text-base font-semibold tabular-nums ${
+                                income ? "text-(--status-green-fg)" : "text-(--status-red-fg)"
+                              }`}
+                            >
+                              <span className="sr-only">{income ? "เงินเข้า" : "เงินออก"} </span>
+                              {income ? "+" : "-"}
+                              {money(entry.amount)}
+                            </span>
+                          </span>
+                          <span className="mt-0.5 block text-sm leading-snug text-muted line-clamp-2">
+                            {entry.subtitle}
+                          </span>
+                          <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.8125rem] text-muted">
+                            <span>{sourceLabel(transaction.source_type)}</span>
+                            {transaction.slip_url && (
+                              <span className="inline-flex items-center gap-1 text-accent">
+                                <Paperclip size={13} /> มีสลิป
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+          {filteredTransactions.length === 0 && (
+            <EmptyState icon={<FileText size={24} />} title="ไม่พบรายการ" description="ยังไม่มีรายการบัญชีตามตัวกรองนี้" />
+          )}
         </div>
       </Card>
 
-      <Card>
-        <CardHeader title="รายการบัญชี" description={`${filteredTransactions.length} รายการ`} />
-        <div className="divide-y divide-border">
-        {filteredTransactions.map((transaction) => {
-          const entry = accountingTransactionToEntry(transaction);
-          const menuItems = [
-            ...(transaction.slip_url
-              ? [
-                  {
-                    label: "ดูสลิป",
-                    icon: <Paperclip size={14} />,
-                    onClick: () =>
-                      setSlipPreview({
-                        url: transaction.slip_url!,
-                        fileName: transaction.slip_file_name,
-                      }),
-                  },
-                ]
-              : []),
-            {
-              label: "แก้ไข",
-              icon: <Pencil size={14} />,
-              onClick: () => openEditTransaction(transaction),
-            },
-            {
-              label: "ลบ",
-              icon: <Trash2 size={14} />,
-              danger: true,
-              onClick: () => deleteTransaction(transaction),
-            },
-          ];
-          return (
-            <ListRow
-              key={transaction.id}
-              leading={
-                <span className={`flex size-9 items-center justify-center rounded-xl ${entry.type === "income" ? "bg-(--status-green-bg) text-(--status-green-fg)" : "bg-(--status-red-bg) text-(--status-red-fg)"}`}>
-                  {entry.type === "income" ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
-                </span>
-              }
-              title={
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate">{entry.title}</span>
-                  <StatusStamp label={sourceLabel(transaction.source_type)} tone="slate" className="hidden sm:inline-flex" />
-                  {transaction.slip_url && (
-                    <button type="button" onClick={() => setSlipPreview({ url: transaction.slip_url!, fileName: transaction.slip_file_name })} className="p-1 text-accent sm:hidden" aria-label="ดูสลิป">
-                      <Paperclip size={14} />
-                    </button>
-                  )}
+      <Modal open={!!detail} onClose={() => setDetail(null)} title="รายละเอียดรายการ">
+        {detail && (
+          <div className="space-y-5">
+            <div>
+              <StatusStamp
+                label={detail.type === "income" ? "เงินเข้า" : "เงินออก"}
+                tone={detail.type === "income" ? "green" : "red"}
+              />
+              <p
+                className={`mt-2 text-[2rem] font-semibold leading-tight tabular-nums wrap-anywhere ${
+                  detail.type === "income" ? "text-(--status-green-fg)" : "text-(--status-red-fg)"
+                }`}
+              >
+                {detail.type === "income" ? "+" : "-"}
+                {money(detail.amount)}
+              </p>
+              <p className="mt-1 text-base font-medium leading-snug">{detail.description}</p>
+            </div>
+
+            <dl className="divide-y divide-border rounded-2xl bg-surface-soft px-4 text-[0.9375rem]">
+              {(
+                [
+                  ["วันที่", formatDate(detail.transaction_date)],
+                  ["หมวด", detail.category?.name ?? "ไม่ระบุ"],
+                  ["ที่มา", sourceLabel(detail.source_type)],
+                  detail.client?.name ? ["ลูกค้า", detail.client.name] : null,
+                  detail.member?.display_name ? ["สมาชิก", detail.member.display_name] : null,
+                  detail.vat_amount ? ["VAT", money(detail.vat_amount)] : null,
+                  detail.updater?.display_name ? ["แก้ไขล่าสุดโดย", detail.updater.display_name] : null,
+                  detail.notes ? ["หมายเหตุ", detail.notes] : null,
+                ].filter(Boolean) as [string, string][]
+              ).map(([label, value]) => (
+                <div key={label} className="flex items-start justify-between gap-4 py-3">
+                  <dt className="shrink-0 text-muted">{label}</dt>
+                  <dd className="min-w-0 text-right font-medium wrap-anywhere whitespace-pre-line">{value}</dd>
                 </div>
-              }
-              description={
-                <span className="block truncate">
-                  {formatDate(entry.date)} · {entry.subtitle}
-                  {transaction.slip_url ? " · มีสลิป" : ""}
-                  {transaction.updater?.display_name ? ` · แก้โดย ${transaction.updater.display_name}` : ""}
-                </span>
-              }
-              trailing={
-                <div className="flex items-center gap-2">
-                  <span className={`text-right text-sm font-semibold tabular-nums ${entry.type === "income" ? "text-(--status-green-fg)" : "text-(--status-red-fg)"}`}>
-                    {entry.type === "income" ? "+" : "-"}{money(entry.amount)}
-                  </span>
-                  <RowMenu items={menuItems} />
-                </div>
-              }
-            />
-          );
-        })}
-        {filteredTransactions.length === 0 && (
-          <EmptyState icon={<FileText size={24} />} title="ไม่พบรายการ" description="ยังไม่มีรายการบัญชีตามตัวกรองนี้" />
+              ))}
+            </dl>
+
+            <div className="grid grid-cols-2 gap-2">
+              {detail.slip_url && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="col-span-2"
+                  onClick={() => {
+                    setSlipPreview({ url: detail.slip_url!, fileName: detail.slip_file_name });
+                    setDetail(null);
+                  }}
+                >
+                  <Paperclip size={16} /> ดูสลิป / หลักฐาน
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  const transaction = detail;
+                  setDetail(null);
+                  openEditTransaction(transaction);
+                }}
+              >
+                <Pencil size={16} /> แก้ไข
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => {
+                  const transaction = detail;
+                  setDetail(null);
+                  void deleteTransaction(transaction);
+                }}
+              >
+                <Trash2 size={16} /> ลบ
+              </Button>
+            </div>
+          </div>
         )}
-        </div>
-      </Card>
+      </Modal>
 
       <Modal open={incomeOpen} onClose={() => setIncomeOpen(false)} title="รับเงินลูกค้า">
         <QuickIncomeForm

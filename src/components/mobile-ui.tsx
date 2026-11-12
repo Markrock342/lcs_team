@@ -84,7 +84,7 @@ export function FilterSelect({ label, value, onChange, options }: FilterSelectPr
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 min-w-0 px-3 py-2.5 rounded-xl bg-card border border-border text-sm min-h-11 touch-manipulation"
+        className="flex-1 min-w-0 px-3 py-2.5 rounded-xl bg-card border border-border text-base min-h-11 touch-manipulation"
       >
         {options.map((o) => (
           <option key={o.key} value={o.key}>
@@ -142,11 +142,11 @@ export function PageHeader({ title, description, action, kicker }: PageHeaderPro
       <div>
         <p className="ticket-kicker">{stamp}</p>
         <div className="ticket-rule mt-2 mb-3" />
-        <h1 className="text-[1.65rem] sm:text-[1.85rem] font-semibold tracking-tight leading-tight">
+        <h1 className="text-[1.65rem] sm:text-[1.85rem] font-semibold leading-snug">
           {title}
         </h1>
         {description && (
-          <p className="text-muted mt-1.5 text-sm leading-relaxed max-w-2xl">
+          <p className="text-muted mt-1.5 text-[0.9375rem] leading-relaxed max-w-2xl">
             {description}
           </p>
         )}
@@ -211,11 +211,11 @@ export function RowMenu({ items }: { items: RowMenuItem[] }) {
 
   useEffect(() => {
     if (!open) return;
-    function close(e: MouseEvent) {
+    function close(e: PointerEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
   }, [open]);
 
   return (
@@ -230,13 +230,13 @@ export function RowMenu({ items }: { items: RowMenuItem[] }) {
         <MoreHorizontal size={18} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 min-w-42 bg-card border border-border rounded-xl shadow-xl py-1 text-sm">
+        <div className="absolute right-0 top-full mt-1 z-50 min-w-48 bg-card border border-border rounded-xl shadow-xl py-1 text-[0.9375rem]">
           {items.map((item) => (
             <button
               key={item.label}
               type="button"
-              className={`w-full flex items-center gap-2 px-3 py-2.5 hover:bg-card-hover text-left touch-manipulation ${
-                item.danger ? "text-red-400 hover:bg-red-500/10" : ""
+              className={`w-full flex min-h-11 items-center gap-2.5 px-4 py-2.5 hover:bg-card-hover text-left touch-manipulation ${
+                item.danger ? "text-(--status-red-fg) hover:bg-(--status-red-bg)" : ""
               }`}
               onClick={() => {
                 setOpen(false);
